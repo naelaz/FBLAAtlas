@@ -1,0 +1,33 @@
+name: fbla_atlas
+description: FBLA Mobile Application Development 2025-2026 competition app.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.6.2
+  isar: ^3.1.0+1
+  isar_flutter_libs: ^3.1.0+1
+  flutter_secure_storage: ^9.2.4
+  flutter_local_notifications: ^17.2.4
+  url_launcher: ^6.3.2
+  connectivity_plus: ^6.1.3
+  timezone: ^0.9.4
+  path_provider: ^2.1.5
+  intl: ^0.20.2
+  google_fonts: ^6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

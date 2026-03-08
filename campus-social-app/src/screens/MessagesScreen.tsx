@@ -1,13 +1,15 @@
-﻿import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
-import { Avatar, Badge, Card, Text, TextInput } from "react-native-paper";
+import { Badge, Card, Text, TextInput } from "react-native-paper";
 
+import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { EmptyState } from "../components/ui/EmptyState";
 import { SkeletonCard } from "../components/ui/SkeletonCard";
 import { useAuthContext } from "../context/AuthContext";
 import { useMessaging } from "../context/MessagingContext";
+import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
 import { formatDateTime } from "../services/firestoreUtils";
 import { hapticTap } from "../services/haptics";
@@ -24,6 +26,7 @@ export function MessagesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile } = useAuthContext();
   const { conversations, unreadCount, refreshing, refreshConversations } = useMessaging();
+  const { palette } = useThemeContext();
 
   const [usersById, setUsersById] = useState<Map<string, UserProfile>>(new Map());
   const [query, setQuery] = useState("");
@@ -100,7 +103,7 @@ export function MessagesScreen() {
       refreshing={refreshing}
       onRefresh={() => void refreshConversations()}
     >
-      <Card mode="elevated" style={{ marginBottom: 12, backgroundColor: "#FFFFFF" }}>
+      <Card mode="elevated" style={{ marginBottom: 12, backgroundColor: palette.colors.surface }}>
         <Card.Content style={{ gap: 8 }}>
           <Text variant="titleMedium" style={{ fontWeight: "800" }}>
             Start New Conversation
@@ -136,7 +139,7 @@ export function MessagesScreen() {
                   }}
                   style={{
                     borderWidth: 1,
-                    borderColor: "#E2E8F0",
+                    borderColor: palette.colors.border,
                     borderRadius: 12,
                     padding: 10,
                     flexDirection: "row",
@@ -145,15 +148,15 @@ export function MessagesScreen() {
                   }}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Avatar.Image size={36} source={{ uri: user.avatarUrl }} />
+                    <AvatarWithStatus uri={user.avatarUrl} size={36} online={false} />
                     <View>
                       <Text style={{ fontWeight: "700" }}>{user.displayName}</Text>
-                      <Text style={{ color: "#64748B", fontSize: 12 }}>
+                      <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
                         {user.grade}th grade • {user.schoolName}
                       </Text>
                     </View>
                   </View>
-                  <Text style={{ color: "#2563EB", fontWeight: "700" }}>Chat</Text>
+                  <Text style={{ color: palette.colors.primary, fontWeight: "700" }}>Chat</Text>
                 </Pressable>
               ))}
             </View>
@@ -161,7 +164,7 @@ export function MessagesScreen() {
         </Card.Content>
       </Card>
 
-      <Card mode="elevated" style={{ backgroundColor: "#FFFFFF" }}>
+      <Card mode="elevated" style={{ backgroundColor: palette.colors.surface }}>
         <Card.Content style={{ gap: 10 }}>
           <Text variant="titleMedium" style={{ fontWeight: "800" }}>
             Conversations
@@ -182,7 +185,7 @@ export function MessagesScreen() {
                 style={{
                   borderRadius: 14,
                   borderWidth: 1,
-                  borderColor: "#E2E8F0",
+                  borderColor: palette.colors.border,
                   padding: 12,
                   flexDirection: "row",
                   alignItems: "center",
@@ -190,21 +193,26 @@ export function MessagesScreen() {
                 }}
               >
                 <View>
-                  <Avatar.Image
-                    size={42}
-                    source={{ uri: other?.avatarUrl ?? "https://i.pravatar.cc/150?img=10" }}
-                  />
+                  <AvatarWithStatus uri={other?.avatarUrl ?? ""} size={42} online={false} />
                   {unread > 0 ? <Badge style={{ position: "absolute", right: -4, top: -2 }}>{unread}</Badge> : null}
                 </View>
 
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                    <Text style={{ fontWeight: "800", color: "#0F172A" }}>
+                    <Text style={{ fontWeight: "800", color: palette.colors.text }}>
                       {other?.displayName ?? "Conversation"}
                     </Text>
-                    <Text style={{ color: "#94A3B8", fontSize: 12 }}>{formatDateTime(conversation.updatedAt)}</Text>
+                    <Text style={{ color: palette.colors.muted, fontSize: 12 }}>
+                      {formatDateTime(conversation.updatedAt)}
+                    </Text>
                   </View>
-                  <Text numberOfLines={1} style={{ color: typing ? "#0EA5A4" : "#475569", marginTop: 2 }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      color: typing ? palette.colors.success : palette.colors.textSecondary,
+                      marginTop: 2,
+                    }}
+                  >
                     {typing ? "Typing..." : conversation.lastMessage || "No messages yet"}
                   </Text>
                 </View>

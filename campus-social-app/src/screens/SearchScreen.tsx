@@ -4,11 +4,13 @@ import { Button, Card, Searchbar, Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
 import { useAuthContext } from "../context/AuthContext";
+import { useThemeContext } from "../context/ThemeContext";
 import { searchFblaAtlas } from "../services/socialService";
 import { PostItem, UserProfile } from "../types/social";
 
 export function SearchScreen() {
   const { profile } = useAuthContext();
+  const { palette } = useThemeContext();
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [posts, setPosts] = useState<PostItem[]>([]);
@@ -74,25 +76,25 @@ export function SearchScreen() {
       </View>
 
       <View style={{ marginTop: 14, gap: 8 }}>
-        <Text variant="titleMedium" style={{ fontWeight: "700", color: "#0F172A" }}>
+        <Text variant="titleMedium" style={{ fontWeight: "700", color: palette.colors.text }}>
           Students
         </Text>
         {users.map((user) => (
-          <Card key={user.uid} mode="elevated" style={{ backgroundColor: "#FFFFFF" }}>
+          <Card key={user.uid} mode="elevated" style={{ backgroundColor: palette.colors.surface }}>
             <Card.Title title={user.displayName} subtitle={`${user.grade}th grade • ${user.tier}`} />
           </Card>
         ))}
         {users.length === 0 ? (
-          <Text style={{ color: "#64748B" }}>No student results yet.</Text>
+          <Text style={{ color: palette.colors.textSecondary }}>No student results yet.</Text>
         ) : null}
       </View>
 
       <View style={{ marginTop: 14, gap: 8 }}>
-        <Text variant="titleMedium" style={{ fontWeight: "700", color: "#0F172A" }}>
+        <Text variant="titleMedium" style={{ fontWeight: "700", color: palette.colors.text }}>
           Posts
         </Text>
         {posts.map((post) => (
-          <Card key={post.id} mode="elevated" style={{ backgroundColor: "#FFFFFF" }}>
+          <Card key={post.id} mode="elevated" style={{ backgroundColor: palette.colors.surface }}>
             <Card.Title title={post.authorName} subtitle={`${post.likeCount} likes`} />
             <Card.Content>
               <Text>{post.content}</Text>
@@ -100,7 +102,7 @@ export function SearchScreen() {
           </Card>
         ))}
         {posts.length === 0 ? (
-          <Text style={{ color: "#64748B" }}>No post results yet.</Text>
+          <Text style={{ color: palette.colors.textSecondary }}>No post results yet.</Text>
         ) : null}
       </View>
     </ScreenShell>

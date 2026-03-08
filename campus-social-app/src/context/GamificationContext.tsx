@@ -11,6 +11,7 @@ import { useAuthContext } from "./AuthContext";
 import { useNotifications } from "./NotificationsContext";
 import { usePushNotifications } from "./PushNotificationsContext";
 import { useSettings } from "./SettingsContext";
+import { useThemeContext } from "./ThemeContext";
 
 type TierUpgradeState = {
   fromTier: string;
@@ -73,6 +74,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   const { notifications } = useNotifications();
   const { enabled: pushEnabled } = usePushNotifications();
   const { settings } = useSettings();
+  const { palette } = useThemeContext();
 
   const [queue, setQueue] = useState<XpToastState[]>([]);
   const [activeToast, setActiveToast] = useState<XpToastState | null>(null);
@@ -233,13 +235,13 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
       const pointsMatch = item.body.match(/\+(\d+)\sXP/i);
       const points = pointsMatch ? Number(pointsMatch[1]) : 0;
-      enqueueToast(points, "#3B82F6", item.body);
+      enqueueToast(points, palette.colors.primary, item.body);
 
       if (pushEnabled && settings.notifications.globalPush) {
         void sendLocalPush("XP Earned", item.body);
       }
     });
-  }, [notifications, enqueueToast, pushEnabled, settings.notifications.globalPush, settings.notifications.xp]);
+  }, [notifications, enqueueToast, pushEnabled, settings.notifications.globalPush, settings.notifications.xp, palette.colors.primary]);
 
   const value = useMemo(() => ({ handleAwardResult }), [handleAwardResult]);
 
@@ -259,10 +261,10 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
               borderRadius: 16,
               borderWidth: 1,
               borderColor: activeToast.color,
-              backgroundColor: "rgba(11,18,32,0.94)",
+              backgroundColor: palette.colors.glassStrong,
               paddingHorizontal: 14,
               paddingVertical: 12,
-              shadowColor: "#000",
+              shadowColor: palette.colors.background,
               shadowOpacity: 0.25,
               shadowRadius: 18,
               shadowOffset: { width: 0, height: 8 },
@@ -271,10 +273,10 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
             toastStyle,
           ]}
         >
-          <Text style={{ color: "#FFFFFF", fontWeight: "800", marginBottom: 2 }}>
+          <Text style={{ color: palette.colors.onPrimary, fontWeight: "800", marginBottom: 2 }}>
             +{activeToast.points} XP
           </Text>
-          <Text style={{ color: "#E2E8F0" }}>{activeToast.message}</Text>
+          <Text style={{ color: palette.colors.textSecondary }}>{activeToast.message}</Text>
         </Animated.View>
       ) : null}
 
@@ -282,7 +284,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         <View
           style={{
             flex: 1,
-            backgroundColor: "rgba(15,23,42,0.66)",
+            backgroundColor: palette.colors.overlay,
             justifyContent: "center",
             alignItems: "center",
             padding: 20,
@@ -296,24 +298,24 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
               padding: 20,
               gap: 12,
               overflow: "hidden",
-              backgroundColor: "#FFFFFF",
+              backgroundColor: palette.colors.surface,
             }}
           >
-            <Text style={{ fontSize: 22, fontWeight: "900", color: "#0F172A" }}>🏆 Tier Upgrade!</Text>
-            <Text style={{ color: "#334155", fontSize: 15 }}>
+            <Text style={{ fontSize: 22, fontWeight: "900", color: palette.colors.text }}>🏆 Tier Upgrade!</Text>
+            <Text style={{ color: palette.colors.textSecondary, fontSize: 15 }}>
               {tierUpgrade ? `You reached ${tierUpgrade.toTier}! Keep it up!` : ""}
             </Text>
             <Pressable
               onPress={() => setTierUpgrade(null)}
               style={{
                 alignSelf: "flex-start",
-                backgroundColor: "#2563EB",
+                backgroundColor: palette.colors.primary,
                 borderRadius: 12,
                 paddingHorizontal: 14,
                 paddingVertical: 9,
               }}
             >
-              <Text style={{ color: "white", fontWeight: "700" }}>Awesome</Text>
+              <Text style={{ color: palette.colors.onPrimary, fontWeight: "700" }}>Awesome</Text>
             </Pressable>
             <ConfettiLayer active={tierUpgrade !== null} />
           </View>

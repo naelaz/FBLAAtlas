@@ -2,10 +2,12 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { NavigationProp, useNavigation } from "@react-navigation/native";
 import { Pressable } from "react-native";
 
+import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
 
 export function FinnHeaderButton() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const { palette } = useThemeContext();
 
   return (
     <Pressable
@@ -14,8 +16,7 @@ export function FinnHeaderButton() {
       accessibilityRole="button"
       accessibilityLabel="Open Finn AI assistant"
     >
-      <MaterialCommunityIcons name="robot-outline" size={24} color="#0F172A" />
+      <MaterialCommunityIcons name="robot-outline" size={24} color={palette.colors.text} />
     </Pressable>
   );
 }
-

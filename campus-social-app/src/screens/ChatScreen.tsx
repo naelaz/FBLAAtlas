@@ -15,8 +15,9 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { Avatar, Button, Text } from "react-native-paper";
+import { Button, Text } from "react-native-paper";
 
+import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { useAuthContext } from "../context/AuthContext";
 import { useGamification } from "../context/GamificationContext";
@@ -38,7 +39,7 @@ import { ConversationItem, MessageItem, UserProfile } from "../types/social";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
-function TypingDots() {
+function TypingDots({ color }: { color: string }) {
   const opacity = useSharedValue(0.2);
 
   useEffect(() => {
@@ -53,9 +54,9 @@ function TypingDots() {
 
   return (
     <Animated.View style={[style, { flexDirection: "row", gap: 4, marginTop: 2 }]}>
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#64748B" }} />
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#64748B" }} />
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#64748B" }} />
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
     </Animated.View>
   );
 }
@@ -244,12 +245,12 @@ export function ChatScreen({ route, navigation }: Props) {
     >
       <View style={{ flex: 1, paddingHorizontal: 12, paddingTop: 10 }}>
         {otherUser ? (
-          <GlassSurface style={{ padding: 10, marginBottom: 10, backgroundColor: "rgba(255,255,255,0.75)" }}>
+          <GlassSurface style={{ padding: 10, marginBottom: 10, backgroundColor: palette.colors.glassStrong }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Avatar.Image size={34} source={{ uri: otherUser.avatarUrl }} />
+              <AvatarWithStatus uri={otherUser.avatarUrl} size={34} online={false} />
               <View>
-                <Text style={{ fontWeight: "800", color: "#0F172A" }}>{otherUser.displayName}</Text>
-                <Text style={{ color: "#64748B", fontSize: 12 }}>{otherUser.schoolName}</Text>
+                <Text style={{ fontWeight: "800", color: palette.colors.text }}>{otherUser.displayName}</Text>
+                <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>{otherUser.schoolName}</Text>
               </View>
             </View>
           </GlassSurface>
@@ -266,26 +267,23 @@ export function ChatScreen({ route, navigation }: Props) {
               <View style={{ marginBottom: 10, alignItems: mine ? "flex-end" : "flex-start" }}>
                 <View
                   style={{
-                    maxWidth: "88%",
+                    maxWidth: "75%",
                     flexDirection: mine ? "row-reverse" : "row",
                     alignItems: "flex-end",
                     gap: 8,
                   }}
                 >
-                  <Avatar.Image
-                    size={26}
-                    source={{ uri: sender?.avatarUrl ?? "https://i.pravatar.cc/150?img=20" }}
-                  />
+                  <AvatarWithStatus uri={sender?.avatarUrl ?? ""} size={26} online={false} />
                   {mine ? (
                     <View
                       style={{
-                        backgroundColor: "#2563EB",
+                        backgroundColor: palette.colors.primary,
                         borderRadius: 18,
                         paddingHorizontal: 12,
                         paddingVertical: 10,
                       }}
                     >
-                      <Text style={{ color: "white" }}>{item.text}</Text>
+                      <Text style={{ color: palette.colors.onPrimary }}>{item.text}</Text>
                     </View>
                   ) : (
                     <GlassSurface
@@ -293,18 +291,18 @@ export function ChatScreen({ route, navigation }: Props) {
                         borderRadius: 18,
                         paddingHorizontal: 12,
                         paddingVertical: 10,
-                        backgroundColor: "rgba(255,255,255,0.72)",
+                        backgroundColor: palette.colors.glassStrong,
                       }}
                     >
-                      <Text style={{ color: "#0F172A" }}>{item.text}</Text>
+                      <Text style={{ color: palette.colors.text }}>{item.text}</Text>
                     </GlassSurface>
                   )}
                 </View>
-                <Text style={{ color: "#64748B", fontSize: 11, marginTop: 3 }}>
+                <Text style={{ color: palette.colors.textSecondary, fontSize: 11, marginTop: 3 }}>
                   {formatDateTime(item.timestamp)}
                 </Text>
                 {mine && lastOwnMessageId === item.id && showSeen ? (
-                  <Text style={{ color: "#0EA5A4", fontSize: 11 }}>Seen</Text>
+                  <Text style={{ color: palette.colors.success, fontSize: 11 }}>Seen</Text>
                 ) : null}
               </View>
             );
@@ -313,8 +311,8 @@ export function ChatScreen({ route, navigation }: Props) {
 
         {isOtherTyping ? (
           <View style={{ marginBottom: 8, marginLeft: 4 }}>
-            <Text style={{ color: "#64748B", fontSize: 12 }}>Typing...</Text>
-            <TypingDots />
+            <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>Typing...</Text>
+            <TypingDots color={palette.colors.subtleDot} />
           </View>
         ) : null}
 
@@ -323,7 +321,7 @@ export function ChatScreen({ route, navigation }: Props) {
             paddingHorizontal: 8,
             paddingVertical: 8,
             marginBottom: 10,
-            backgroundColor: "rgba(255,255,255,0.8)",
+            backgroundColor: palette.colors.glassStrong,
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
@@ -335,12 +333,14 @@ export function ChatScreen({ route, navigation }: Props) {
               multiline
               style={{
                 flex: 1,
-                backgroundColor: "#F8FAFC",
+                backgroundColor: palette.colors.inputSurface,
                 borderRadius: 14,
                 paddingHorizontal: 12,
                 paddingVertical: 10,
                 maxHeight: 120,
+                color: palette.colors.text,
               }}
+              placeholderTextColor={palette.colors.placeholder}
             />
             <Pressable
               onPress={() => {
@@ -348,13 +348,15 @@ export function ChatScreen({ route, navigation }: Props) {
                 void send();
               }}
               style={{
-                backgroundColor: input.trim() ? "#2563EB" : "#93C5FD",
+                backgroundColor: input.trim() ? palette.colors.primary : palette.colors.inputMuted,
                 borderRadius: 24,
                 paddingHorizontal: 14,
                 paddingVertical: 10,
               }}
             >
-              <Text style={{ color: "white", fontWeight: "700" }}>{sending ? "..." : "Send"}</Text>
+              <Text style={{ color: palette.colors.onPrimary, fontWeight: "700" }}>
+                {sending ? "..." : "Send"}
+              </Text>
             </Pressable>
           </View>
         </GlassSurface>

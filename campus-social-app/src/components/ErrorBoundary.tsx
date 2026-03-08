@@ -2,6 +2,8 @@ import React from "react";
 import { View } from "react-native";
 import { Button, Text } from "react-native-paper";
 
+import { DEFAULT_THEME, getThemeByName } from "../constants/themes";
+
 type ErrorBoundaryState = {
   hasError: boolean;
 };
@@ -10,6 +12,8 @@ export class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   ErrorBoundaryState
 > {
+  private readonly palette = getThemeByName(DEFAULT_THEME);
+
   state: ErrorBoundaryState = {
     hasError: false,
   };
@@ -28,15 +32,17 @@ export class ErrorBoundary extends React.Component<
         <View
           style={{
             flex: 1,
-            backgroundColor: "#090A1A",
+            backgroundColor: this.palette.colors.background,
             alignItems: "center",
             justifyContent: "center",
             padding: 20,
             gap: 14,
           }}
         >
-          <Text style={{ color: "white", fontSize: 22, fontWeight: "800" }}>FBLA Atlas</Text>
-          <Text style={{ color: "#CBD5E1", textAlign: "center" }}>
+          <Text style={{ color: this.palette.colors.text, fontSize: 22, fontWeight: "800" }}>
+            FBLA Atlas
+          </Text>
+          <Text style={{ color: this.palette.colors.textSecondary, textAlign: "center" }}>
             Something went wrong, but your app is still alive.
           </Text>
           <Button mode="contained" onPress={() => this.setState({ hasError: false })}>
@@ -48,4 +54,3 @@ export class ErrorBoundary extends React.Component<
     return this.props.children;
   }
 }
-

@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   doc,
   getDoc,
@@ -9,7 +9,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
-import { APP_THEMES, DEFAULT_THEME } from "../theme/appThemes";
+import { APP_THEMES, DEFAULT_THEME } from "../constants/themes";
 import { AppSettings } from "../types/settings";
 import { toIso } from "./firestoreUtils";
 
@@ -259,4 +259,5 @@ export async function saveSettings(uid: string, settings: AppSettings): Promise<
   );
   await cacheSettings(uid, settings);
 }
+
 

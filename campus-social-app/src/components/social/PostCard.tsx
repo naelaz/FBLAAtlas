@@ -1,5 +1,4 @@
 import * as Clipboard from "expo-clipboard";
-import { Image } from "expo-image";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -18,18 +17,21 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { Button, Chip, Text, TextInput } from "react-native-paper";
+import { Button, Text, TextInput } from "react-native-paper";
 
 import { useThemeContext } from "../../context/ThemeContext";
+import { resolveAvatarUrl } from "../../constants/media";
 import { formatDateTime } from "../../services/firestoreUtils";
 import { hapticLike, hapticTap } from "../../services/haptics";
 import { subscribePostComments } from "../../services/socialService";
 import { CommentItem, PostItem, UserProfile } from "../../types/social";
 import { formatCompactNumber, formatRelativeTime } from "../../utils/format";
+import { AppImage } from "../media/AppImage";
+import { Badge, getTierBadgeVariant } from "../ui/badge";
 import { AvatarWithStatus } from "../ui/AvatarWithStatus";
 import { GlassSurface } from "../ui/GlassSurface";
 
-const REACTIONS = ["🔥", "👏", "💡", "🎯", "😂"];
+const REACTIONS = ["\u{1F525}", "\u{1F44F}", "\u{1F4A1}", "\u{1F3AF}", "\u{1F602}"];
 
 type PostCardProps = {
   post: PostItem;
@@ -193,14 +195,18 @@ function PostCardInner({
             style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}
           >
             <AvatarWithStatus
-              uri={author?.avatarUrl ?? `https://i.pravatar.cc/150?img=${(post.authorId.length % 70) + 1}`}
+              uri={resolveAvatarUrl(author?.avatarUrl, post.authorId)}
               size={36}
               online
             />
             <View style={{ flex: 1 }}>
               <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{post.authorName}</Text>
               <View style={{ flexDirection: "row", gap: 6, alignItems: "center", marginTop: 1 }}>
-                {author ? <Chip compact>{author.tier}</Chip> : null}
+                {author ? (
+                  <Badge size="sm" variant={getTierBadgeVariant(author.tier)} capitalize={false}>
+                    {author.tier}
+                  </Badge>
+                ) : null}
                 <Text style={{ color: palette.colors.muted, fontSize: 12 }}>{formatRelativeTime(post.createdAt)}</Text>
               </View>
             </View>
@@ -211,38 +217,36 @@ function PostCardInner({
           {post.content}
         </Text>
 
-        {post.imageUrl ? (
-          <Pressable
-            onPress={(event) => {
-              onImagePress(event.nativeEvent.locationX, event.nativeEvent.locationY);
-            }}
-            style={{ marginTop: 10, borderRadius: 14, overflow: "hidden" }}
-          >
-            <Image source={post.imageUrl} style={{ width: "100%", height: 190 }} contentFit="cover" transition={180} />
-            {heartPoint ? (
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  {
-                    position: "absolute",
-                    left: heartPoint.x - 15,
-                    top: heartPoint.y - 15,
-                  },
-                  heartStyle,
-                ]}
-              >
-                <Text style={{ fontSize: 30 }}>❤️</Text>
-              </Animated.View>
-            ) : null}
-          </Pressable>
-        ) : null}
+        <Pressable
+          onPress={(event) => {
+            onImagePress(event.nativeEvent.locationX, event.nativeEvent.locationY);
+          }}
+          style={{ marginTop: 10, borderRadius: 12, overflow: "hidden" }}
+        >
+          <AppImage uri={post.imageUrl} style={{ width: "100%", aspectRatio: 4 / 3 }} />
+          {heartPoint ? (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                {
+                  position: "absolute",
+                  left: heartPoint.x - 15,
+                  top: heartPoint.y - 15,
+                },
+                heartStyle,
+              ]}
+            >
+              <Text style={{ fontSize: 30 }}>{"\u{2764}\u{FE0F}"}</Text>
+            </Animated.View>
+          ) : null}
+        </Pressable>
 
         {reactionSummary.length > 0 ? (
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
             {reactionSummary.slice(0, 4).map(([emoji, count]) => (
-              <Chip key={emoji} compact>
+              <Badge key={emoji} size="sm" variant="gray-subtle" capitalize={false}>
                 {emoji} {formatCompactNumber(count)}
-              </Chip>
+              </Badge>
             ))}
           </View>
         ) : null}
@@ -276,7 +280,7 @@ function PostCardInner({
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <Pressable onPress={openComments} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>💬</Text>
+              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{"\u{1F4AC}"}</Text>
               <Text style={{ color: palette.colors.text }}>{formatCompactNumber(post.commentCount)}</Text>
             </Pressable>
             <Pressable
@@ -286,7 +290,7 @@ function PostCardInner({
               }}
               style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
             >
-              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>↗</Text>
+              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{"\u{2197}"}</Text>
               <Text style={{ color: palette.colors.text }}>Share</Text>
             </Pressable>
           </View>
@@ -307,12 +311,12 @@ function PostCardInner({
           </Animated.View>
 
           <Text style={{ color: palette.colors.muted, fontSize: 12 }}>
-            {formatCompactNumber(post.likeCount)} likes • {formatDateTime(post.createdAt)}
+            {formatCompactNumber(post.likeCount)} likes {"\u2022"} {formatDateTime(post.createdAt)}
           </Text>
         </View>
 
         <Modal visible={commentsOpen} transparent animationType="none" onRequestClose={() => setCommentsOpen(false)}>
-          <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.5)", justifyContent: "flex-end" }}>
+          <View style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }}>
             <Pressable style={{ flex: 1 }} onPress={() => setCommentsOpen(false)} />
             <Animated.View style={sheetStyle}>
               <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -387,7 +391,7 @@ function PostCardInner({
 
         <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
           <Pressable
-            style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.42)", justifyContent: "flex-end" }}
+            style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }}
             onPress={() => setMenuOpen(false)}
           >
             <Pressable>

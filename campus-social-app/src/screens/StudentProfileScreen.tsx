@@ -1,13 +1,15 @@
-﻿import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useEffect, useState } from "react";
 import { View } from "react-native";
-import { Chip, Text } from "react-native-paper";
+import { Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
+import { Badge, getTierBadgeVariant } from "../components/ui/badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { useAuthContext } from "../context/AuthContext";
+import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
 import { formatRelativeDateTime } from "../services/firestoreUtils";
 import { fetchRecentActivityForUser, fetchSchoolUsersOnce } from "../services/socialService";
@@ -19,6 +21,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "StudentProfile">;
 export function StudentProfileScreen({ route, navigation }: Props) {
   const { userId } = route.params;
   const { profile } = useAuthContext();
+  const { palette } = useThemeContext();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
 
@@ -60,10 +63,18 @@ export function StudentProfileScreen({ route, navigation }: Props) {
             {user.displayName}
           </Text>
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-            <Chip>{user.tier}</Chip>
-            <Chip>{formatCompactNumber(user.xp)} XP</Chip>
-            <Chip>Class of {user.graduationYear}</Chip>
-            <Chip>🔥 {user.streakCount} day streak</Chip>
+            <Badge variant={getTierBadgeVariant(user.tier)} size="sm" capitalize={false}>
+              {user.tier}
+            </Badge>
+            <Badge variant="blue-subtle" size="sm" capitalize={false}>
+              {formatCompactNumber(user.xp)} XP
+            </Badge>
+            <Badge variant="gray-subtle" size="sm" capitalize={false}>
+              Class of {user.graduationYear}
+            </Badge>
+            <Badge variant="amber-subtle" size="sm" capitalize={false}>
+              🔥 {user.streakCount} day streak
+            </Badge>
           </View>
           <Text>{user.bio || "No bio yet."}</Text>
         </View>
@@ -74,7 +85,15 @@ export function StudentProfileScreen({ route, navigation }: Props) {
           Badges
         </Text>
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-          {user.badges.length > 0 ? user.badges.map((badge) => <Chip key={badge}>{badge}</Chip>) : <Text>No badges yet.</Text>}
+          {user.badges.length > 0 ? (
+            user.badges.map((badge) => (
+              <Badge key={badge} variant={getTierBadgeVariant(user.tier)} size="sm" capitalize={false}>
+                {badge}
+              </Badge>
+            ))
+          ) : (
+            <Text>No badges yet.</Text>
+          )}
         </View>
       </GlassSurface>
 
@@ -84,13 +103,23 @@ export function StudentProfileScreen({ route, navigation }: Props) {
         </Text>
         {activity.length > 0 ? (
           activity.map((item) => (
-            <View key={item.id} style={{ borderBottomWidth: 1, borderBottomColor: "#E2E8F0", paddingBottom: 8, marginBottom: 8 }}>
+            <View
+              key={item.id}
+              style={{
+                borderBottomWidth: 1,
+                borderBottomColor: palette.colors.border,
+                paddingBottom: 8,
+                marginBottom: 8,
+              }}
+            >
               <Text>{item.message}</Text>
-              <Text style={{ color: "#64748B", fontSize: 12 }}>{formatRelativeDateTime(item.createdAt)}</Text>
+              <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                {formatRelativeDateTime(item.createdAt)}
+              </Text>
             </View>
           ))
         ) : (
-          <Text style={{ color: "#64748B" }}>No recent activity found.</Text>
+          <Text style={{ color: palette.colors.textSecondary }}>No recent activity found.</Text>
         )}
       </GlassSurface>
     </ScreenShell>

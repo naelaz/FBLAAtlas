@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { MD3Theme } from "react-native-paper";
 
@@ -10,7 +10,7 @@ import {
   createPaperTheme,
   DEFAULT_THEME,
   getThemeByName,
-} from "../theme/appThemes";
+} from "../constants/themes";
 
 type ThemeContextValue = {
   themeName: AppThemeName;
@@ -89,4 +89,5 @@ export function useThemeContext(): ThemeContextValue {
   }
   return context;
 }
+
 

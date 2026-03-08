@@ -125,7 +125,7 @@ export function OnboardingScreen() {
                     borderRadius: 22,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: "rgba(37,99,235,0.18)",
+                    backgroundColor: palette.colors.primarySoft,
                   }}
                 >
                   <MaterialCommunityIcons name={feature.icon} size={22} color={palette.colors.primary} />
@@ -180,10 +180,10 @@ export function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#090A1A" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }}>
       <View style={{ flex: 1 }}>
         <LinearGradient
-          colors={["#0C122B", "#1A1742", "#090A1A"]}
+          colors={[palette.colors.background, palette.colors.surface, palette.colors.elevated]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
@@ -197,7 +197,7 @@ export function OnboardingScreen() {
               width: 300,
               height: 300,
               borderRadius: 150,
-              backgroundColor: "rgba(59,130,246,0.25)",
+              backgroundColor: palette.colors.primarySoft,
             },
             gradientStyle,
           ]}
@@ -226,7 +226,7 @@ export function OnboardingScreen() {
                   height: 8,
                   borderRadius: 999,
                   width: dotIndex === index ? 24 : 8,
-                  backgroundColor: dotIndex === index ? "#60A5FA" : "rgba(255,255,255,0.35)",
+                  backgroundColor: dotIndex === index ? palette.colors.primary : palette.colors.inputMuted,
                 }}
               />
             ))}
@@ -234,7 +234,7 @@ export function OnboardingScreen() {
 
           <View style={{ marginTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <Pressable onPress={complete} style={{ minWidth: 44, minHeight: 44, justifyContent: "center", paddingHorizontal: 6 }}>
-              <Text style={{ color: "#CBD5E1" }}>Skip</Text>
+              <Text style={{ color: palette.colors.textSecondary }}>Skip</Text>
             </Pressable>
 
             {index < SLIDES.length - 1 ? (

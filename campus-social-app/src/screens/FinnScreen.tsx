@@ -1,6 +1,9 @@
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   ListRenderItemInfo,
@@ -8,7 +11,6 @@ import {
   Pressable,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -17,12 +19,15 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { Chip, Text } from "react-native-paper";
+import { Text } from "react-native-paper";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FinnInput } from "../components/FinnInput";
 import { FinnRobotIcon } from "../components/branding/FinnRobotIcon";
+import { Badge } from "../components/ui/badge";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { useAuthContext } from "../context/AuthContext";
+import { useNavBarVisibility } from "../context/NavBarVisibilityContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { hapticTap } from "../services/haptics";
 import { askFinn, isFinnConfigured } from "../services/finnService";
@@ -72,6 +77,7 @@ function createMessage(
 }
 
 function ThinkingDot({ delayMs }: { delayMs: number }) {
+  const { palette } = useThemeContext();
   const pulse = useSharedValue(0.45);
 
   useEffect(() => {
@@ -97,7 +103,7 @@ function ThinkingDot({ delayMs }: { delayMs: number }) {
           width: 7,
           height: 7,
           borderRadius: 3.5,
-          backgroundColor: "#64748B",
+          backgroundColor: palette.colors.subtleDot,
         },
         style,
       ]}
@@ -117,9 +123,13 @@ function ThinkingIndicator() {
 
 export function FinnScreen() {
   const { profile } = useAuthContext();
+  const { hideNavBar, showNavBar } = useNavBarVisibility();
   const { palette } = useThemeContext();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+
   const [sending, setSending] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [messages, setMessages] = useState<FinnChatMessage[]>([
     createMessage(
       "assistant",
@@ -139,6 +149,27 @@ export function FinnScreen() {
   useEffect(() => {
     scrollToLatest();
   }, [messages.length]);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", () => {
+      setKeyboardVisible(true);
+      hideNavBar();
+    });
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardVisible(false);
+      showNavBar();
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      showNavBar();
+    };
+  }, [hideNavBar, showNavBar]);
+
+  const inputBottomPadding = keyboardVisible
+    ? Math.max(insets.bottom, 10) + 8
+    : Math.max(insets.bottom, 10) + Math.max(tabBarHeight, 72);
 
   const sendMessage = async (rawText: string) => {
     const messageText = rawText.trim();
@@ -181,18 +212,13 @@ export function FinnScreen() {
             : item,
         ),
       );
-    } catch (error) {
-      const responseText =
-        error instanceof Error
-          ? `Finn error: ${error.message}`
-          : "Finn error: Request failed. Please try again.";
-
+    } catch {
       setMessages((prev) =>
         prev.map((item) =>
           item.id === pendingAssistantId
             ? {
                 ...item,
-                text: responseText,
+                text: "I hit a temporary issue. Try again in a few seconds.",
                 pending: false,
                 error: true,
               }
@@ -231,9 +257,9 @@ export function FinnScreen() {
                 borderRadius: 20,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "rgba(99,102,241,0.2)",
+                backgroundColor: palette.colors.secondarySoft,
                 borderWidth: 1,
-                borderColor: "rgba(99,102,241,0.35)",
+                borderColor: palette.colors.glassBorder,
               }}
             >
               <FinnRobotIcon size={24} />
@@ -267,7 +293,7 @@ export function FinnScreen() {
                 maxWidth: "75%",
               }}
             >
-              <Text style={{ color: "#FFFFFF", lineHeight: 20 }}>{item.text}</Text>
+              <Text style={{ color: palette.colors.onPrimary, lineHeight: 20 }}>{item.text}</Text>
             </View>
           )}
         </View>
@@ -277,6 +303,12 @@ export function FinnScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }} edges={["top", "left", "right"]}>
+      <LinearGradient
+        colors={[palette.colors.background, palette.colors.surface, palette.colors.elevated]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ position: "absolute", top: 0, right: 0, left: 0, bottom: 0 }}
+      />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -300,7 +332,7 @@ export function FinnScreen() {
                   borderRadius: 20,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "rgba(99,102,241,0.22)",
+                  backgroundColor: palette.colors.secondarySoft,
                 }}
               >
                 <FinnRobotIcon size={26} />
@@ -309,13 +341,13 @@ export function FinnScreen() {
                 <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "800" }}>
                   Finn AI Agent
                 </Text>
-                <Text style={{ color: palette.colors.muted }}>
-                  {hasApiKey ? "Live AI mode enabled" : "Live AI disabled (add OpenAI key)"}
+                <Text style={{ color: palette.colors.textSecondary }}>
+                  {hasApiKey ? "Live AI mode enabled" : "Smart local mode active"}
                 </Text>
               </View>
-              <Chip compact icon="school">
+              <Badge size="sm" variant="blue-subtle" capitalize={false}>
                 FBLA
-              </Chip>
+              </Badge>
             </View>
           </GlassSurface>
 
@@ -334,7 +366,7 @@ export function FinnScreen() {
                       borderRadius: 999,
                       borderWidth: 1,
                       borderColor: palette.colors.border,
-                      backgroundColor: palette.colors.surface,
+                      backgroundColor: palette.colors.chipSurface,
                       paddingHorizontal: 12,
                       alignItems: "center",
                       justifyContent: "center",
@@ -364,7 +396,7 @@ export function FinnScreen() {
                     borderRadius: 999,
                     borderWidth: 1,
                     borderColor: palette.colors.border,
-                    backgroundColor: palette.colors.surface,
+                    backgroundColor: palette.colors.chipSurface,
                     paddingHorizontal: 12,
                     alignItems: "center",
                     justifyContent: "center",
@@ -382,13 +414,14 @@ export function FinnScreen() {
             keyExtractor={(item) => item.id}
             renderItem={renderMessage}
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingTop: 4, paddingBottom: 10 }}
+            contentContainerStyle={{ paddingTop: 4, paddingBottom: 12 }}
             onContentSizeChange={() => scrollToLatest()}
+            keyboardShouldPersistTaps="handled"
           />
 
           <View
             style={{
-              paddingBottom: Math.max(insets.bottom, 10),
+              paddingBottom: inputBottomPadding,
               paddingTop: 6,
             }}
           >

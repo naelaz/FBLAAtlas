@@ -1,27 +1,30 @@
-﻿import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { BlurView } from "expo-blur";
-import { Image } from "expo-image";
 import * as Sharing from "expo-sharing";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, Share, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { Button, Chip, Text, TextInput } from "react-native-paper";
+import { Button, Text, TextInput } from "react-native-paper";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
+import { AppImage } from "../components/media/AppImage";
+import { Badge, getTierBadgeVariant } from "../components/ui/badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { ScreenShell } from "../components/ScreenShell";
 import { useAuthContext } from "../context/AuthContext";
 import { useSettings } from "../context/SettingsContext";
+import { useThemeContext } from "../context/ThemeContext";
 import { getNextTier, getTierForXp, getXpProgress } from "../constants/gamification";
 import { RootStackParamList } from "../navigation/types";
 import { formatRelativeDateTime } from "../services/firestoreUtils";
 import { hapticSuccess, hapticTap } from "../services/haptics";
 import { fetchPostsOnce, fetchRecentActivityForUser, fetchSchoolUsersOnce } from "../services/socialService";
 import { updateUserProfileFields } from "../services/userService";
-import { APP_THEMES } from "../theme/appThemes";
+import { APP_THEMES } from "../constants/themes";
+import { getCampusImage } from "../constants/media";
 import { ActivityItem, PostItem, UserProfile } from "../types/social";
 import { formatCompactNumber } from "../utils/format";
 
@@ -31,6 +34,7 @@ export function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile, refreshProfile } = useAuthContext();
   const { settings, updateSettings } = useSettings();
+  const { palette } = useThemeContext();
 
   const [refreshing, setRefreshing] = useState(false);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
@@ -113,6 +117,7 @@ export function ProfileScreen() {
   const progressInfo = getXpProgress(profile.xp);
   const tier = getTierForXp(profile.xp);
   const nextTier = getNextTier(profile.xp);
+  const profileHeaderImage = posts[0]?.imageUrl ?? profile.avatarUrl ?? getCampusImage(profile.uid);
 
   const followers = profile.followerIds.map((id) => usersById.get(id)).filter(Boolean) as UserProfile[];
   const following = profile.followingIds.map((id) => usersById.get(id)).filter(Boolean) as UserProfile[];
@@ -153,8 +158,8 @@ export function ProfileScreen() {
       onRefresh={() => void refresh()}
     >
       <View style={{ borderRadius: 20, overflow: "hidden", marginBottom: 12 }}>
-        <Image source="https://picsum.photos/900/500?random=901" style={{ width: "100%", height: 208 }} />
-        <BlurView intensity={42} tint="dark" style={{ position: "absolute", left: 0, right: 0, bottom: 0, top: 0 }} />
+        <AppImage uri={profileHeaderImage} style={{ width: "100%", height: 208 }} />
+        <BlurView intensity={80} tint="dark" style={{ position: "absolute", left: 0, right: 0, bottom: 0, top: 0 }} />
 
         <View style={{ position: "absolute", left: 0, right: 0, top: 14, alignItems: "center" }}>
           <AvatarWithStatus uri={profile.avatarUrl} size={84} online />
@@ -175,8 +180,8 @@ export function ProfileScreen() {
               <Text style={{ color: "white", fontWeight: "800" }}>{profile.tier}</Text>
             </View>
           </View>
-          <Text style={{ color: "#E2E8F0", marginTop: 2 }}>{profile.schoolName}</Text>
-          <Text style={{ color: "#FBBF24", marginTop: 3 }}>🔥 {profile.streakCount} day streak</Text>
+          <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>{profile.schoolName}</Text>
+          <Text style={{ color: palette.colors.warning, marginTop: 3 }}>🔥 {profile.streakCount} day streak</Text>
         </View>
 
         <GlassSurface
@@ -186,8 +191,8 @@ export function ProfileScreen() {
             right: 12,
             bottom: 12,
             padding: 10,
-            backgroundColor: "rgba(15,23,42,0.58)",
-            borderColor: "rgba(148,163,184,0.5)",
+            backgroundColor: palette.colors.glassStrong,
+            borderColor: palette.colors.glassBorder,
           }}
         >
           <View style={{ flexDirection: "row", justifyContent: "space-around" }}>
@@ -199,7 +204,7 @@ export function ProfileScreen() {
               style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
             >
               <Text style={{ color: "white", fontWeight: "800" }}>{formatCompactNumber(posts.length)}</Text>
-              <Text style={{ color: "#CBD5E1", fontSize: 12 }}>Posts</Text>
+              <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>Posts</Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -209,7 +214,7 @@ export function ProfileScreen() {
               style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
             >
               <Text style={{ color: "white", fontWeight: "800" }}>{formatCompactNumber(profile.followerIds.length)}</Text>
-              <Text style={{ color: "#CBD5E1", fontSize: 12 }}>Followers</Text>
+              <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>Followers</Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -219,7 +224,7 @@ export function ProfileScreen() {
               style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
             >
               <Text style={{ color: "white", fontWeight: "800" }}>{formatCompactNumber(profile.followingIds.length)}</Text>
-              <Text style={{ color: "#CBD5E1", fontSize: 12 }}>Following</Text>
+              <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>Following</Text>
             </Pressable>
           </View>
         </GlassSurface>
@@ -229,19 +234,19 @@ export function ProfileScreen() {
         style={{
           padding: 12,
           marginBottom: 12,
-          backgroundColor: "rgba(255,255,255,0.78)",
-          borderColor: "rgba(148,163,184,0.3)",
+          backgroundColor: palette.colors.glass,
+          borderColor: palette.colors.glassBorder,
         }}
       >
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-          <Text style={{ fontWeight: "800", color: "#0F172A" }}>
+          <Text style={{ fontWeight: "800", color: palette.colors.text }}>
             XP {formatCompactNumber(profile.xp)}
           </Text>
-          <Text style={{ color: "#64748B" }}>
+          <Text style={{ color: palette.colors.textSecondary }}>
             {nextTier ? `${formatCompactNumber(profile.xp)} / ${formatCompactNumber(nextTier.minXp)}` : "Max Tier"}
           </Text>
         </View>
-        <View style={{ height: 12, borderRadius: 999, backgroundColor: "#E2E8F0", overflow: "hidden" }}>
+        <View style={{ height: 12, borderRadius: 999, backgroundColor: palette.colors.inputMuted, overflow: "hidden" }}>
           <Animated.View style={[{ height: 12, backgroundColor: tier.color, borderRadius: 999 }, barStyle]} />
         </View>
       </GlassSurface>
@@ -307,7 +312,7 @@ export function ProfileScreen() {
                   height: 58,
                   borderRadius: 29,
                   borderWidth: selected ? 3 : 1,
-                  borderColor: selected ? theme.colors.primary : "#CBD5E1",
+                  borderColor: selected ? theme.colors.primary : palette.colors.border,
                   overflow: "hidden",
                 }}
               >
@@ -326,7 +331,9 @@ export function ProfileScreen() {
         {profile.badges.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {profile.badges.map((badge) => (
-              <Chip key={badge}>{badge}</Chip>
+              <Badge key={badge} variant={getTierBadgeVariant(profile.tier)} size="sm" capitalize={false}>
+                {badge}
+              </Badge>
             ))}
           </ScrollView>
         ) : (
@@ -340,20 +347,30 @@ export function ProfileScreen() {
         </Text>
         {activity.length > 0 ? (
           activity.map((item) => (
-            <View key={item.id} style={{ borderBottomWidth: 1, borderBottomColor: "rgba(148,163,184,0.2)", paddingBottom: 8, marginBottom: 8 }}>
-              <Text style={{ color: "#0F172A" }}>{item.message}</Text>
-              <Text style={{ color: "#64748B", fontSize: 12 }}>{formatRelativeDateTime(item.createdAt)}</Text>
+            <View
+              key={item.id}
+              style={{
+                borderBottomWidth: 1,
+                borderBottomColor: palette.colors.divider,
+                paddingBottom: 8,
+                marginBottom: 8,
+              }}
+            >
+              <Text style={{ color: palette.colors.text }}>{item.message}</Text>
+              <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                {formatRelativeDateTime(item.createdAt)}
+              </Text>
             </View>
           ))
         ) : (
-          <Text style={{ color: "#64748B" }}>No recent activity yet.</Text>
+          <Text style={{ color: palette.colors.textSecondary }}>No recent activity yet.</Text>
         )}
       </GlassSurface>
 
       <Modal visible={statSheet !== null} transparent animationType="slide" onRequestClose={() => setStatSheet(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.48)", justifyContent: "flex-end" }} onPress={() => setStatSheet(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }} onPress={() => setStatSheet(null)}>
           <Pressable>
-            <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, maxHeight: "70%" }}>
+            <View style={{ backgroundColor: palette.colors.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, maxHeight: "70%" }}>
               <Text variant="titleLarge" style={{ fontWeight: "900", marginBottom: 10 }}>
                 {statSheet === "posts" ? "Posts" : statSheet === "followers" ? "Followers" : "Following"}
               </Text>
@@ -366,12 +383,12 @@ export function ProfileScreen() {
                         <Text style={{ fontWeight: "800" }} numberOfLines={2}>
                           {row.title}
                         </Text>
-                        <Text style={{ color: "#64748B" }}>{row.subtitle}</Text>
+                        <Text style={{ color: palette.colors.textSecondary }}>{row.subtitle}</Text>
                       </View>
                     </View>
                   ))
                 ) : (
-                  <Text style={{ color: "#64748B" }}>No items to show.</Text>
+                  <Text style={{ color: palette.colors.textSecondary }}>No items to show.</Text>
                 )}
               </ScrollView>
             </View>
@@ -380,9 +397,9 @@ export function ProfileScreen() {
       </Modal>
 
       <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => setEditOpen(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.48)", justifyContent: "flex-end" }} onPress={() => setEditOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }} onPress={() => setEditOpen(false)}>
           <Pressable>
-            <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, gap: 10 }}>
+            <View style={{ backgroundColor: palette.colors.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, gap: 10 }}>
               <Text variant="titleLarge" style={{ fontWeight: "900" }}>Edit Profile</Text>
               <TextInput mode="outlined" label="Display Name" value={editName} onChangeText={setEditName} />
               <TextInput mode="outlined" label="Bio" value={editBio} onChangeText={setEditBio} multiline />
@@ -416,21 +433,31 @@ export function ProfileScreen() {
 
       <View style={{ position: "absolute", left: -1000, top: -1000 }}>
         <ViewShot ref={shareCardRef} options={{ format: "png", quality: 1 }}>
-          <View style={{ width: 360, backgroundColor: "#0F172A", borderRadius: 18, padding: 16 }}>
+          <View style={{ width: 360, backgroundColor: palette.colors.background, borderRadius: 18, padding: 16 }}>
             <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>FBLA Atlas</Text>
-            <Text style={{ color: "#93C5FD", marginTop: 4 }}>{profile.schoolName}</Text>
+            <Text style={{ color: palette.colors.secondary, marginTop: 4 }}>{profile.schoolName}</Text>
             <View style={{ marginTop: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Image source={profile.avatarUrl} style={{ width: 62, height: 62, borderRadius: 31 }} />
+              <AppImage uri={profile.avatarUrl} style={{ width: 62, height: 62, borderRadius: 31 }} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: "white", fontWeight: "900", fontSize: 18 }}>{profile.displayName}</Text>
-                <Text style={{ color: "#CBD5E1" }}>{profile.tier} Tier • {formatCompactNumber(profile.xp)} XP</Text>
+                <Text style={{ color: palette.colors.textSecondary }}>
+                  {profile.tier} Tier • {formatCompactNumber(profile.xp)} XP
+                </Text>
               </View>
             </View>
-            <Text style={{ color: "#CBD5E1", marginTop: 12 }}>Top Badges</Text>
+            <Text style={{ color: palette.colors.textSecondary, marginTop: 12 }}>Top Badges</Text>
             <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
               {profile.badges.slice(0, 3).map((badge) => (
-                <View key={badge} style={{ backgroundColor: "rgba(148,163,184,0.2)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 }}>
-                  <Text style={{ color: "#E2E8F0" }}>{badge}</Text>
+                <View
+                  key={badge}
+                  style={{
+                    backgroundColor: palette.colors.inputMuted,
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                  }}
+                >
+                  <Text style={{ color: palette.colors.text }}>{badge}</Text>
                 </View>
               ))}
             </View>
@@ -444,3 +471,4 @@ export function ProfileScreen() {
     </ScreenShell>
   );
 }
+

@@ -4,6 +4,7 @@ import { Button, Card, Text } from "react-native-paper";
 
 import { RootStackParamList } from "../navigation/types";
 import { ScreenShell } from "../components/ScreenShell";
+import { useThemeContext } from "../context/ThemeContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AnnouncementDetail">;
 
@@ -19,11 +20,12 @@ function formatDate(isoDate: string): string {
 
 export function AnnouncementDetailScreen({ route, navigation }: Props) {
   const { item } = route.params;
+  const { palette } = useThemeContext();
 
   return (
     <ScreenShell title="Announcement Detail" subtitle="Stack navigation example screen.">
       <View className="gap-3">
-        <Card mode="elevated" style={{ backgroundColor: "#FFFFFF" }}>
+        <Card mode="elevated" style={{ backgroundColor: palette.colors.surface }}>
           <Card.Title title={item.title} subtitle={`${item.author} • ${formatDate(item.createdAt)}`} />
           <Card.Content>
             <Text>{item.body}</Text>

@@ -33,7 +33,7 @@ export function SkeletonCard({ height = 96 }: { height?: number }) {
         {
           height,
           borderRadius: 14,
-          backgroundColor: palette.isDark ? "rgba(148,163,184,0.18)" : "#E2E8F0",
+          backgroundColor: palette.colors.inputMuted,
           marginBottom: 10,
         },
       ]}

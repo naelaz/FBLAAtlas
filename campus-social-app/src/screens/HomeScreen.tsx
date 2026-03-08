@@ -1,17 +1,22 @@
-﻿import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
-import { Image } from "expo-image";
+import { Bell, Globe, LucideIcon, Settings, Sparkles, SquarePen, Trophy } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Linking, Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
-import { ActivityIndicator, Avatar, Button, Chip, SegmentedButtons, Text, TextInput } from "react-native-paper";
+import { ActivityIndicator, Avatar, Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
 
+import { AppImage } from "../components/media/AppImage";
 import { PostCard } from "../components/social/PostCard";
+import { StoryAvatar } from "../components/social/StoryAvatar";
 import { StoryViewerModal } from "../components/social/StoryViewerModal";
+import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { SkeletonCard } from "../components/ui/SkeletonCard";
+import { getCampusImage, getNewsBannerImage, SOCIAL_WIDGET_IMAGES } from "../constants/media";
+import { BRAND_COLORS } from "../constants/themes";
 import { useAuthContext } from "../context/AuthContext";
 import { useGamification } from "../context/GamificationContext";
 import { useThemeContext } from "../context/ThemeContext";
@@ -41,55 +46,64 @@ import { ActivityItem, PostItem, SchoolNewsItem, StoryItem, UserProfile } from "
 import { FeedItem } from "../types/feed";
 import { formatCompactNumber, getTimeGreeting } from "../utils/format";
 
-const MOODS = ["😀", "😎", "🤓", "😴", "🔥", "💡"];
+const MOODS = ["\u{1F600}", "\u{1F60E}", "\u{1F913}", "\u{1F634}", "\u{1F525}", "\u{1F4A1}"];
 
 const SOCIAL_WIDGETS = [
   {
     id: "instagram",
     name: "Instagram",
-    brand: "#E1306C",
+    brand: BRAND_COLORS.instagram,
     latest: "Latest: Chapter recap reel posted today",
-    imageUrl: "https://picsum.photos/400/300?random=941",
+    imageUrl: SOCIAL_WIDGET_IMAGES.instagram,
     appUrl: "instagram://user?username=fbla",
     webUrl: "https://instagram.com/fbla",
   },
   {
     id: "x",
     name: "Twitter / X",
-    brand: "#1D9BF0",
+    brand: BRAND_COLORS.x,
     latest: "Latest: New competition update thread",
-    imageUrl: "https://picsum.photos/400/300?random=942",
+    imageUrl: SOCIAL_WIDGET_IMAGES.x,
     appUrl: "twitter://user?screen_name=fbla",
     webUrl: "https://x.com/fbla",
   },
   {
     id: "tiktok",
     name: "TikTok",
-    brand: "#111111",
+    brand: BRAND_COLORS.tiktok,
     latest: "Latest: Event prep tips short video",
-    imageUrl: "https://picsum.photos/400/300?random=943",
+    imageUrl: SOCIAL_WIDGET_IMAGES.tiktok,
     appUrl: "snssdk1128://user/profile",
     webUrl: "https://www.tiktok.com/@fbla",
   },
   {
     id: "youtube",
     name: "YouTube",
-    brand: "#FF0000",
+    brand: BRAND_COLORS.youtube,
     latest: "Latest: FBLA chapter livestream replay",
-    imageUrl: "https://picsum.photos/400/300?random=944",
+    imageUrl: SOCIAL_WIDGET_IMAGES.youtube,
     appUrl: "vnd.youtube://channel/UC",
     webUrl: "https://www.youtube.com/results?search_query=fbla",
   },
   {
     id: "snapchat",
     name: "Snapchat",
-    brand: "#FACC15",
+    brand: BRAND_COLORS.snapchat,
     latest: "Latest: Story from chapter spirit day",
-    imageUrl: "https://picsum.photos/400/300?random=945",
+    imageUrl: SOCIAL_WIDGET_IMAGES.snapchat,
     appUrl: "snapchat://",
     webUrl: "https://www.snapchat.com",
   },
 ];
+
+type QuickActionItem = {
+  id: string;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  accent: string;
+  onPress: () => void;
+};
 
 async function openPlatform(appUrl: string, webUrl: string): Promise<void> {
   try {
@@ -104,7 +118,19 @@ async function openPlatform(appUrl: string, webUrl: string): Promise<void> {
   await Linking.openURL(webUrl);
 }
 
-function ShimmerCard({ label, value, borderColor }: { label: string; value: string; borderColor: string }) {
+function ShimmerCard({
+  label,
+  value,
+  borderColor,
+  labelColor,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  borderColor: string;
+  labelColor: string;
+  valueColor: string;
+}) {
   const shimmer = useSharedValue(-220);
 
   useEffect(() => {
@@ -122,10 +148,10 @@ function ShimmerCard({ label, value, borderColor }: { label: string; value: stri
   return (
     <GlassSurface style={{ width: "48%", padding: 10, borderRadius: 14, borderColor, overflow: "hidden" }}>
       <Animated.View style={[{ position: "absolute", top: 0, bottom: 0, width: 120, opacity: 0.22 }, shimmerStyle]}>
-        <LinearGradient colors={["transparent", "rgba(255,255,255,0.85)", "transparent"]} style={{ flex: 1 }} />
+        <LinearGradient colors={["transparent", borderColor, "transparent"]} style={{ flex: 1 }} />
       </Animated.View>
-      <Text style={{ color: "#64748B", fontSize: 12 }}>{label}</Text>
-      <Text style={{ color: "#0F172A", fontWeight: "900", marginTop: 4 }}>{value}</Text>
+      <Text style={{ color: labelColor, fontSize: 12 }}>{label}</Text>
+      <Text style={{ color: valueColor, fontWeight: "900", marginTop: 4 }}>{value}</Text>
     </GlassSurface>
   );
 }
@@ -280,12 +306,12 @@ export function HomeScreen() {
   const campusPulse = useMemo(() => {
     const topStudent = [...users].sort((a, b) => b.xp - a.xp)[0];
     return [
-      { id: "online", label: "Students Online", value: `${47 + (users.length % 11)}`, border: "#60A5FA" },
-      { id: "events", label: "Events This Week", value: `${Math.max(3, announcements.length)}`, border: "#F59E0B" },
-      { id: "top", label: "Top Student", value: topStudent?.displayName ?? "TBD", border: "#22C55E" },
-      { id: "feed", label: "New Feed Items", value: `${activities.length}`, border: "#A855F7" },
+      { id: "online", label: "Students Online", value: `${47 + (users.length % 11)}`, border: palette.colors.info },
+      { id: "events", label: "Events This Week", value: `${Math.max(3, announcements.length)}`, border: palette.colors.warning },
+      { id: "top", label: "Top Student", value: topStudent?.displayName ?? "TBD", border: palette.colors.success },
+      { id: "feed", label: "New Feed Items", value: `${activities.length}`, border: palette.colors.secondary },
     ];
-  }, [users, announcements.length, activities.length]);
+  }, [users, announcements.length, activities.length, palette.colors.info, palette.colors.warning, palette.colors.success, palette.colors.secondary]);
 
   const storiesWithMood = useMemo(() => {
     return stories.map((story) => {
@@ -297,6 +323,62 @@ export function HomeScreen() {
       };
     });
   }, [stories, userLookup]);
+
+  const quickActions = useMemo<QuickActionItem[]>(
+    () => [
+      {
+        id: "notifications",
+        title: "Notifications",
+        description: "Alerts and mentions",
+        icon: Bell,
+        accent: palette.colors.info,
+        onPress: () => navigation.navigate("Notifications"),
+      },
+      {
+        id: "leaderboard",
+        title: "Leaderboard",
+        description: "Top XP this week",
+        icon: Trophy,
+        accent: palette.colors.warning,
+        onPress: () => navigation.navigate("Leaderboard"),
+      },
+      {
+        id: "settings",
+        title: "Settings",
+        description: "Privacy and themes",
+        icon: Settings,
+        accent: palette.colors.secondary,
+        onPress: () => navigation.navigate("Settings"),
+      },
+      {
+        id: "compose",
+        title: "New Post",
+        description: "Share an update",
+        icon: SquarePen,
+        accent: palette.colors.primary,
+        onPress: () => navigation.navigate("CreatePost"),
+      },
+      {
+        id: "finn",
+        title: "Finn Coach",
+        description: "AI help and planning",
+        icon: Sparkles,
+        accent: palette.colors.secondary,
+        onPress: () => navigation.navigate("Finn"),
+      },
+      {
+        id: "fbla",
+        title: "FBLA.org",
+        description: "Official resources",
+        icon: Globe,
+        accent: BRAND_COLORS.youtube,
+        onPress: () => {
+          void Linking.openURL("https://www.fbla.org");
+        },
+      },
+    ],
+    [navigation, palette.colors.info, palette.colors.warning, palette.colors.secondary, palette.colors.primary],
+  );
 
   if (authLoading || !profile) {
     return (
@@ -319,8 +401,12 @@ export function HomeScreen() {
         ListHeaderComponent={
           <View>
             <GlassSurface style={{ marginBottom: 12, padding: 12 }}>
-              <Text style={{ fontWeight: "900", fontSize: 24, color: "#0F172A" }}>{getTimeGreeting(profile.displayName.split(" ")[0])}</Text>
-              <Text style={{ color: "#64748B", marginTop: 3 }}>Welcome to FBLA Atlas.</Text>
+              <Text style={{ fontWeight: "900", fontSize: 24, color: palette.colors.text }}>
+                {getTimeGreeting(profile.displayName.split(" ")[0])}
+              </Text>
+              <Text style={{ color: palette.colors.textSecondary, marginTop: 3 }}>
+                Welcome to FBLA Atlas.
+              </Text>
               <TextInput
                 mode="outlined"
                 value={searchQuery}
@@ -331,12 +417,73 @@ export function HomeScreen() {
               />
             </GlassSurface>
 
+            <GlassSurface style={{ marginBottom: 12, padding: 10 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Text variant="titleMedium" style={{ fontWeight: "800" }}>
+                  Quick Actions
+                </Text>
+                <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>Shortcuts</Text>
+              </View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                {quickActions.map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <Pressable
+                      key={action.id}
+                      onPress={() => {
+                        hapticTap();
+                        action.onPress();
+                      }}
+                      style={{
+                        width: "48%",
+                        minHeight: 80,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: palette.colors.border,
+                        backgroundColor: palette.colors.surfaceSoft,
+                        paddingHorizontal: 10,
+                        paddingVertical: 9,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: 15,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: action.accent,
+                          marginBottom: 6,
+                        }}
+                      >
+                        <Icon size={16} color={palette.colors.onPrimary} strokeWidth={2.2} />
+                      </View>
+                      <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{action.title}</Text>
+                      <Text numberOfLines={1} style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                        {action.description}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </GlassSurface>
+
             {pinnedNews ? (
-              <GlassSurface style={{ marginBottom: 12, padding: 10, borderLeftWidth: 4, borderLeftColor: "#2563EB" }}>
-                <Image source={pinnedNews.bannerUrl || "https://picsum.photos/400/300?random=946"} style={{ width: "100%", height: 120, borderRadius: 12 }} />
-                <Text style={{ marginTop: 8, fontWeight: "900" }}>Pinned School News</Text>
-                <Text style={{ color: "#0F172A", fontWeight: "700" }}>{pinnedNews.title}</Text>
-                <Text style={{ color: "#475569" }}>{pinnedNews.body}</Text>
+              <GlassSurface style={{ marginBottom: 12, padding: 10, borderLeftWidth: 4, borderLeftColor: palette.colors.leftAccent }}>
+                <View style={{ borderRadius: 12, overflow: "hidden" }}>
+                  <AppImage
+                    uri={pinnedNews.bannerUrl || getNewsBannerImage(pinnedNews.id)}
+                    style={{ width: "100%", aspectRatio: 3 }}
+                    overlayReadable
+                  />
+                  <View style={{ position: "absolute", left: 12, right: 12, bottom: 10 }}>
+                    <Text style={{ fontWeight: "900", color: "white" }}>Pinned School News</Text>
+                    <Text style={{ color: "white", fontWeight: "800" }} numberOfLines={2}>
+                      {pinnedNews.title}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ color: palette.colors.textSecondary, marginTop: 8 }}>{pinnedNews.body}</Text>
               </GlassSurface>
             ) : null}
 
@@ -369,15 +516,19 @@ export function HomeScreen() {
                         setSelectedStory(story);
                       }}
                     >
-                      <Animated.View entering={FadeInUp.delay(index * 35).duration(280)} style={{ alignItems: "center", width: 72 }}>
-                        <Avatar.Image size={56} source={{ uri: story.avatarUrl || "https://i.pravatar.cc/150?img=9" }} />
-                        <Text numberOfLines={1} style={{ fontSize: 12, marginTop: 4 }}>{story.userName.split(" ")[0]} {story.moodEmoji ?? ""}</Text>
+                      <Animated.View entering={FadeInUp.delay(index * 35).duration(280)}>
+                        <StoryAvatar
+                          userName={story.userName.split(" ")[0]}
+                          avatarUrl={story.avatarUrl}
+                          moodEmoji={story.moodEmoji}
+                          seen={index % 3 === 0}
+                        />
                       </Animated.View>
                     </Pressable>
                   ))}
                 </ScrollView>
                 <LinearGradient
-                  colors={["rgba(246,247,248,0)", palette.colors.background]}
+                  colors={["transparent", palette.colors.background]}
                   style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 34 }}
                   pointerEvents="none"
                 />
@@ -390,7 +541,14 @@ export function HomeScreen() {
               <Text variant="titleMedium" style={{ fontWeight: "800", marginBottom: 8 }}>Campus Pulse</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {campusPulse.map((card) => (
-                  <ShimmerCard key={card.id} label={card.label} value={card.value} borderColor={card.border} />
+                  <ShimmerCard
+                    key={card.id}
+                    label={card.label}
+                    value={card.value}
+                    borderColor={card.border}
+                    labelColor={palette.colors.textSecondary}
+                    valueColor={palette.colors.text}
+                  />
                 ))}
               </View>
             </GlassSurface>
@@ -401,13 +559,21 @@ export function HomeScreen() {
               <Text variant="titleMedium" style={{ fontWeight: "800", marginBottom: 8 }}>Trending</Text>
               <View style={{ gap: 8 }}>
                 {trending.slice(0, 3).map((post, index) => (
-                  <View key={post.id} style={{ borderRadius: 12, backgroundColor: "#F8FAFC", padding: 10 }}>
-                    <Text style={{ color: "#0F172A", fontWeight: "800" }}>🔥 #{index + 1} {post.authorName}</Text>
-                    <Text style={{ color: "#334155" }} numberOfLines={2}>{post.content}</Text>
-                    <Text style={{ color: "#64748B", marginTop: 3 }}>{formatCompactNumber(post.likeCount)} likes</Text>
+                  <View key={post.id} style={{ borderRadius: 12, backgroundColor: palette.colors.surfaceSoft, padding: 10 }}>
+                    <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
+                      {"\u{1F525}"} #{index + 1} {post.authorName}
+                    </Text>
+                    <Text style={{ color: palette.colors.textSecondary }} numberOfLines={2}>
+                      {post.content}
+                    </Text>
+                    <Text style={{ color: palette.colors.textSecondary, marginTop: 3 }}>
+                      {formatCompactNumber(post.likeCount)} likes
+                    </Text>
                   </View>
                 ))}
-                {trending.length === 0 ? <Text style={{ color: "#64748B" }}>No trending posts yet.</Text> : null}
+                {trending.length === 0 ? (
+                  <Text style={{ color: palette.colors.textSecondary }}>No trending posts yet.</Text>
+                ) : null}
               </View>
             </GlassSurface>
 
@@ -499,10 +665,12 @@ export function HomeScreen() {
                       }}
                       style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}
                     >
-                      <Avatar.Image size={36} source={{ uri: user.avatarUrl }} />
+                      <AvatarWithStatus uri={user.avatarUrl} size={36} online={false} />
                       <View>
                         <Text style={{ fontWeight: "700" }}>{user.displayName}</Text>
-                        <Text style={{ color: "#64748B", fontSize: 12 }}>{user.grade}th grade</Text>
+                        <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                          {user.grade}th grade
+                        </Text>
                       </View>
                     </Pressable>
                     <Button
@@ -522,7 +690,7 @@ export function HomeScreen() {
                   </View>
                 ))
               ) : (
-                <Text style={{ color: "#64748B" }}>No suggestions right now.</Text>
+                <Text style={{ color: palette.colors.textSecondary }}>No suggestions right now.</Text>
               )}
             </GlassSurface>
 
@@ -539,9 +707,9 @@ export function HomeScreen() {
                     style={{ width: 194 }}
                   >
                     <GlassSurface style={{ borderColor: widget.brand, padding: 10 }}>
-                      <Image source={widget.imageUrl} style={{ width: "100%", height: 88, borderRadius: 12 }} />
+                      <AppImage uri={widget.imageUrl} style={{ width: "100%", height: 88, borderRadius: 12 }} />
                       <Text style={{ fontWeight: "900", color: widget.brand, marginTop: 6 }}>{widget.name}</Text>
-                      <Text style={{ color: "#475569", marginTop: 2 }}>{widget.latest}</Text>
+                      <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>{widget.latest}</Text>
                     </GlassSurface>
                   </Pressable>
                 ))}
@@ -552,12 +720,12 @@ export function HomeScreen() {
               <Text variant="titleMedium" style={{ fontWeight: "800", marginBottom: 8 }}>Announcements</Text>
               <View style={{ gap: 8 }}>
                 {announcements.map((item) => (
-                  <View key={item.id} style={{ borderRadius: 12, overflow: "hidden", backgroundColor: "#F8FAFC" }}>
-                    <Image source={`https://picsum.photos/400/300?random=${Math.abs(item.id.length * 37) + 950}`} style={{ width: "100%", height: 110 }} />
+                  <View key={item.id} style={{ borderRadius: 12, overflow: "hidden", backgroundColor: palette.colors.surfaceSoft }}>
+                    <AppImage uri={getCampusImage(item.id)} style={{ width: "100%", height: 110 }} overlayReadable />
                     <View style={{ padding: 10 }}>
                       <Text style={{ fontWeight: "800" }}>{item.title}</Text>
-                      <Text style={{ color: "#334155" }}>{item.body}</Text>
-                      <Text style={{ color: "#64748B", marginTop: 4 }}>{item.author}</Text>
+                      <Text style={{ color: palette.colors.textSecondary }}>{item.body}</Text>
+                      <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>{item.author}</Text>
                     </View>
                   </View>
                 ))}
@@ -571,11 +739,15 @@ export function HomeScreen() {
                   <Avatar.Text size={32} label={activity.actorName.slice(0, 1).toUpperCase()} style={{ backgroundColor: activity.actorAvatarColor }} />
                   <View style={{ flex: 1 }}>
                     <Text>{activity.message}</Text>
-                    <Text style={{ color: "#64748B", fontSize: 12 }}>{formatRelativeDateTime(activity.createdAt)}</Text>
+                    <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                      {formatRelativeDateTime(activity.createdAt)}
+                    </Text>
                   </View>
                 </View>
               ))}
-              {activities.length === 0 ? <Text style={{ color: "#64748B" }}>No activity yet.</Text> : null}
+              {activities.length === 0 ? (
+                <Text style={{ color: palette.colors.textSecondary }}>No activity yet.</Text>
+              ) : null}
             </GlassSurface>
           </View>
         }
@@ -595,17 +767,18 @@ export function HomeScreen() {
           minWidth: 56,
           minHeight: 56,
           borderRadius: 28,
-          backgroundColor: "#2563EB",
+          backgroundColor: palette.colors.primary,
           alignItems: "center",
           justifyContent: "center",
-          shadowColor: "#2563EB",
+          shadowColor: palette.colors.primary,
           shadowOpacity: 0.3,
           shadowRadius: 12,
           shadowOffset: { width: 0, height: 4 },
         }}
       >
-        <Text style={{ color: "white", fontWeight: "800" }}>＋</Text>
+        <Text style={{ color: palette.colors.onPrimary, fontWeight: "800", fontSize: 22, lineHeight: 24 }}>+</Text>
       </Pressable>
     </View>
   );
 }
+

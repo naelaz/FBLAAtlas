@@ -1,4 +1,4 @@
-import { AppThemeName } from "../theme/appThemes";
+﻿import { AppThemeName } from "../constants/themes";
 
 export type NotificationSettings = {
   globalPush: boolean;
@@ -46,4 +46,5 @@ export type AppSettings = {
   account: AccountSettings;
   updatedAt?: string;
 };
+
 

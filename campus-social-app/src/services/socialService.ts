@@ -19,6 +19,17 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
+import {
+  getBusinessImage,
+  getClubImageByCategory,
+  getEventImageByCategory,
+  getNewsBannerImage,
+  getSocialImage,
+  getUserAvatarFallbackUrl,
+  getUserAvatarUrl,
+  resolveAvatarUrl,
+} from "../constants/media";
+import { AVATAR_FALLBACK_COLORS } from "../constants/themes";
 import { awardPointsToUser } from "./gamificationService";
 import { createUserNotification } from "./notificationService";
 import { formatDateTime, startOfCurrentWeekIso, toIso } from "./firestoreUtils";
@@ -46,7 +57,9 @@ function parsePost(id: string, data: Record<string, unknown>): PostItem {
     authorId: typeof data.authorId === "string" ? data.authorId : "",
     authorName: typeof data.authorName === "string" ? data.authorName : "Student",
     authorAvatarColor:
-      typeof data.authorAvatarColor === "string" ? data.authorAvatarColor : "#2563EB",
+      typeof data.authorAvatarColor === "string"
+        ? data.authorAvatarColor
+        : AVATAR_FALLBACK_COLORS[0],
     imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : undefined,
     content: typeof data.content === "string" ? data.content : "",
     createdAt: toIso(data.createdAt),
@@ -71,7 +84,7 @@ function parseStory(id: string, data: Record<string, unknown>): StoryItem {
     id,
     userId: typeof data.userId === "string" ? data.userId : "",
     userName: typeof data.userName === "string" ? data.userName : "Student",
-    avatarColor: typeof data.avatarColor === "string" ? data.avatarColor : "#2563EB",
+    avatarColor: typeof data.avatarColor === "string" ? data.avatarColor : AVATAR_FALLBACK_COLORS[0],
     schoolId: typeof data.schoolId === "string" ? data.schoolId : "",
     content: typeof data.content === "string" ? data.content : "",
     createdAt: toIso(data.createdAt),
@@ -93,7 +106,7 @@ function parseActivity(id: string, data: Record<string, unknown>): ActivityItem 
     actorId: typeof data.actorId === "string" ? data.actorId : "",
     actorName: typeof data.actorName === "string" ? data.actorName : "Student",
     actorAvatarColor:
-      typeof data.actorAvatarColor === "string" ? data.actorAvatarColor : "#2563EB",
+      typeof data.actorAvatarColor === "string" ? data.actorAvatarColor : AVATAR_FALLBACK_COLORS[0],
     targetId: typeof data.targetId === "string" ? data.targetId : "",
     message: typeof data.message === "string" ? data.message : "",
     createdAt: toIso(data.createdAt),
@@ -132,7 +145,9 @@ function parseComment(postId: string, id: string, data: Record<string, unknown>)
     authorId: typeof data.authorId === "string" ? data.authorId : "",
     authorName: typeof data.authorName === "string" ? data.authorName : "Student",
     authorAvatarColor:
-      typeof data.authorAvatarColor === "string" ? data.authorAvatarColor : "#2563EB",
+      typeof data.authorAvatarColor === "string"
+        ? data.authorAvatarColor
+        : AVATAR_FALLBACK_COLORS[0],
     content: typeof data.content === "string" ? data.content : "",
     createdAt: toIso(data.createdAt),
   };
@@ -254,8 +269,8 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
   ].map((item, index): UserProfile => ({
     ...item,
     avatarColor:
-      ["#2563EB", "#10B981", "#F59E0B", "#9333EA", "#EC4899"][index],
-    avatarUrl: `https://i.pravatar.cc/150?img=${index + 11}`,
+      AVATAR_FALLBACK_COLORS[index % AVATAR_FALLBACK_COLORS.length],
+    avatarUrl: getUserAvatarUrl(item.displayName),
     schoolName: user.schoolName,
     schoolId: user.schoolId,
     grade: DEMO_SCHOOL_GRADES[index % DEMO_SCHOOL_GRADES.length],
@@ -284,7 +299,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       id: "seed_post_1",
       author: demoUsers[0],
       content: "Anyone prepping for next week's business pitch challenge?",
-      imageUrl: "https://picsum.photos/400/300?random=301",
+      imageUrl: getBusinessImage("seed_post_1"),
       likeCount: 12,
       commentCount: 2,
     },
@@ -292,7 +307,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       id: "seed_post_2",
       author: demoUsers[1],
       content: "Study hall in room 210 at 3:45 PM. Bring your math packet.",
-      imageUrl: "https://picsum.photos/400/300?random=302",
+      imageUrl: getSocialImage("seed_post_2"),
       likeCount: 22,
       commentCount: 5,
     },
@@ -300,7 +315,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       id: "seed_post_3",
       author: demoUsers[3],
       content: "Signed us up for the spring volunteer drive. Need 10 helpers.",
-      imageUrl: "https://picsum.photos/400/300?random=303",
+      imageUrl: getEventImageByCategory("Social", "seed_post_3"),
       likeCount: 31,
       commentCount: 8,
     },
@@ -341,7 +356,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       description: "Pitch your startup concept in 3 minutes.",
       location: "Auditorium",
       category: "FBLA" as const,
-      coverImageUrl: "https://picsum.photos/400/300?random=304",
+      coverImageUrl: getEventImageByCategory("FBLA", "seed_event_1"),
       startAt: Timestamp.fromDate(new Date(now + 1000 * 60 * 60 * 24 * 2)),
       attendeeIds: [demoUsers[0].uid, demoUsers[1].uid],
     },
@@ -351,7 +366,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       description: "Mock interviews and resume review.",
       location: "Room 204",
       category: "Academic" as const,
-      coverImageUrl: "https://picsum.photos/400/300?random=305",
+      coverImageUrl: getEventImageByCategory("Academic", "seed_event_2"),
       startAt: Timestamp.fromDate(new Date(now + 1000 * 60 * 60 * 24 * 4)),
       attendeeIds: [demoUsers[3].uid, demoUsers[4].uid],
     },
@@ -429,7 +444,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       name: "FBLA Competitive Team",
       description: "Practice events, case studies, and presentation coaching.",
       memberIds: [demoUsers[0].uid, demoUsers[1].uid, demoUsers[3].uid],
-      coverImageUrl: "https://picsum.photos/400/300?random=306",
+      coverImageUrl: getClubImageByCategory("FBLA Competitive Team", "business presentation"),
       postPreview: "Regionals prep session Thursday at 4 PM.",
     },
     {
@@ -437,7 +452,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       name: "Coding Club",
       description: "Build apps, web projects, and hackathon prep.",
       memberIds: [demoUsers[2].uid, demoUsers[3].uid, demoUsers[4].uid],
-      coverImageUrl: "https://picsum.photos/400/300?random=307",
+      coverImageUrl: getClubImageByCategory("Coding Club", "academic study"),
       postPreview: "Mobile sprint starts this weekend.",
     },
   ];
@@ -489,14 +504,14 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       title: "Principal Update: Spring Showcase Dates",
       body: "Student showcase signups open this Friday in the activities office.",
       pinned: true,
-      bannerUrl: "https://picsum.photos/400/300?random=308",
+      bannerUrl: getNewsBannerImage("seed_news_1"),
     },
     {
       id: "seed_news_2",
       title: "Library Extends Study Hours",
       body: "Library will stay open until 6:30 PM during finals week.",
       pinned: false,
-      bannerUrl: "https://picsum.photos/400/300?random=309",
+      bannerUrl: getNewsBannerImage("seed_news_2"),
     },
   ];
 
@@ -666,7 +681,7 @@ export async function createPost(
     imageUrl:
       imageUrl ||
       (Math.random() > 0.55
-        ? `https://picsum.photos/400/300?random=${Math.floor(Math.random() * 80) + 330}`
+        ? getSocialImage(`${actor.uid}_${Date.now()}`)
         : null),
     content: trimmed,
     createdAt: serverTimestamp(),
@@ -1050,11 +1065,12 @@ export function subscribeSchoolUsers(
             schoolId: typeof data.schoolId === "string" ? data.schoolId : "",
             schoolName: typeof data.schoolName === "string" ? data.schoolName : "",
             grade: typeof data.grade === "string" ? data.grade : "11",
-            avatarColor: typeof data.avatarColor === "string" ? data.avatarColor : "#2563EB",
+            avatarColor:
+              typeof data.avatarColor === "string" ? data.avatarColor : AVATAR_FALLBACK_COLORS[0],
             avatarUrl:
               typeof data.avatarUrl === "string"
                 ? data.avatarUrl
-                : "https://i.pravatar.cc/150?img=2",
+                : getUserAvatarFallbackUrl(docSnap.id),
             bio: typeof data.bio === "string" ? data.bio : "",
             xp: typeof data.xp === "number" ? data.xp : 0,
             tier: typeof data.tier === "string" ? (data.tier as UserProfile["tier"]) : "Bronze",
@@ -1114,11 +1130,12 @@ export async function fetchSchoolUsersOnce(schoolId: string): Promise<UserProfil
         schoolId: typeof data.schoolId === "string" ? data.schoolId : "",
         schoolName: typeof data.schoolName === "string" ? data.schoolName : "",
         grade: typeof data.grade === "string" ? data.grade : "11",
-        avatarColor: typeof data.avatarColor === "string" ? data.avatarColor : "#2563EB",
+        avatarColor:
+          typeof data.avatarColor === "string" ? data.avatarColor : AVATAR_FALLBACK_COLORS[0],
         avatarUrl:
           typeof data.avatarUrl === "string"
             ? data.avatarUrl
-            : "https://i.pravatar.cc/150?img=2",
+            : getUserAvatarFallbackUrl(docSnap.id),
         bio: typeof data.bio === "string" ? data.bio : "",
         xp: typeof data.xp === "number" ? data.xp : 0,
         tier: typeof data.tier === "string" ? (data.tier as UserProfile["tier"]) : "Bronze",
@@ -1434,7 +1451,10 @@ function parseClub(id: string, data: Record<string, unknown>): ClubItem {
     coverImageUrl:
       typeof data.coverImageUrl === "string"
         ? data.coverImageUrl
-        : "https://picsum.photos/400/300?random=410",
+        : getClubImageByCategory(
+            typeof data.name === "string" ? data.name : "Club",
+            typeof data.description === "string" ? data.description : "",
+          ),
     postPreview: typeof data.postPreview === "string" ? data.postPreview : "No updates yet.",
   };
 }
@@ -1466,7 +1486,7 @@ function parseSchoolNews(id: string, data: Record<string, unknown>): SchoolNewsI
     bannerUrl:
       typeof data.bannerUrl === "string"
         ? data.bannerUrl
-        : "https://picsum.photos/400/300?random=411",
+        : getNewsBannerImage(id),
     createdAt: toIso(data.createdAt),
   };
 }

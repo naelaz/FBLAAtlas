@@ -1,14 +1,18 @@
-﻿import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Avatar, Button, Chip, SegmentedButtons, Text } from "react-native-paper";
+import { Button, SegmentedButtons, Text } from "react-native-paper";
 
+import { AppImage } from "../components/media/AppImage";
+import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
+import { Badge } from "../components/ui/badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { SkeletonCard } from "../components/ui/SkeletonCard";
+import { getEventImageByCategory } from "../constants/media";
 import { useAuthContext } from "../context/AuthContext";
 import { useGamification } from "../context/GamificationContext";
 import { useThemeContext } from "../context/ThemeContext";
@@ -165,10 +169,12 @@ export function EventsScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 12 }}
         ListHeaderComponent={
           <View style={{ marginBottom: 10 }}>
-            <Text variant="headlineSmall" style={{ fontWeight: "900", color: "#0F172A" }}>
+            <Text variant="headlineSmall" style={{ fontWeight: "900", color: palette.colors.text }}>
               Events
             </Text>
-            <Text style={{ color: "#64748B", marginTop: 4 }}>Track events and never miss a chapter moment.</Text>
+            <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
+              Track events and never miss a chapter moment.
+            </Text>
 
             <SegmentedButtons
               value={viewMode}
@@ -186,16 +192,18 @@ export function EventsScreen() {
 
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
               {EVENT_FILTERS.map((label) => (
-                <Chip
+                <Pressable
                   key={label}
-                  selected={filter === label}
                   onPress={() => {
                     hapticTap();
                     setFilter(label);
                   }}
+                  style={{ minHeight: 36 }}
                 >
-                  {label}
-                </Chip>
+                  <Badge size="md" variant={filter === label ? "blue" : "gray-subtle"} capitalize={false}>
+                    {label}
+                  </Badge>
+                </Pressable>
               ))}
             </View>
           </View>
@@ -211,7 +219,23 @@ export function EventsScreen() {
               onPress={() => navigation.navigate("EventDetail", { eventId: item.id })}
               style={{ borderRadius: 18, overflow: "hidden", marginBottom: 6 }}
             >
-              <Image source={item.coverImageUrl ?? "https://picsum.photos/900/500?random=502"} style={{ width: "100%", height: 188 }} />
+              <View style={{ width: "100%", height: 224 }}>
+                <AppImage
+                  uri={item.coverImageUrl ?? getEventImageByCategory(item.category, item.id)}
+                  style={{ position: "absolute", left: 0, right: 0, top: 0, height: "56%" }}
+                />
+                <LinearGradient
+                  colors={["transparent", "rgba(0,0,0,0.56)", palette.colors.surface]}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  style={{ position: "absolute", left: 0, right: 0, top: "40%", bottom: 0 }}
+                />
+                <View style={{ position: "absolute", left: 10, top: 10 }}>
+                  <Badge size="sm" variant="blue-subtle" capitalize={false}>
+                    {item.category ?? "FBLA"}
+                  </Badge>
+                </View>
+              </View>
               <GlassSurface
                 style={{
                   position: "absolute",
@@ -219,22 +243,25 @@ export function EventsScreen() {
                   right: 10,
                   bottom: 10,
                   padding: 10,
-                  backgroundColor: "rgba(15,23,42,0.62)",
-                  borderColor: "rgba(148,163,184,0.45)",
+                  backgroundColor: palette.colors.glassStrong,
+                  borderColor: palette.colors.glassBorder,
                 }}
               >
-                <Text style={{ color: "white", fontWeight: "900", fontSize: 17 }}>{item.title}</Text>
-                <Text style={{ color: "#CBD5E1", marginTop: 2 }}>
+                <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 17 }}>
+                  {item.title}
+                </Text>
+                <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>
                   {formatDateTime(item.startAt)} • {item.location}
                 </Text>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Chip compact>{item.category ?? "FBLA"}</Chip>
-                    <Text style={{ color: "#FBBF24", fontWeight: "700" }}>Starts in {timeUntil(item.startAt)}</Text>
+                    <Text style={{ color: palette.colors.warning, fontWeight: "700" }}>
+                      Starts in {timeUntil(item.startAt)}
+                    </Text>
                   </View>
                   <View style={{ flexDirection: "row", gap: 5 }}>
                     {attendees.slice(0, 4).map((attendee) => (
-                      <Avatar.Image key={attendee.uid} size={26} source={{ uri: attendee.avatarUrl }} />
+                      <AvatarWithStatus key={attendee.uid} uri={attendee.avatarUrl} size={26} online={false} />
                     ))}
                   </View>
                 </View>
@@ -275,12 +302,14 @@ export function EventsScreen() {
                         flex: 1,
                         minHeight: 52,
                         padding: 6,
-                        backgroundColor: "rgba(255,255,255,0.8)",
+                        backgroundColor: palette.colors.glass,
                       }}
                     >
-                      <Text style={{ fontSize: 12, fontWeight: "700" }}>{cell.day ?? ""}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: palette.colors.text }}>
+                        {cell.day ?? ""}
+                      </Text>
                       {cell.events.length > 0 ? (
-                        <Text numberOfLines={1} style={{ fontSize: 11, color: "#2563EB" }}>
+                        <Text numberOfLines={1} style={{ fontSize: 11, color: palette.colors.primary }}>
                           {cell.events.length} event
                         </Text>
                       ) : null}

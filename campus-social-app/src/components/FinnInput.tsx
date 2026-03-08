@@ -272,9 +272,7 @@ export function FinnInput({
           {
             backgroundColor:
               disabled || value.trim().length === 0
-                ? palette.isDark
-                  ? "#334155"
-                  : "#E2E8F0"
+                ? palette.colors.inputMuted
                 : palette.colors.primary,
             opacity: pressed ? 0.95 : 1,
           },
@@ -287,14 +285,16 @@ export function FinnInput({
               lineStyle,
               {
                 backgroundColor:
-                  disabled || value.trim().length === 0 ? "#94A3B8" : "#E2E8F0",
+                  disabled || value.trim().length === 0
+                    ? palette.colors.muted
+                    : palette.colors.onPrimary,
               },
             ]}
           />
           <MaterialCommunityIcons
             name="arrow-right"
             size={18}
-            color={disabled || value.trim().length === 0 ? "#64748B" : "#FFFFFF"}
+            color={disabled || value.trim().length === 0 ? palette.colors.muted : palette.colors.onPrimary}
           />
         </Animated.View>
       </Pressable>

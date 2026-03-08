@@ -10,6 +10,7 @@ import { ScreenShell } from "../components/ScreenShell";
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassSurface } from "../components/ui/GlassSurface";
+import { getUserAvatarUrl } from "../constants/media";
 import { useNotifications } from "../context/NotificationsContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
@@ -43,8 +44,7 @@ function avatarForNotification(item: AppNotification): string {
     return fromMetadata;
   }
   const seedSource = item.metadata?.userId ?? item.id;
-  const hash = [...seedSource].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return `https://i.pravatar.cc/150?img=${(hash % 70) + 1}`;
+  return getUserAvatarUrl(seedSource);
 }
 
 export function NotificationsScreen() {
@@ -174,7 +174,7 @@ export function NotificationsScreen() {
                             width: 10,
                             height: 10,
                             borderRadius: 5,
-                            backgroundColor: "#3B82F6",
+                            backgroundColor: palette.colors.primary,
                           }}
                         />
                       ) : null}

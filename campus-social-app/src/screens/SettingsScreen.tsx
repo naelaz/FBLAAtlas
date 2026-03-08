@@ -2,25 +2,29 @@ import Slider from "@react-native-community/slider";
 import Constants from "expo-constants";
 import { deleteUser, signOut } from "firebase/auth";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { Ban, Check, CircleX } from "lucide-react-native";
 import React, { useMemo, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
-import { Button, Card, Chip, SegmentedButtons, Switch, Text, TextInput } from "react-native-paper";
+import { Button, Card, SegmentedButtons, Switch, Text, TextInput } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
+import { Badge } from "../components/ui/badge";
 import { auth, db } from "../config/firebase";
 import { useAuthContext } from "../context/AuthContext";
 import { useSettings } from "../context/SettingsContext";
+import { useThemeContext } from "../context/ThemeContext";
 import { hapticTap } from "../services/haptics";
-import { APP_THEMES } from "../theme/appThemes";
+import { APP_THEMES } from "../constants/themes";
 
 type SectionProps = {
   title: string;
+  cardColor: string;
   children: React.ReactNode;
 };
 
-function SettingsSection({ title, children }: SectionProps) {
+function SettingsSection({ title, cardColor, children }: SectionProps) {
   return (
-    <Card mode="elevated" style={{ marginBottom: 12, backgroundColor: "#FFFFFF" }}>
+    <Card mode="elevated" style={{ marginBottom: 12, backgroundColor: cardColor }}>
       <Card.Content style={{ gap: 12 }}>
         <Text variant="titleMedium" style={{ fontWeight: "800" }}>
           {title}
@@ -57,6 +61,7 @@ function ToggleRow({
 export function SettingsScreen() {
   const { profile } = useAuthContext();
   const { settings, updateSettings } = useSettings();
+  const { palette } = useThemeContext();
   const [feedback, setFeedback] = useState("");
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
@@ -77,17 +82,25 @@ export function SettingsScreen() {
       title="Settings"
       subtitle="Account, notifications, accessibility, appearance, privacy, and app info."
     >
-      <SettingsSection title="Account">
+      <SettingsSection title="Account" cardColor={palette.colors.surface}>
         <Button mode="outlined">Edit Profile</Button>
         <Button mode="outlined">Change Email</Button>
         <Button mode="outlined">Change Password</Button>
         <View style={{ flexDirection: "row", gap: 8 }}>
-          <Chip icon={settings.account.connectedGoogle ? "check" : "close"}>
+          <Badge
+            variant={settings.account.connectedGoogle ? "green-subtle" : "red-subtle"}
+            icon={settings.account.connectedGoogle ? <Check /> : <CircleX />}
+            capitalize={false}
+          >
             Google
-          </Chip>
-          <Chip icon={settings.account.connectedApple ? "check" : "close"}>
+          </Badge>
+          <Badge
+            variant={settings.account.connectedApple ? "green-subtle" : "red-subtle"}
+            icon={settings.account.connectedApple ? <Check /> : <CircleX />}
+            capitalize={false}
+          >
             Apple
-          </Chip>
+          </Badge>
         </View>
         <Button
           mode="outlined"
@@ -100,7 +113,7 @@ export function SettingsScreen() {
         </Button>
         <Button
           mode="outlined"
-          textColor="#DC2626"
+          textColor={palette.colors.danger}
           onPress={() => {
             hapticTap();
             const user = auth.currentUser;
@@ -117,7 +130,7 @@ export function SettingsScreen() {
         </Button>
       </SettingsSection>
 
-      <SettingsSection title="Notifications">
+      <SettingsSection title="Notifications" cardColor={palette.colors.surface}>
         <ToggleRow
           label="Global Push"
           value={settings.notifications.globalPush}
@@ -210,7 +223,7 @@ export function SettingsScreen() {
         />
       </SettingsSection>
 
-      <SettingsSection title="Accessibility">
+      <SettingsSection title="Accessibility" cardColor={palette.colors.surface}>
         <View>
           <Text style={{ marginBottom: 4 }}>Text Size ({settings.accessibility.textScale.toFixed(2)}x)</Text>
           <Slider
@@ -271,7 +284,7 @@ export function SettingsScreen() {
         />
       </SettingsSection>
 
-      <SettingsSection title="Appearance">
+      <SettingsSection title="Appearance" cardColor={palette.colors.surface}>
         <Text>Theme Picker</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
           {APP_THEMES.map((theme) => {
@@ -291,7 +304,7 @@ export function SettingsScreen() {
                   height: 52,
                   borderRadius: 26,
                   borderWidth: selected ? 3 : 1,
-                  borderColor: selected ? theme.colors.primary : "#CBD5E1",
+                  borderColor: selected ? theme.colors.primary : palette.colors.border,
                   overflow: "hidden",
                 }}
               >
@@ -323,7 +336,7 @@ export function SettingsScreen() {
         />
       </SettingsSection>
 
-      <SettingsSection title="Privacy">
+      <SettingsSection title="Privacy" cardColor={palette.colors.surface}>
         <SegmentedButtons
           value={settings.privacy.profileVisibility}
           onValueChange={(value) => {
@@ -370,10 +383,12 @@ export function SettingsScreen() {
             }))
           }
         />
-        <Chip icon="block-helper">Blocked Users: {settings.privacy.blockedUserIds.length}</Chip>
+        <Badge variant="gray-subtle" icon={<Ban />} capitalize={false}>
+          Blocked Users: {settings.privacy.blockedUserIds.length}
+        </Badge>
       </SettingsSection>
 
-      <SettingsSection title="About">
+      <SettingsSection title="About" cardColor={palette.colors.surface}>
         <Text>App Version: {appVersion}</Text>
         <Text>
           FBLA Atlas is a high school social/campus platform built for FBLA competition with
@@ -422,3 +437,4 @@ export function SettingsScreen() {
     </ScreenShell>
   );
 }
+

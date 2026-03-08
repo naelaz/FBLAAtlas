@@ -6,6 +6,8 @@ import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { ScreenShell } from "../components/ScreenShell";
 import { useAuthContext } from "../context/AuthContext";
 import { useGamification } from "../context/GamificationContext";
+import { useThemeContext } from "../context/ThemeContext";
+import { getSocialImage } from "../constants/media";
 import { RootStackParamList } from "../navigation/types";
 import { hapticTap } from "../services/haptics";
 import { createPost } from "../services/socialService";
@@ -15,6 +17,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "CreatePost">;
 export function CreatePostScreen({ navigation }: Props) {
   const { profile } = useAuthContext();
   const { handleAwardResult } = useGamification();
+  const { palette } = useThemeContext();
 
   const [text, setText] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
@@ -54,7 +57,7 @@ export function CreatePostScreen({ navigation }: Props) {
         <Text variant="headlineSmall" style={{ fontWeight: "900" }}>
           Create Post
         </Text>
-        <Text style={{ color: "#64748B" }}>
+        <Text style={{ color: palette.colors.textSecondary }}>
           Write an update, attach optional photo, and tag your school, club, event, and mood.
         </Text>
 
@@ -71,13 +74,13 @@ export function CreatePostScreen({ navigation }: Props) {
           label="Photo URL (optional)"
           value={photoUrl}
           onChangeText={setPhotoUrl}
-          placeholder="https://picsum.photos/400/300?random=501"
+          placeholder={getSocialImage("post-manual-placeholder")}
         />
         <Button
           mode="outlined"
           onPress={() => {
             hapticTap();
-            setPhotoUrl(`https://picsum.photos/400/300?random=${Math.floor(Math.random() * 300) + 401}`);
+            setPhotoUrl(getSocialImage(`post-attach-${Date.now()}`));
           }}
         >
           Attach Placeholder Photo

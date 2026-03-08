@@ -4,6 +4,7 @@ type NavBarVisibilityContextValue = {
   hidden: boolean;
   reportScrollOffset: (offsetY: number) => void;
   showNavBar: () => void;
+  hideNavBar: () => void;
 };
 
 const NavBarVisibilityContext = createContext<NavBarVisibilityContextValue | undefined>(
@@ -32,12 +33,14 @@ export function NavBarVisibilityProvider({ children }: { children: React.ReactNo
   };
 
   const showNavBar = () => setHidden(false);
+  const hideNavBar = () => setHidden(true);
 
   const value = useMemo(
     () => ({
       hidden,
       reportScrollOffset,
       showNavBar,
+      hideNavBar,
     }),
     [hidden],
   );
@@ -56,4 +59,3 @@ export function useNavBarVisibility(): NavBarVisibilityContextValue {
   }
   return context;
 }
-

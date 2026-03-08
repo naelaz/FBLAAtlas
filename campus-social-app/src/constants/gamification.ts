@@ -1,4 +1,5 @@
 ﻿import { PointAction, TierDefinition } from "../types/social";
+import { TIER_COLORS } from "./themes";
 
 export const POINT_VALUES: Record<PointAction, number> = {
   posting: 10,
@@ -11,12 +12,12 @@ export const POINT_VALUES: Record<PointAction, number> = {
 };
 
 export const TIERS: TierDefinition[] = [
-  { name: "Bronze", minXp: 0, maxXp: 500, color: "#B45309" },
-  { name: "Silver", minXp: 500, maxXp: 1500, color: "#9CA3AF" },
-  { name: "Gold", minXp: 1500, maxXp: 3500, color: "#EAB308" },
-  { name: "Platinum", minXp: 3500, maxXp: 7000, color: "#14B8A6" },
-  { name: "Diamond", minXp: 7000, maxXp: 12000, color: "#3B82F6" },
-  { name: "Legend", minXp: 12000, maxXp: null, color: "#9333EA" },
+  { name: "Bronze", minXp: 0, maxXp: 500, color: TIER_COLORS.Bronze },
+  { name: "Silver", minXp: 500, maxXp: 1500, color: TIER_COLORS.Silver },
+  { name: "Gold", minXp: 1500, maxXp: 3500, color: TIER_COLORS.Gold },
+  { name: "Platinum", minXp: 3500, maxXp: 7000, color: TIER_COLORS.Platinum },
+  { name: "Diamond", minXp: 7000, maxXp: 12000, color: TIER_COLORS.Diamond },
+  { name: "Legend", minXp: 12000, maxXp: null, color: TIER_COLORS.Legend },
 ];
 
 export function getTierForXp(xp: number): TierDefinition {
@@ -39,7 +40,11 @@ export function getNextTier(xp: number): TierDefinition | null {
   return TIERS[currentIndex + 1];
 }
 
-export function getXpProgress(xp: number): { progress: number; current: TierDefinition; next: TierDefinition | null } {
+export function getXpProgress(xp: number): {
+  progress: number;
+  current: TierDefinition;
+  next: TierDefinition | null;
+} {
   const current = getTierForXp(xp);
   const next = getNextTier(xp);
   if (!next) {

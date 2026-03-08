@@ -8,6 +8,7 @@ import { ScreenShell } from "../components/ScreenShell";
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassSurface } from "../components/ui/GlassSurface";
+import { TIER_COLORS } from "../constants/themes";
 import { useAuthContext } from "../context/AuthContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { fetchLeaderboardOnce, subscribeLeaderboard } from "../services/socialService";
@@ -15,35 +16,14 @@ import { UserProfile } from "../types/social";
 import { formatCompactNumber } from "../utils/format";
 
 type PodiumTheme = {
-  rank: number;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  iconColor: string;
-  borderColor: string;
-  backgroundColor: string;
+  tierColor: keyof typeof TIER_COLORS;
 };
 
 const PODIUM: PodiumTheme[] = [
-  {
-    rank: 1,
-    icon: "crown",
-    iconColor: "#FACC15",
-    borderColor: "#FACC15",
-    backgroundColor: "rgba(250,204,21,0.18)",
-  },
-  {
-    rank: 2,
-    icon: "medal",
-    iconColor: "#CBD5E1",
-    borderColor: "#CBD5E1",
-    backgroundColor: "rgba(203,213,225,0.16)",
-  },
-  {
-    rank: 3,
-    icon: "star-circle",
-    iconColor: "#D97706",
-    borderColor: "#D97706",
-    backgroundColor: "rgba(217,119,6,0.16)",
-  },
+  { icon: "crown", tierColor: "Gold" },
+  { icon: "medal", tierColor: "Silver" },
+  { icon: "star-circle", tierColor: "Bronze" },
 ];
 
 function PodiumCard({
@@ -57,12 +37,14 @@ function PodiumCard({
   textColor: string;
   mutedColor: string;
 }) {
+  const accent = TIER_COLORS[theme.tierColor];
+
   return (
     <GlassSurface
       style={{
         padding: 12,
-        borderColor: theme.borderColor,
-        backgroundColor: theme.backgroundColor,
+        borderColor: accent,
+        backgroundColor: "transparent",
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -73,7 +55,7 @@ function PodiumCard({
             {user.tier} • {formatCompactNumber(user.xp)} XP
           </Text>
         </View>
-        <MaterialCommunityIcons name={theme.icon} size={22} color={theme.iconColor} />
+        <MaterialCommunityIcons name={theme.icon} size={22} color={accent} />
       </View>
     </GlassSurface>
   );
@@ -149,7 +131,7 @@ export function LeaderboardScreen() {
                 user={user}
                 theme={PODIUM[index]}
                 textColor={palette.colors.text}
-                mutedColor={palette.colors.muted}
+                mutedColor={palette.colors.textSecondary}
               />
             </Animated.View>
           ))}
@@ -159,16 +141,18 @@ export function LeaderboardScreen() {
               <GlassSurface
                 style={{
                   padding: 10,
-                  backgroundColor: "rgba(255,255,255,0.78)",
-                  borderColor: "rgba(148,163,184,0.25)",
+                  backgroundColor: palette.colors.glass,
+                  borderColor: palette.colors.glassBorder,
                 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <Text style={{ width: 24, fontWeight: "900", color: palette.colors.muted }}>{index + 4}</Text>
+                  <Text style={{ width: 24, fontWeight: "900", color: palette.colors.textSecondary }}>
+                    {index + 4}
+                  </Text>
                   <AvatarWithStatus uri={user.avatarUrl} size={38} online />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{user.displayName}</Text>
-                    <Text style={{ color: palette.colors.muted, fontSize: 12 }}>
+                    <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
                       {user.grade}th grade • {user.tier}
                     </Text>
                   </View>
@@ -197,9 +181,7 @@ export function LeaderboardScreen() {
                 <AvatarWithStatus uri={myRank.user.avatarUrl} size={40} online />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{myRank.user.displayName}</Text>
-                  <Text style={{ color: palette.colors.muted, fontSize: 12 }}>
-                    {myRank.user.tier}
-                  </Text>
+                  <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>{myRank.user.tier}</Text>
                 </View>
                 <Text style={{ color: palette.colors.text, fontFamily: "monospace", fontWeight: "700" }}>
                   {formatCompactNumber(myRank.user.xp)} XP
@@ -211,15 +193,17 @@ export function LeaderboardScreen() {
           <GlassSurface
             style={{
               padding: 12,
-              backgroundColor: "rgba(255,255,255,0.7)",
-              borderColor: "rgba(148,163,184,0.28)",
+              backgroundColor: palette.colors.glass,
+              borderColor: palette.colors.glassBorder,
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <MaterialCommunityIcons name="lock-outline" size={18} color={palette.colors.muted} />
-              <Text style={{ color: palette.colors.text, fontWeight: "800" }}>How does your school rank?</Text>
+              <MaterialCommunityIcons name="lock-outline" size={18} color={palette.colors.textSecondary} />
+              <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
+                How does your school rank?
+              </Text>
             </View>
-            <Text style={{ color: palette.colors.muted, marginTop: 4 }}>
+            <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
               School vs school leaderboard is a premium teaser feature.
             </Text>
           </GlassSurface>

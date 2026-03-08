@@ -1,6 +1,7 @@
 import "react-native-gesture-handler";
 import "./global.css";
 
+import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { View } from "react-native";
@@ -21,9 +22,20 @@ import { ThemeProvider, useThemeContext } from "./src/context/ThemeContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 
+void SplashScreen.preventAutoHideAsync().catch(() => {
+  // no-op if already prevented
+});
+
 function AppGate() {
   const { palette, paperTheme, ready: themeReady } = useThemeContext();
   const { ready: onboardingReady, completed } = useOnboarding();
+
+  React.useEffect(() => {
+    if (!themeReady || !onboardingReady) {
+      return;
+    }
+    void SplashScreen.hideAsync();
+  }, [onboardingReady, themeReady]);
 
   if (!themeReady || !onboardingReady) {
     return (

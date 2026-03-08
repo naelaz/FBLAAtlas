@@ -1,24 +1,34 @@
-﻿import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Animated, Dimensions, StyleSheet, View } from "react-native";
 
-const COLORS = ["#F59E0B", "#10B981", "#3B82F6", "#EF4444", "#9333EA", "#EC4899"];
+import { useThemeContext } from "../../context/ThemeContext";
 
 export function ConfettiLayer({ active }: { active: boolean }) {
+  const { palette } = useThemeContext();
   const progress = useRef(new Animated.Value(0)).current;
   const width = Dimensions.get("window").width;
+  const colors = useMemo(
+    () => [
+      palette.colors.warning,
+      palette.colors.success,
+      palette.colors.primary,
+      palette.colors.danger,
+      palette.colors.secondary,
+      palette.colors.info,
+    ],
+    [palette],
+  );
 
   const pieces = useMemo(
     () =>
       Array.from({ length: 28 }).map((_, index) => ({
         id: index,
         left: Math.random() * (width - 20),
-        delay: Math.random() * 250,
-        duration: 700 + Math.random() * 700,
-        size: 6 + Math.random() * 8,
         rotate: Math.random() * 220,
-        color: COLORS[index % COLORS.length],
+        size: 6 + Math.random() * 8,
+        color: colors[index % colors.length],
       })),
-    [width],
+    [colors, width],
   );
 
   useEffect(() => {

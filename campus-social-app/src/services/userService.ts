@@ -11,33 +11,23 @@
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
+import { getUserAvatarFallbackUrl, getUserAvatarUrl } from "../constants/media";
 import { getTierForXp } from "../constants/gamification";
+import { AVATAR_FALLBACK_COLORS } from "../constants/themes";
 import { UserProfile } from "../types/social";
 import { toIso } from "./firestoreUtils";
-
-const AVATAR_COLORS = [
-  "#2563EB",
-  "#0EA5E9",
-  "#10B981",
-  "#F59E0B",
-  "#EF4444",
-  "#8B5CF6",
-  "#14B8A6",
-  "#EC4899",
-];
 
 export const DEFAULT_SCHOOL_ID = "fbla-atlas";
 export const DEFAULT_SCHOOL_NAME = "FBLA Atlas";
 
 function colorFromId(id: string): string {
   const sum = id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return AVATAR_COLORS[sum % AVATAR_COLORS.length];
+  return AVATAR_FALLBACK_COLORS[sum % AVATAR_FALLBACK_COLORS.length];
 }
 
 function avatarUrlFromId(uid: string): string {
-  const hash = uid.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const imageId = (hash % 70) + 1;
-  return `https://i.pravatar.cc/150?img=${imageId}`;
+  const generated = getUserAvatarUrl(uid);
+  return generated || getUserAvatarFallbackUrl(uid);
 }
 
 function graduationYearFromGrade(grade: string): number {

@@ -2,6 +2,8 @@ import { BlurView } from "expo-blur";
 import React from "react";
 import { Platform, StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 
+import { useThemeContext } from "../../context/ThemeContext";
+
 type GlassSurfaceProps = {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -14,11 +16,13 @@ type GlassSurfaceProps = {
 export function GlassSurface({
   children,
   style,
-  backgroundColor = "rgba(255,255,255,0.65)",
-  borderColor = "rgba(255,255,255,0.35)",
-  intensity = 46,
+  backgroundColor,
+  borderColor,
+  intensity,
   borderRadius = 16,
 }: GlassSurfaceProps) {
+  const { palette } = useThemeContext();
+
   return (
     <View
       style={[
@@ -26,16 +30,16 @@ export function GlassSurface({
           borderRadius,
           overflow: "hidden",
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor,
-          backgroundColor,
+          borderColor: borderColor ?? palette.colors.glassBorder,
+          backgroundColor: backgroundColor ?? palette.colors.glass,
         },
         style,
       ]}
     >
       {Platform.OS === "ios" ? (
         <BlurView
-          intensity={intensity}
-          tint="light"
+          intensity={intensity ?? palette.blur.md}
+          tint={palette.isDark ? "dark" : "light"}
           style={StyleSheet.absoluteFill}
         />
       ) : null}
@@ -43,4 +47,3 @@ export function GlassSurface({
     </View>
   );
 }
-

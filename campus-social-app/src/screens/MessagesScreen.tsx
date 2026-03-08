@@ -1,0 +1,226 @@
+﻿import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import React, { useEffect, useMemo, useState } from "react";
+import { Pressable, View } from "react-native";
+import { Avatar, Badge, Card, Text, TextInput } from "react-native-paper";
+
+import { EmptyState } from "../components/ui/EmptyState";
+import { SkeletonCard } from "../components/ui/SkeletonCard";
+import { useAuthContext } from "../context/AuthContext";
+import { useMessaging } from "../context/MessagingContext";
+import { RootStackParamList } from "../navigation/types";
+import { formatDateTime } from "../services/firestoreUtils";
+import { hapticTap } from "../services/haptics";
+import {
+  createOrGetConversation,
+  findStudentsByName,
+  getConversationUnreadCount,
+} from "../services/messagingService";
+import { fetchSchoolUsersOnce } from "../services/socialService";
+import { UserProfile } from "../types/social";
+import { ScreenShell } from "../components/ScreenShell";
+
+export function MessagesScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { profile } = useAuthContext();
+  const { conversations, unreadCount, refreshing, refreshConversations } = useMessaging();
+
+  const [usersById, setUsersById] = useState<Map<string, UserProfile>>(new Map());
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<UserProfile[]>([]);
+  const [loadingSearch, setLoadingSearch] = useState(false);
+
+  useEffect(() => {
+    if (!profile) {
+      return;
+    }
+    const loadUsers = async () => {
+      try {
+        const users = await fetchSchoolUsersOnce(profile.schoolId);
+        setUsersById(new Map(users.map((user) => [user.uid, user])));
+      } catch (error) {
+        console.warn("Messages users load failed:", error);
+      }
+    };
+    void loadUsers();
+  }, [profile?.schoolId]);
+
+  useEffect(() => {
+    if (!profile) {
+      return;
+    }
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setLoadingSearch(true);
+      void findStudentsByName(profile.schoolId, profile.uid, query)
+        .then((rows) => {
+          if (!cancelled) {
+            setResults(rows);
+          }
+        })
+        .catch((error) => {
+          console.warn("Search students failed:", error);
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setLoadingSearch(false);
+          }
+        });
+    }, 240);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, profile?.uid, profile?.schoolId]);
+
+  const sortedConversations = useMemo(() => {
+    return [...conversations].sort((a, b) => {
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+  }, [conversations]);
+
+  if (!profile) {
+    return (
+      <ScreenShell title="Messages" subtitle="Loading messages...">
+        <Text>Loading...</Text>
+      </ScreenShell>
+    );
+  }
+
+  return (
+    <ScreenShell
+      title="Messages"
+      subtitle={`Unread: ${unreadCount} • Real-time conversations`}
+      refreshing={refreshing}
+      onRefresh={() => void refreshConversations()}
+    >
+      <Card mode="elevated" style={{ marginBottom: 12, backgroundColor: "#FFFFFF" }}>
+        <Card.Content style={{ gap: 8 }}>
+          <Text variant="titleMedium" style={{ fontWeight: "800" }}>
+            Start New Conversation
+          </Text>
+          <TextInput
+            mode="outlined"
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search a student by name"
+            left={<TextInput.Icon icon="magnify" />}
+          />
+
+          {loadingSearch ? (
+            <SkeletonCard height={62} />
+          ) : (
+            <View style={{ gap: 8 }}>
+              {results.slice(0, 4).map((user) => (
+                <Pressable
+                  key={user.uid}
+                  onPress={async () => {
+                    hapticTap();
+                    try {
+                      const conversation = await createOrGetConversation(profile, user);
+                      navigation.navigate("Chat", {
+                        conversationId: conversation.conversationId,
+                        targetUserId: user.uid,
+                      });
+                      setQuery("");
+                      setResults([]);
+                    } catch (error) {
+                      console.warn("Create conversation failed:", error);
+                    }
+                  }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    borderRadius: 12,
+                    padding: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Avatar.Image size={36} source={{ uri: user.avatarUrl }} />
+                    <View>
+                      <Text style={{ fontWeight: "700" }}>{user.displayName}</Text>
+                      <Text style={{ color: "#64748B", fontSize: 12 }}>
+                        {user.grade}th grade • {user.schoolName}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ color: "#2563EB", fontWeight: "700" }}>Chat</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </Card.Content>
+      </Card>
+
+      <Card mode="elevated" style={{ backgroundColor: "#FFFFFF" }}>
+        <Card.Content style={{ gap: 10 }}>
+          <Text variant="titleMedium" style={{ fontWeight: "800" }}>
+            Conversations
+          </Text>
+          {sortedConversations.map((conversation) => {
+            const otherId = conversation.participants.find((id) => id !== profile.uid);
+            const other = otherId ? usersById.get(otherId) : null;
+            const unread = getConversationUnreadCount(conversation, profile.uid);
+            const typing = otherId ? Boolean(conversation.typingBy?.[otherId]) : false;
+
+            return (
+              <Pressable
+                key={conversation.id}
+                onPress={() => {
+                  hapticTap();
+                  navigation.navigate("Chat", { conversationId: conversation.id, targetUserId: otherId });
+                }}
+                style={{
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  padding: 12,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <View>
+                  <Avatar.Image
+                    size={42}
+                    source={{ uri: other?.avatarUrl ?? "https://i.pravatar.cc/150?img=10" }}
+                  />
+                  {unread > 0 ? <Badge style={{ position: "absolute", right: -4, top: -2 }}>{unread}</Badge> : null}
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text style={{ fontWeight: "800", color: "#0F172A" }}>
+                      {other?.displayName ?? "Conversation"}
+                    </Text>
+                    <Text style={{ color: "#94A3B8", fontSize: 12 }}>{formatDateTime(conversation.updatedAt)}</Text>
+                  </View>
+                  <Text numberOfLines={1} style={{ color: typing ? "#0EA5A4" : "#475569", marginTop: 2 }}>
+                    {typing ? "Typing..." : conversation.lastMessage || "No messages yet"}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+
+          {sortedConversations.length === 0 ? (
+            <EmptyState
+              title="No Conversations Yet"
+              message="Start a chat by searching for a student above."
+            />
+          ) : null}
+        </Card.Content>
+      </Card>
+    </ScreenShell>
+  );
+}
+

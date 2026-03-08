@@ -1,12 +1,12 @@
-﻿import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
-import { NavigationProp } from "@react-navigation/native";
-import { Pressable, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { NavigationProp, useNavigation } from "@react-navigation/native";
+import { Text, View } from "react-native";
 
-import { RootStackParamList } from "../navigation/types";
 import { useNotifications } from "../context/NotificationsContext";
 import { useThemeContext } from "../context/ThemeContext";
+import { RootStackParamList } from "../navigation/types";
 import { hapticTap } from "../services/haptics";
+import { GlassIconButton } from "./ui/GlassIconButton";
 
 export function NotificationBell() {
   const { unreadCount } = useNotifications();
@@ -14,17 +14,18 @@ export function NotificationBell() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
 
   return (
-    <Pressable
-      onPress={() => {
-        hapticTap();
-        navigation.navigate("Notifications");
-      }}
-      style={{ padding: 6, marginRight: 8 }}
-      accessibilityRole="button"
-      accessibilityLabel="Open notifications"
-    >
+    <View style={{ marginRight: 8 }}>
       <View>
-        <MaterialCommunityIcons name="bell-outline" size={24} color={palette.colors.text} />
+        <GlassIconButton
+          onPress={() => {
+            hapticTap();
+            navigation.navigate("Notifications");
+          }}
+          accessibilityLabel="Open notifications"
+          size={38}
+        >
+          <MaterialCommunityIcons name="bell-outline" size={20} color={palette.colors.text} />
+        </GlassIconButton>
         {unreadCount > 0 ? (
           <View
             style={{
@@ -40,12 +41,12 @@ export function NotificationBell() {
               paddingHorizontal: 4,
             }}
           >
-            <Text style={{ color: "white", fontSize: 10, fontWeight: "700" }}>
+            <Text style={{ color: palette.colors.onDanger, fontSize: 10, fontWeight: "700" }}>
               {unreadCount > 99 ? "99+" : unreadCount}
             </Text>
           </View>
         ) : null}
       </View>
-    </Pressable>
+    </View>
   );
 }

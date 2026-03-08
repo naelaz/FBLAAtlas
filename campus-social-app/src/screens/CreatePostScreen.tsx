@@ -1,9 +1,12 @@
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useState } from "react";
 import { View } from "react-native";
-import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
+import { Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
+import { GlassButton } from "../components/ui/GlassButton";
+import { GlassDropdown } from "../components/ui/GlassDropdown";
+import { GlassInput } from "../components/ui/GlassInput";
 import { useAuthContext } from "../context/AuthContext";
 import { useGamification } from "../context/GamificationContext";
 import { useThemeContext } from "../context/ThemeContext";
@@ -61,86 +64,92 @@ export function CreatePostScreen({ navigation }: Props) {
           Write an update, attach optional photo, and tag your school, club, event, and mood.
         </Text>
 
-        <TextInput
-          mode="outlined"
+        <GlassInput
           label="Post text"
           multiline
           value={text}
           onChangeText={setText}
           placeholder="Share something with your campus..."
+          inputWrapperStyle={{ borderRadius: 18 }}
         />
-        <TextInput
-          mode="outlined"
+        <GlassInput
           label="Photo URL (optional)"
           value={photoUrl}
           onChangeText={setPhotoUrl}
           placeholder={getSocialImage("post-manual-placeholder")}
         />
-        <Button
-          mode="outlined"
+        <GlassButton
+          variant="ghost"
+          label="Attach Placeholder Photo"
           onPress={() => {
             hapticTap();
             setPhotoUrl(getSocialImage(`post-attach-${Date.now()}`));
           }}
-        >
-          Attach Placeholder Photo
-        </Button>
+        />
 
         <View style={{ flexDirection: "row", gap: 8 }}>
-          <TextInput
-            mode="outlined"
+          <GlassInput
             label="School tag"
             value={schoolTag}
             onChangeText={setSchoolTag}
-            style={{ flex: 1 }}
+            containerStyle={{ flex: 1 }}
           />
-          <TextInput
-            mode="outlined"
+          <GlassInput
             label="Club tag"
             value={clubTag}
             onChangeText={setClubTag}
-            style={{ flex: 1 }}
+            containerStyle={{ flex: 1 }}
           />
         </View>
 
         <View style={{ flexDirection: "row", gap: 8 }}>
-          <TextInput
-            mode="outlined"
+          <GlassInput
             label="Event tag"
             value={eventTag}
             onChangeText={setEventTag}
-            style={{ flex: 1 }}
+            containerStyle={{ flex: 1 }}
           />
-          <TextInput
-            mode="outlined"
+          <GlassInput
             label="Mood tag"
             value={moodTag}
             onChangeText={setMoodTag}
-            style={{ flex: 1 }}
+            containerStyle={{ flex: 1 }}
           />
         </View>
 
-        <SegmentedButtons
+        <GlassDropdown
+          label="Post Privacy"
           value={privacy}
           onValueChange={setPrivacy}
-          buttons={[
-            { value: "school", label: "School" },
-            { value: "followers", label: "Followers" },
-            { value: "private", label: "Private" },
+          options={[
+            {
+              value: "school",
+              label: "School",
+              description: "Visible to students in your school",
+            },
+            {
+              value: "followers",
+              label: "Followers",
+              description: "Only followers can see this post",
+            },
+            {
+              value: "private",
+              label: "Private",
+              description: "Only you can view this post",
+            },
           ]}
         />
 
-        <Button
-          mode="contained"
+        <GlassButton
+          variant="solid"
+          label={submitting ? "Publishing..." : "Publish Post"}
           onPress={() => {
             hapticTap();
             void create();
           }}
-          loading={submitting}
           disabled={!text.trim()}
-        >
-          Publish Post
-        </Button>
+          loading={submitting}
+        />
       </View>
     </ScreenShell>
   );

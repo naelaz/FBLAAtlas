@@ -1,14 +1,18 @@
-import { NavigationContainer } from "@react-navigation/native";
+﻿import { LinkingOptions, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { useThemeContext } from "../context/ThemeContext";
 import { AnnouncementDetailScreen } from "../screens/AnnouncementDetailScreen";
+import { AdminDashboardScreen } from "../screens/AdminDashboardScreen";
 import { ChatScreen } from "../screens/ChatScreen";
 import { CreatePostScreen } from "../screens/CreatePostScreen";
 import { EventDetailScreen } from "../screens/EventDetailScreen";
 import { FinnScreen } from "../screens/FinnScreen";
 import { LeaderboardScreen } from "../screens/LeaderboardScreen";
+import { MyConferencesScreen } from "../screens/MyConferencesScreen";
 import { NotificationsScreen } from "../screens/NotificationsScreen";
+import { PracticeEventHubScreen } from "../screens/PracticeEventHubScreen";
+import { PracticeScreen } from "../screens/PracticeScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { StudentProfileScreen } from "../screens/StudentProfileScreen";
 import { MainTabs } from "./MainTabs";
@@ -16,12 +20,43 @@ import { RootStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export function RootNavigator() {
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: ["fbla://"],
+  config: {
+    screens: {
+      MainTabs: {
+        screens: {
+          Home: "home",
+          Events: "events",
+          Finn: "finn",
+          Messages: "messages",
+          Profile: "profile",
+          SettingsTab: "settings-tab",
+        },
+      },
+      AdminDashboard: "admin",
+      Practice: "practice",
+      PracticeEventHub: "practice/:eventId/:mode?",
+      EventDetail: "events/:eventId",
+      Notifications: "notifications",
+      Leaderboard: "leaderboard",
+      Settings: "settings",
+      MyConferences: "conferences",
+    },
+  },
+};
+
+type RootNavigatorProps = {
+  startInAdmin?: boolean;
+};
+
+export function RootNavigator({ startInAdmin = false }: RootNavigatorProps) {
   const { navigationTheme, palette } = useThemeContext();
 
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer theme={navigationTheme} linking={linking}>
       <Stack.Navigator
+        initialRouteName={startInAdmin ? "AdminDashboard" : "MainTabs"}
         screenOptions={{
           contentStyle: { backgroundColor: palette.colors.background },
           headerStyle: { backgroundColor: palette.colors.surface },
@@ -36,6 +71,11 @@ export function RootNavigator() {
         }}
       >
         <Stack.Screen
+          name="AdminDashboard"
+          component={AdminDashboardScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
           name="MainTabs"
           component={MainTabs}
           options={{ headerShown: false }}
@@ -43,47 +83,62 @@ export function RootNavigator() {
         <Stack.Screen
           name="AnnouncementDetail"
           component={AnnouncementDetailScreen}
-          options={{ title: "Announcement" }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="EventDetail"
           component={EventDetailScreen}
-          options={{ title: "Event" }}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Practice"
+          component={PracticeScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="PracticeEventHub"
+          component={PracticeEventHubScreen}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Notifications"
           component={NotificationsScreen}
-          options={{ title: "Notifications" }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Leaderboard"
           component={LeaderboardScreen}
-          options={{ title: "Leaderboard" }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Finn"
           component={FinnScreen}
-          options={{ title: "Finn AI" }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Settings"
           component={SettingsScreen}
-          options={{ title: "Settings" }}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="MyConferences"
+          component={MyConferencesScreen}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Chat"
           component={ChatScreen}
-          options={{ title: "Chat" }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="CreatePost"
           component={CreatePostScreen}
-          options={{ title: "Create Post" }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="StudentProfile"
           component={StudentProfileScreen}
-          options={{ title: "Profile" }}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

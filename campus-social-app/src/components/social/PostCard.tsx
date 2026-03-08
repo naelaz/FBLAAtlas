@@ -9,15 +9,7 @@ import {
   Share,
   View,
 } from "react-native";
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
-import { Button, Text, TextInput } from "react-native-paper";
+import { Text } from "react-native-paper";
 
 import { useThemeContext } from "../../context/ThemeContext";
 import { resolveAvatarUrl } from "../../constants/media";
@@ -29,9 +21,11 @@ import { formatCompactNumber, formatRelativeTime } from "../../utils/format";
 import { AppImage } from "../media/AppImage";
 import { Badge, getTierBadgeVariant } from "../ui/badge";
 import { AvatarWithStatus } from "../ui/AvatarWithStatus";
+import { GlassButton } from "../ui/GlassButton";
+import { GlassInput } from "../ui/GlassInput";
 import { GlassSurface } from "../ui/GlassSurface";
 
-const REACTIONS = ["\u{1F525}", "\u{1F44F}", "\u{1F4A1}", "\u{1F3AF}", "\u{1F602}"];
+const REACTIONS = ["🔥", "👏", "💡", "🎯", "😂"];
 
 type PostCardProps = {
   post: PostItem;
@@ -58,14 +52,7 @@ function PostCardInner({
   const [pendingComment, setPendingComment] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [heartPoint, setHeartPoint] = useState<{ x: number; y: number } | null>(null);
-
-  const likeScale = useSharedValue(1);
-  const sheetTranslate = useSharedValue(420);
-  const sheetOpacity = useSharedValue(0);
-  const heartOpacity = useSharedValue(0);
-  const heartScale = useSharedValue(0.5);
-  const heartTranslateY = useSharedValue(0);
+  const [heartPoint, setHeartPoint] = useState<{ x: number; y: number; id: string } | null>(null);
   const lastTapRef = useRef(0);
 
   useEffect(() => {
@@ -78,31 +65,6 @@ function PostCardInner({
     );
     return unsubscribe;
   }, [post.id]);
-
-  useEffect(() => {
-    if (!commentsOpen) {
-      sheetTranslate.value = withTiming(420, { duration: 260 });
-      sheetOpacity.value = withTiming(0, { duration: 180 });
-      return;
-    }
-
-    sheetTranslate.value = withSpring(0, { damping: 16, stiffness: 170 });
-    sheetOpacity.value = withTiming(1, { duration: 220 });
-  }, [commentsOpen, sheetOpacity, sheetTranslate]);
-
-  const likeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: likeScale.value }],
-  }));
-
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetTranslate.value }],
-    opacity: sheetOpacity.value,
-  }));
-
-  const heartStyle = useAnimatedStyle(() => ({
-    opacity: heartOpacity.value,
-    transform: [{ scale: heartScale.value }, { translateY: heartTranslateY.value }],
-  }));
 
   const likedByMe = post.likedBy.includes(currentUser.uid);
   const myReaction = post.userReactions[currentUser.uid] ?? null;
@@ -130,24 +92,15 @@ function PostCardInner({
   };
 
   const runLikeAnimation = () => {
-    likeScale.value = withSequence(
-      withTiming(1.18, { duration: 110 }),
-      withSpring(1, { damping: 12, stiffness: 220 }),
-    );
+    // Animations removed in simplified mode.
   };
 
   const burstHeart = (x: number, y: number) => {
-    setHeartPoint({ x, y });
-    heartOpacity.value = 1;
-    heartScale.value = 0.5;
-    heartTranslateY.value = 0;
-    heartScale.value = withSpring(1.2, { damping: 10, stiffness: 180 });
-    heartTranslateY.value = withTiming(-26, { duration: 420 });
-    heartOpacity.value = withTiming(0, { duration: 420 }, (finished) => {
-      if (finished) {
-        runOnJS(setHeartPoint)(null);
-      }
-    });
+    const id = `${Date.now()}`;
+    setHeartPoint({ x, y, id });
+    setTimeout(() => {
+      setHeartPoint((prev) => (prev?.id === id ? null : prev));
+    }, 320);
   };
 
   const onImagePress = (x: number, y: number) => {
@@ -225,19 +178,19 @@ function PostCardInner({
         >
           <AppImage uri={post.imageUrl} style={{ width: "100%", aspectRatio: 4 / 3 }} />
           {heartPoint ? (
-            <Animated.View
+            <View
               pointerEvents="none"
               style={[
                 {
                   position: "absolute",
                   left: heartPoint.x - 15,
                   top: heartPoint.y - 15,
+                  opacity: 0.95,
                 },
-                heartStyle,
               ]}
             >
-              <Text style={{ fontSize: 30 }}>{"\u{2764}\u{FE0F}"}</Text>
-            </Animated.View>
+              <Text style={{ fontSize: 30 }}>❤️</Text>
+            </View>
           ) : null}
         </Pressable>
 
@@ -280,7 +233,7 @@ function PostCardInner({
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <Pressable onPress={openComments} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{"\u{1F4AC}"}</Text>
+              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>💬</Text>
               <Text style={{ color: palette.colors.text }}>{formatCompactNumber(post.commentCount)}</Text>
             </Pressable>
             <Pressable
@@ -290,35 +243,35 @@ function PostCardInner({
               }}
               style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
             >
-              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{"\u{2197}"}</Text>
+              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>↗</Text>
               <Text style={{ color: palette.colors.text }}>Share</Text>
             </Pressable>
           </View>
         </View>
 
         <View style={{ marginTop: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Animated.View style={likeStyle}>
-            <Button
-              mode={likedByMe ? "contained" : "outlined"}
+          <View>
+            <GlassButton
+              variant={likedByMe ? "solid" : "ghost"}
+              label={likedByMe ? "Liked" : "Like"}
+              fullWidth={false}
               onPress={() => {
                 runLikeAnimation();
                 hapticLike();
                 void onToggleLike(post);
               }}
-            >
-              {likedByMe ? "Liked" : "Like"}
-            </Button>
-          </Animated.View>
+            />
+          </View>
 
           <Text style={{ color: palette.colors.muted, fontSize: 12 }}>
-            {formatCompactNumber(post.likeCount)} likes {"\u2022"} {formatDateTime(post.createdAt)}
+            {formatCompactNumber(post.likeCount)} likes • {formatDateTime(post.createdAt)}
           </Text>
         </View>
 
-        <Modal visible={commentsOpen} transparent animationType="none" onRequestClose={() => setCommentsOpen(false)}>
+        <Modal visible={commentsOpen} transparent animationType="slide" onRequestClose={() => setCommentsOpen(false)}>
           <View style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }}>
             <Pressable style={{ flex: 1 }} onPress={() => setCommentsOpen(false)} />
-            <Animated.View style={sheetStyle}>
+            <View>
               <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
                 <GlassSurface
                   style={{
@@ -367,25 +320,25 @@ function PostCardInner({
                   </ScrollView>
 
                   <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginTop: 8 }}>
-                    <TextInput
-                      mode="outlined"
+                    <GlassInput
                       placeholder="Reply..."
                       value={commentText}
                       onChangeText={setCommentText}
-                      style={{ flex: 1 }}
+                      containerStyle={{ flex: 1 }}
+                      inputWrapperStyle={{ minHeight: 42, borderRadius: 12 }}
                     />
-                    <Button
-                      mode="contained"
+                    <GlassButton
+                      variant="solid"
+                      label={pendingComment ? "Sending..." : "Send"}
+                      fullWidth={false}
                       onPress={() => void submitComment()}
                       loading={pendingComment}
                       disabled={!commentText.trim() || pendingComment}
-                    >
-                      Send
-                    </Button>
+                    />
                   </View>
                 </GlassSurface>
               </KeyboardAvoidingView>
-            </Animated.View>
+            </View>
           </View>
         </Modal>
 

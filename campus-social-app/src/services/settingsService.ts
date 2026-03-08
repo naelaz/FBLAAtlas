@@ -52,6 +52,12 @@ export function createDefaultSettings(): AppSettings {
       connectedGoogle: true,
       connectedApple: false,
     },
+    customize: {
+      widgetDensity: "comfortable",
+      showStoriesBar: false,
+      showCampusPulse: false,
+      showSocialFeed: false,
+    },
   };
 }
 
@@ -83,6 +89,10 @@ function parseSettings(data: Record<string, unknown>): AppSettings {
   const account =
     typeof data.account === "object" && data.account !== null
       ? (data.account as Record<string, unknown>)
+      : {};
+  const customize =
+    typeof data.customize === "object" && data.customize !== null
+      ? (data.customize as Record<string, unknown>)
       : {};
 
   return {
@@ -183,6 +193,26 @@ function parseSettings(data: Record<string, unknown>): AppSettings {
         typeof account.connectedApple === "boolean"
           ? account.connectedApple
           : base.account.connectedApple,
+    },
+    customize: {
+      widgetDensity:
+        customize.widgetDensity === "compact" ||
+        customize.widgetDensity === "spacious" ||
+        customize.widgetDensity === "comfortable"
+          ? customize.widgetDensity
+          : base.customize.widgetDensity,
+      showStoriesBar:
+        typeof customize.showStoriesBar === "boolean"
+          ? customize.showStoriesBar
+          : base.customize.showStoriesBar,
+      showCampusPulse:
+        typeof customize.showCampusPulse === "boolean"
+          ? customize.showCampusPulse
+          : base.customize.showCampusPulse,
+      showSocialFeed:
+        typeof customize.showSocialFeed === "boolean"
+          ? customize.showSocialFeed
+          : base.customize.showSocialFeed,
     },
     updatedAt: toIso(data.updatedAt),
   };

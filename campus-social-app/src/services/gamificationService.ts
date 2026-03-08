@@ -22,19 +22,19 @@ type AwardContext = {
 function xpBodyForAction(action: PointAction, points: number, context?: AwardContext): string {
   switch (action) {
     case "attending_event":
-      return `?? +${points} XP — You're going to ${context?.eventName ?? "that event"}!`;
+      return `🎯 +${points} XP — You're going to ${context?.eventName ?? "that event"}!`;
     case "posting":
-      return `?? +${points} XP — Nice post!`;
+      return `🎯 +${points} XP — Nice post!`;
     case "commenting":
-      return `?? +${points} XP — Keep the convo going!`;
+      return `🎯 +${points} XP — Keep the convo going!`;
     case "likes_received":
-      return `?? +${points} XP — Someone liked your post!`;
+      return `🎯 +${points} XP — Someone liked your post!`;
     case "daily_login":
-      return `?? +${points} XP — Day ${context?.streakCount ?? 1} streak!`;
+      return `🔥 +${points} XP — Day ${context?.streakCount ?? 1} streak!`;
     case "following_user":
-      return `? +${points} XP — Growing your network!`;
+      return `🎯 +${points} XP — Growing your network!`;
     case "messaging_new":
-      return `?? +${points} XP — New conversation started!`;
+      return `🎯 +${points} XP — New conversation started!`;
     default:
       return `+${points} XP`;
   }
@@ -59,7 +59,7 @@ async function writeAwardNotifications(uid: string, result: PointAwardResult): P
     await createUserNotification(uid, {
       type: "tier_upgrade",
       title: "Tier Upgrade",
-      body: `?? You reached ${result.newTier.name}! Keep it up!`,
+      body: `🏆 You reached ${result.newTier.name}! Keep it up!`,
       metadata: {
         fromTier: result.previousTier.name,
         toTier: result.newTier.name,
@@ -71,7 +71,7 @@ async function writeAwardNotifications(uid: string, result: PointAwardResult): P
     await createUserNotification(uid, {
       type: "streak",
       title: "Streak Bonus",
-      body: `?? Day ${result.streakCount} streak!`,
+      body: `🔥 Day ${result.streakCount} streak!`,
       metadata: {
         streakCount: String(result.streakCount ?? 0),
       },

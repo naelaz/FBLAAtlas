@@ -1,4 +1,4 @@
-import "react-native-gesture-handler";
+﻿import "react-native-gesture-handler";
 import "./global.css";
 
 import * as SplashScreen from "expo-splash-screen";
@@ -20,7 +20,10 @@ import { PushNotificationsProvider } from "./src/context/PushNotificationsContex
 import { SettingsProvider } from "./src/context/SettingsContext";
 import { ThemeProvider, useThemeContext } from "./src/context/ThemeContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
+import { LoginScreen } from "./src/screens/LoginScreen";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
+import { DashboardProvider } from "./src/context/DashboardContext";
+import { useAuthContext } from "./src/context/AuthContext";
 
 void SplashScreen.preventAutoHideAsync().catch(() => {
   // no-op if already prevented
@@ -28,7 +31,7 @@ void SplashScreen.preventAutoHideAsync().catch(() => {
 
 function AppGate() {
   const { palette, paperTheme, ready: themeReady } = useThemeContext();
-  const { ready: onboardingReady, completed } = useOnboarding();
+  const { ready: onboardingReady } = useOnboarding();
 
   React.useEffect(() => {
     if (!themeReady || !onboardingReady) {
@@ -59,27 +62,78 @@ function AppGate() {
   return (
     <PaperProvider theme={paperTheme}>
       <StatusBar style={palette.isDark ? "light" : "dark"} />
-      {!completed ? (
-        <OnboardingScreen />
-      ) : (
-        <AuthProvider>
-          <SettingsProvider>
+      <AuthProvider>
+        <SettingsProvider>
+          <DashboardProvider>
             <PushNotificationsProvider>
               <NotificationsProvider>
                 <MessagingProvider>
                   <GamificationProvider>
                     <NavBarVisibilityProvider>
-                      <RootNavigator />
+                      <AuthGateContent />
                     </NavBarVisibilityProvider>
                   </GamificationProvider>
                 </MessagingProvider>
               </NotificationsProvider>
             </PushNotificationsProvider>
-          </SettingsProvider>
-        </AuthProvider>
-      )}
+          </DashboardProvider>
+        </SettingsProvider>
+      </AuthProvider>
     </PaperProvider>
   );
+}
+
+function AuthGateContent() {
+  const { loading, isAuthenticated, profile, isAdminMode, setAdminMode } = useAuthContext();
+  const { completed, setOnboardingCompleted } = useOnboarding();
+  const { palette } = useThemeContext();
+
+  React.useEffect(() => {
+    if (!isAuthenticated || !profile) {
+      return;
+    }
+    if (profile.onboardingCompleted && !completed) {
+      void setOnboardingCompleted(true);
+    }
+  }, [completed, isAuthenticated, profile, setOnboardingCompleted]);
+
+  React.useEffect(() => {
+    if (!isAdminMode) {
+      return;
+    }
+    if (profile?.role === "admin") {
+      return;
+    }
+    void setAdminMode(false);
+  }, [isAdminMode, profile?.role, setAdminMode]);
+
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: palette.colors.background,
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+        }}
+      >
+        <ActivityIndicator animating size="large" color={palette.colors.primary} />
+        <AppLogo subtitle="Checking your account" />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginScreen />;
+  }
+
+  if (!completed) {
+    return <OnboardingScreen />;
+  }
+
+  const startInAdmin = Boolean(isAdminMode && profile?.role === "admin");
+  return <RootNavigator startInAdmin={startInAdmin} />;
 }
 
 export default function App() {
@@ -95,3 +149,4 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
+

@@ -1,8 +1,9 @@
 import React from "react";
 import { View } from "react-native";
-import { Button, Text } from "react-native-paper";
+import { Text } from "react-native-paper";
 
 import { DEFAULT_THEME, getThemeByName } from "../constants/themes";
+import { GlassButton } from "./ui/GlassButton";
 
 type ErrorBoundaryState = {
   hasError: boolean;
@@ -45,9 +46,11 @@ export class ErrorBoundary extends React.Component<
           <Text style={{ color: this.palette.colors.textSecondary, textAlign: "center" }}>
             Something went wrong, but your app is still alive.
           </Text>
-          <Button mode="contained" onPress={() => this.setState({ hasError: false })}>
-            Try Again
-          </Button>
+          <GlassButton
+            variant="solid"
+            label="Try Again"
+            onPress={() => this.setState({ hasError: false })}
+          />
         </View>
       );
     }

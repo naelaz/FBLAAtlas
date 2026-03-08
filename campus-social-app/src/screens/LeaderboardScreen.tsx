@@ -1,7 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
 import { Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
@@ -29,11 +28,13 @@ const PODIUM: PodiumTheme[] = [
 function PodiumCard({
   user,
   theme,
+  transparentColor,
   textColor,
   mutedColor,
 }: {
   user: UserProfile;
   theme: PodiumTheme;
+  transparentColor: string;
   textColor: string;
   mutedColor: string;
 }) {
@@ -44,7 +45,7 @@ function PodiumCard({
       style={{
         padding: 12,
         borderColor: accent,
-        backgroundColor: "transparent",
+        backgroundColor: transparentColor,
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -126,18 +127,19 @@ export function LeaderboardScreen() {
       ) : (
         <View style={{ gap: 10 }}>
           {topThree.map((user, index) => (
-            <Animated.View key={user.uid} entering={FadeInUp.delay(index * 70).duration(260)}>
+            <View key={user.uid}>
               <PodiumCard
                 user={user}
                 theme={PODIUM[index]}
+                transparentColor={palette.colors.transparent}
                 textColor={palette.colors.text}
                 mutedColor={palette.colors.textSecondary}
               />
-            </Animated.View>
+            </View>
           ))}
 
           {rest.map((user, index) => (
-            <Animated.View key={user.uid} entering={FadeInUp.delay(180 + index * 48).duration(220)}>
+            <View key={user.uid}>
               <GlassSurface
                 style={{
                   padding: 10,
@@ -161,7 +163,7 @@ export function LeaderboardScreen() {
                   </Text>
                 </View>
               </GlassSurface>
-            </Animated.View>
+            </View>
           ))}
 
           {myRank ? (

@@ -86,8 +86,8 @@ export function StudentProfileScreen({ route, navigation }: Props) {
         </Text>
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           {user.badges.length > 0 ? (
-            user.badges.map((badge) => (
-              <Badge key={badge} variant={getTierBadgeVariant(user.tier)} size="sm" capitalize={false}>
+            user.badges.map((badge, index) => (
+              <Badge key={`${badge}-${index}`} variant={getTierBadgeVariant(user.tier)} size="sm" capitalize={false}>
                 {badge}
               </Badge>
             ))

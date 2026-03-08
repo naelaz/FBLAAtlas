@@ -5,6 +5,8 @@ type OnboardingContextValue = {
   completed: boolean;
   ready: boolean;
   completeOnboarding: () => Promise<void>;
+  resetOnboarding: () => Promise<void>;
+  setOnboardingCompleted: (value: boolean) => Promise<void>;
 };
 
 const STORAGE_KEY = "fbla_atlas_onboarding_complete_v1";
@@ -47,11 +49,30 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     }
   };
 
+  const resetOnboarding = async () => {
+    setCompleted(false);
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.warn("Onboarding state reset failed:", error);
+    }
+  };
+
+  const setOnboardingCompleted = async (value: boolean) => {
+    if (value) {
+      await completeOnboarding();
+      return;
+    }
+    await resetOnboarding();
+  };
+
   const value = useMemo(
     () => ({
       completed,
       ready,
       completeOnboarding,
+      resetOnboarding,
+      setOnboardingCompleted,
     }),
     [completed, ready],
   );
@@ -66,4 +87,3 @@ export function useOnboarding(): OnboardingContextValue {
   }
   return context;
 }
-

@@ -3,12 +3,12 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useLayoutEffect, useMemo } from "react";
 import { Pressable, View } from "react-native";
 import Swipeable from "react-native-gesture-handler/Swipeable";
-import Animated, { FadeInUp } from "react-native-reanimated";
-import { Button, Text } from "react-native-paper";
+import { Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { EmptyState } from "../components/ui/EmptyState";
+import { GlassButton } from "../components/ui/GlassButton";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { getUserAvatarUrl } from "../constants/media";
 import { useNotifications } from "../context/NotificationsContext";
@@ -56,16 +56,15 @@ export function NotificationsScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <Button
-          compact
-          mode="text"
+        <GlassButton
+          variant="pill-sm"
+          label="Mark all as read"
+          fullWidth={false}
           onPress={() => {
             hapticTap();
             void markAllRead();
           }}
-        >
-          Mark all as read
-        </Button>
+        />
       ),
     });
   }, [markAllRead, navigation]);
@@ -135,12 +134,12 @@ export function NotificationsScreen() {
                   marginLeft: 8,
                 }}
               >
-                <Text style={{ color: "white", fontWeight: "800" }}>Dismiss</Text>
+                <Text style={{ color: palette.colors.onDanger, fontWeight: "800" }}>Dismiss</Text>
               </Pressable>
             );
 
             return (
-              <Animated.View key={row.key} entering={FadeInUp.delay(Math.min(index * 28, 220)).duration(220)}>
+              <View key={row.key}>
                 <Swipeable renderRightActions={rightAction}>
                   <Pressable
                     onPress={() => {
@@ -181,7 +180,7 @@ export function NotificationsScreen() {
                     </GlassSurface>
                   </Pressable>
                 </Swipeable>
-              </Animated.View>
+              </View>
             );
           })}
         </View>

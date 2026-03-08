@@ -7,6 +7,16 @@ type AskFinnInput = {
   history?: FinnChatMessage[];
 };
 
+type FinnFunctionResponse = {
+  content?: string;
+  output?: string;
+  result?: unknown;
+  payload?: unknown;
+  error?: {
+    message?: string;
+  };
+};
+
 type OpenAIResponse = {
   choices?: Array<{
     message?: {
@@ -18,29 +28,26 @@ type OpenAIResponse = {
   };
 };
 
+const FINN_FUNCTION_URL = process.env.EXPO_PUBLIC_FINN_FUNCTION_URL?.trim() ?? "";
 const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY?.trim() ?? "";
 const OPENAI_MODEL = process.env.EXPO_PUBLIC_OPENAI_MODEL?.trim() || "gpt-4o-mini";
-const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
-function looksLikeRealOpenAiKey(key: string): boolean {
-  if (!key || key.length < 24) {
-    return false;
-  }
-  if (key.includes("REPLACE_")) {
-    return false;
-  }
-  return key.startsWith("sk-");
+function hasFunctionBackend(): boolean {
+  return Boolean(FINN_FUNCTION_URL);
+}
+
+function hasOpenAi(): boolean {
+  return Boolean(OPENAI_API_KEY);
 }
 
 function buildSystemPrompt(schoolName?: string): string {
   const school = schoolName?.trim() || "your school";
   return [
-    "You are Finn, a friendly AI assistant in FBLA Atlas.",
-    "Voice: encouraging, supportive, light humor, like a helpful older student mentor.",
-    "Keep advice practical and concise.",
-    `Context: student life at ${school}.`,
-    "You can help with XP tiers, leaderboard strategy, school events, clubs, homework planning, and study tips.",
-    "If the user asks for harmful, unsafe, or cheating behavior, refuse and redirect to safe alternatives.",
+    "You are Finn, an expert FBLA coach and student mentor.",
+    "Voice: concise, practical, and encouraging.",
+    "Prioritize actionable next steps for FBLA members.",
+    `Context: student life and FBLA preparation at ${school}.`,
+    "Focus on FBLA events, testing strategy, presentation coaching, networking, chapter leadership, and conference readiness.",
   ].join(" ");
 }
 
@@ -48,80 +55,120 @@ function buildFallbackReply(input: AskFinnInput): string {
   const message = input.message.trim().toLowerCase();
   const name = input.userName?.split(" ")[0] || "there";
 
-  if (message.includes("event")) {
-    return `Good question, ${name}. Open Events and filter by category. Then join 1 event this week so you gain XP and stay visible on the feed.`;
+  if (message.includes("event") || message.includes("competition")) {
+    return `Good question, ${name}. Pick one event, run one timed practice round today, and score yourself against the rubric.`;
   }
-  if (message.includes("xp") || message.includes("tier") || message.includes("leaderboard")) {
-    return `To climb faster: post consistently, comment on classmates' posts, and join events. That combo is usually the fastest path to the next tier.`;
+  if (message.includes("presentation") || message.includes("speech")) {
+    return "Use this structure: hook, problem, solution, measurable outcome, close. Then run one timed rehearsal.";
   }
-  if (message.includes("club")) {
-    return "Pick 2 clubs: one for leadership and one for skills. Start by introducing yourself in each club thread and showing up at the next meeting.";
+  if (message.includes("test") || message.includes("study")) {
+    return "Run a 25-minute study block, then write 3 key takeaways and 1 weak topic to review next.";
   }
-  if (message.includes("study") || message.includes("homework") || message.includes("fbla")) {
-    return "Try this plan: 1) 25-minute focused block, 2) 5-minute reset, 3) repeat 3 rounds. End with a quick summary card so review is easier tomorrow.";
-  }
+  return `I got your message: "${input.message.trim()}". Tell me your FBLA event and deadline, and I will build a focused prep plan.`;
+}
 
-  return `I can help with events, XP/tier strategy, clubs, and FBLA prep. Tell me your goal for this week and I will map it into 3 concrete steps.`;
+function parseFunctionText(payload: FinnFunctionResponse): string {
+  const nested = payload.result ?? payload.payload;
+  if (typeof nested === "string" && nested.trim().length > 0) {
+    return nested.trim();
+  }
+  if (typeof payload.content === "string" && payload.content.trim().length > 0) {
+    return payload.content.trim();
+  }
+  if (typeof payload.output === "string" && payload.output.trim().length > 0) {
+    return payload.output.trim();
+  }
+  if (nested && typeof nested === "object") {
+    return JSON.stringify(nested);
+  }
+  throw new Error("Empty response");
+}
+
+function parseOpenAiText(payload: OpenAIResponse): string {
+  const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
+  if (!text) {
+    throw new Error(payload.error?.message ?? "Empty OpenAI response");
+  }
+  return text;
 }
 
 export function isFinnConfigured(): boolean {
-  return looksLikeRealOpenAiKey(OPENAI_API_KEY);
+  return hasFunctionBackend() || hasOpenAi();
 }
 
 export async function askFinn(input: AskFinnInput): Promise<string> {
   const safeMessage = input.message.trim();
   if (!safeMessage) {
-    return "Send a question and I will help you plan your next steps.";
+    return "Send a question and I will help you plan your next FBLA steps.";
   }
 
-  if (!isFinnConfigured()) {
-    return buildFallbackReply(input);
-  }
+  const history = (input.history ?? []).slice(-10).map((item) => ({
+    role: item.role,
+    content: item.text,
+  }));
 
-  const history = (input.history ?? [])
-    .slice(-10)
-    .map((item) => ({
-      role: item.role,
-      content: item.text,
-    }));
+  if (hasFunctionBackend()) {
+    try {
+      const response = await fetch(FINN_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          task: "finn_chat",
+          messages: [
+            { role: "system", content: buildSystemPrompt(input.schoolName) },
+            ...history,
+            {
+              role: "user",
+              content: input.userName ? `${input.userName}: ${safeMessage}` : safeMessage,
+            },
+          ],
+        }),
+      });
 
-  try {
-    const response = await fetch(OPENAI_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        temperature: 0.7,
-        max_tokens: 350,
-        messages: [
-          { role: "system", content: buildSystemPrompt(input.schoolName) },
-          ...history,
-          {
-            role: "user",
-            content: input.userName
-              ? `${input.userName}: ${safeMessage}`
-              : safeMessage,
-          },
-        ],
-      }),
-    });
-
-    const data = (await response.json()) as OpenAIResponse;
-
-    if (!response.ok) {
-      return buildFallbackReply(input);
+      const data = (await response.json()) as FinnFunctionResponse;
+      console.log("Finn function response:", data);
+      if (response.ok) {
+        return parseFunctionText(data);
+      }
+    } catch (error) {
+      console.warn("Finn function request failed:", error);
     }
-
-    const text = data.choices?.[0]?.message?.content?.trim();
-    if (!text) {
-      return buildFallbackReply(input);
-    }
-
-    return text;
-  } catch {
-    return buildFallbackReply(input);
   }
+
+  if (hasOpenAi()) {
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          temperature: 0.5,
+          messages: [
+            { role: "system", content: buildSystemPrompt(input.schoolName) },
+            ...history,
+            {
+              role: "user",
+              content: input.userName ? `${input.userName}: ${safeMessage}` : safeMessage,
+            },
+          ],
+        }),
+      });
+
+      const data = (await response.json()) as OpenAIResponse;
+      console.log("Finn OpenAI response:", data);
+      if (!response.ok) {
+        throw new Error(data.error?.message ?? "OpenAI request failed");
+      }
+      return parseOpenAiText(data);
+    } catch (error) {
+      console.warn("Finn OpenAI request failed:", error);
+    }
+  }
+
+  return buildFallbackReply(input);
 }

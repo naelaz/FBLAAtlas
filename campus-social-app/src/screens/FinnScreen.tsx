@@ -1,4 +1,4 @@
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -11,21 +11,15 @@ import {
   Pressable,
   View,
 } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from "react-native-reanimated";
 import { Text } from "react-native-paper";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FinnInput } from "../components/FinnInput";
 import { FinnRobotIcon } from "../components/branding/FinnRobotIcon";
+import { BackButton } from "../components/navigation/BackButton";
 import { Badge } from "../components/ui/badge";
 import { GlassSurface } from "../components/ui/GlassSurface";
+import { MessageLoading } from "../components/ui/MessageLoading";
 import { useAuthContext } from "../context/AuthContext";
 import { useNavBarVisibility } from "../context/NavBarVisibilityContext";
 import { useThemeContext } from "../context/ThemeContext";
@@ -34,25 +28,14 @@ import { askFinn, isFinnConfigured } from "../services/finnService";
 import { FinnChatMessage } from "../types/finn";
 
 const PLACEHOLDERS = [
-  "Ask me about upcoming school events...",
-  "Need help with FBLA prep?",
-  "What clubs should I join?",
-  "How do I level up my tier?",
-  "Who's leading the leaderboard?",
-  "Summarize today's school news...",
-  "Help me find a study group...",
-  "What events are happening this week?",
-  "How do I prepare for FBLA nationals?",
-  "What's the most active club right now?",
+  "Ask Finn anything...",
+  "How do I prep for Business Law?",
+  "What is on the NLC agenda?",
+  "Help me improve my presentation score",
+  "How do I level up my XP faster?",
 ];
 
-const QUICK_REPLIES = [
-  "📅 Events this week",
-  "🏆 My XP & Tier",
-  "📚 FBLA Help",
-  "👥 Find Friends",
-  "🎯 Study Groups",
-];
+const QUICK_REPLIES = ["Events this week", "My XP and Tier", "FBLA Help", "Practice tips", "Study Groups"];
 
 const RESOURCE_LINKS = [
   { id: "khan", label: "Khan Academy", url: "https://www.khanacademy.org" },
@@ -76,69 +59,24 @@ function createMessage(
   };
 }
 
-function ThinkingDot({ delayMs }: { delayMs: number }) {
-  const { palette } = useThemeContext();
-  const pulse = useSharedValue(0.45);
-
-  useEffect(() => {
-    pulse.value = withDelay(
-      delayMs,
-      withRepeat(
-        withSequence(withTiming(1, { duration: 300 }), withTiming(0.45, { duration: 300 })),
-        -1,
-        false,
-      ),
-    );
-  }, [delayMs, pulse]);
-
-  const style = useAnimatedStyle(() => ({
-    opacity: pulse.value,
-    transform: [{ scale: pulse.value }],
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        {
-          width: 7,
-          height: 7,
-          borderRadius: 3.5,
-          backgroundColor: palette.colors.subtleDot,
-        },
-        style,
-      ]}
-    />
-  );
-}
-
-function ThinkingIndicator() {
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, minHeight: 20 }}>
-      <ThinkingDot delayMs={0} />
-      <ThinkingDot delayMs={120} />
-      <ThinkingDot delayMs={240} />
-    </View>
-  );
-}
-
 export function FinnScreen() {
+  const navigation = useNavigation();
   const { profile } = useAuthContext();
   const { hideNavBar, showNavBar } = useNavBarVisibility();
   const { palette } = useThemeContext();
   const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
 
   const [sending, setSending] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [messages, setMessages] = useState<FinnChatMessage[]>([
     createMessage(
       "assistant",
-      "Hey! I'm Finn 👋 Your school's AI assistant. Ask me anything about events, clubs, FBLA prep, or how to climb the leaderboard!",
+      "Hey! I am Finn, your AI FBLA coach. Ask me about events, prep strategy, and how to climb the leaderboard.",
     ),
   ]);
 
   const listRef = useRef<FlatList<FinnChatMessage>>(null);
-  const hasApiKey = useMemo(() => isFinnConfigured(), []);
+  const hasBackend = useMemo(() => isFinnConfigured(), []);
 
   const scrollToLatest = () => {
     requestAnimationFrame(() => {
@@ -167,9 +105,17 @@ export function FinnScreen() {
     };
   }, [hideNavBar, showNavBar]);
 
-  const inputBottomPadding = keyboardVisible
-    ? Math.max(insets.bottom, 10) + 8
-    : Math.max(insets.bottom, 10) + Math.max(tabBarHeight, 72);
+  useFocusEffect(
+    React.useCallback(() => {
+      hideNavBar();
+      return () => {
+        showNavBar();
+      };
+    }, [hideNavBar, showNavBar]),
+  );
+
+  const inputBottomPadding = Math.max(insets.bottom, 10) + 8;
+  const showBackButton = navigation.canGoBack();
 
   const sendMessage = async (rawText: string) => {
     const messageText = rawText.trim();
@@ -258,8 +204,6 @@ export function FinnScreen() {
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: palette.colors.secondarySoft,
-                borderWidth: 1,
-                borderColor: palette.colors.glassBorder,
               }}
             >
               <FinnRobotIcon size={24} />
@@ -277,14 +221,13 @@ export function FinnScreen() {
                 borderColor: item.error ? palette.colors.danger : palette.colors.glassBorder,
               }}
             >
-              {item.pending ? (
-                <ThinkingIndicator />
-              ) : (
-                <Text style={{ color: palette.colors.text, lineHeight: 20 }}>{item.text}</Text>
-              )}
+              {item.pending ? <MessageLoading size="md" /> : <Text style={{ color: palette.colors.text, lineHeight: 20 }}>{item.text}</Text>}
             </GlassSurface>
           ) : (
-            <View
+            <GlassSurface
+              tone="accent"
+              strong
+              elevation={2}
               style={{
                 backgroundColor: palette.colors.primary,
                 borderRadius: 18,
@@ -294,7 +237,7 @@ export function FinnScreen() {
               }}
             >
               <Text style={{ color: palette.colors.onPrimary, lineHeight: 20 }}>{item.text}</Text>
-            </View>
+            </GlassSurface>
           )}
         </View>
       </View>
@@ -315,6 +258,14 @@ export function FinnScreen() {
         keyboardVerticalOffset={Platform.OS === "ios" ? 6 : 0}
       >
         <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 10 }}>
+          {showBackButton ? (
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
+              <BackButton onPress={() => navigation.goBack()} />
+              <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "800" }}>
+                Finn
+              </Text>
+            </View>
+          ) : null}
           <GlassSurface
             style={{
               marginBottom: 10,
@@ -342,7 +293,7 @@ export function FinnScreen() {
                   Finn AI Agent
                 </Text>
                 <Text style={{ color: palette.colors.textSecondary }}>
-                  {hasApiKey ? "Live AI mode enabled" : "Smart local mode active"}
+                  {hasBackend ? "Live AI mode enabled" : "Local fallback mode active"}
                 </Text>
               </View>
               <Badge size="sm" variant="blue-subtle" capitalize={false}>
@@ -361,18 +312,27 @@ export function FinnScreen() {
                       hapticTap();
                       void sendMessage(label);
                     }}
-                    style={{
-                      minHeight: 44,
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor: palette.colors.border,
-                      backgroundColor: palette.colors.chipSurface,
-                      paddingHorizontal: 12,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
+                    style={{ minHeight: 44 }}
                   >
-                    <Text style={{ color: palette.colors.text, fontWeight: "600" }}>{label}</Text>
+                    {({ pressed }) => (
+                      <GlassSurface
+                        pressed={pressed}
+                        elevation={2}
+                        borderRadius={999}
+                        style={{
+                          minHeight: 44,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: palette.colors.border,
+                          backgroundColor: palette.colors.chipSurface,
+                          paddingHorizontal: 12,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text style={{ color: palette.colors.text, fontWeight: "600" }}>{label}</Text>
+                      </GlassSurface>
+                    )}
                   </Pressable>
                 ))}
               </View>
@@ -391,18 +351,27 @@ export function FinnScreen() {
                     hapticTap();
                     void Linking.openURL(link.url);
                   }}
-                  style={{
-                    minHeight: 44,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: palette.colors.border,
-                    backgroundColor: palette.colors.chipSurface,
-                    paddingHorizontal: 12,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
+                  style={{ minHeight: 44 }}
                 >
-                  <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{link.label}</Text>
+                  {({ pressed }) => (
+                    <GlassSurface
+                      pressed={pressed}
+                      elevation={2}
+                      borderRadius={999}
+                      style={{
+                        minHeight: 44,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: palette.colors.border,
+                        backgroundColor: palette.colors.chipSurface,
+                        paddingHorizontal: 12,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{link.label}</Text>
+                    </GlassSurface>
+                  )}
                 </Pressable>
               ))}
             </View>
@@ -428,6 +397,12 @@ export function FinnScreen() {
             <FinnInput
               placeholders={PLACEHOLDERS}
               disabled={sending}
+              onFocus={() => hideNavBar()}
+              onBlur={() => {
+                if (!keyboardVisible) {
+                  showNavBar();
+                }
+              }}
               onSubmit={(text) => {
                 void sendMessage(text);
               }}
@@ -438,3 +413,6 @@ export function FinnScreen() {
     </SafeAreaView>
   );
 }
+
+
+

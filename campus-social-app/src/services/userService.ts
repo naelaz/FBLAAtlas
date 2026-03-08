@@ -1,5 +1,6 @@
-﻿import {
+import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -9,8 +10,9 @@
   updateDoc,
   Unsubscribe,
 } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 
-import { db } from "../config/firebase";
+import { db, storage } from "../config/firebase";
 import { getUserAvatarFallbackUrl, getUserAvatarUrl } from "../constants/media";
 import { getTierForXp } from "../constants/gamification";
 import { AVATAR_FALLBACK_COLORS } from "../constants/themes";
@@ -30,6 +32,18 @@ function avatarUrlFromId(uid: string): string {
   return generated || getUserAvatarFallbackUrl(uid);
 }
 
+function normalizeAvatarUrl(preferred: unknown, seed: string): string {
+  if (typeof preferred !== "string" || preferred.trim().length === 0) {
+    return getUserAvatarFallbackUrl(seed);
+  }
+  const trimmed = preferred.trim();
+  const legacyDiceBear = /api\.dicebear\.com\/7\.x\/(avataaars|lorelei)\//i.test(trimmed);
+  if (legacyDiceBear) {
+    return getUserAvatarFallbackUrl(seed);
+  }
+  return trimmed;
+}
+
 function graduationYearFromGrade(grade: string): number {
   const numericGrade = Number(grade);
   if (!Number.isFinite(numericGrade)) {
@@ -46,6 +60,12 @@ export function createDefaultUserProfile(uid: string): Omit<UserProfile, "create
     displayName: `Student ${uid.slice(0, 4).toUpperCase()}`,
     schoolId: DEFAULT_SCHOOL_ID,
     schoolName: DEFAULT_SCHOOL_NAME,
+    state: "CA",
+    chapterName: "FBLA Atlas Chapter",
+    membershipId: null,
+    onboardingCompleted: false,
+    authProvider: "email",
+    isGuest: false,
     grade: "11",
     avatarColor: colorFromId(uid),
     avatarUrl: avatarUrlFromId(uid),
@@ -62,6 +82,15 @@ export function createDefaultUserProfile(uid: string): Omit<UserProfile, "create
     pointsByAction: {},
     lastDailyLoginDate: null,
     joinedEventIds: [],
+    officerPosition: "Member",
+    chapterRoles: [],
+    yearsServed: "",
+    schoolCity: "",
+    competitiveEvents: [],
+    placements: [],
+    roleExperiences: [],
+    role: "member",
+    banned: false,
   };
 }
 
@@ -82,11 +111,25 @@ function parseUser(uid: string, data: Record<string, unknown>): UserProfile {
       typeof data.schoolName === "string" && data.schoolName.length > 0
         ? data.schoolName
         : base.schoolName,
+    state: typeof data.state === "string" ? data.state : base.state,
+    chapterName: typeof data.chapterName === "string" ? data.chapterName : base.chapterName,
+    membershipId: typeof data.membershipId === "string" ? data.membershipId : null,
+    onboardingCompleted: typeof data.onboardingCompleted === "boolean" ? data.onboardingCompleted : true,
+    authProvider:
+      data.authProvider === "email" ||
+      data.authProvider === "google" ||
+      data.authProvider === "fbla_connect" ||
+      data.authProvider === "guest"
+        ? data.authProvider
+        : base.authProvider,
+    isGuest: typeof data.isGuest === "boolean" ? data.isGuest : false,
     grade: typeof data.grade === "string" ? data.grade : base.grade,
     avatarColor:
       typeof data.avatarColor === "string" ? data.avatarColor : base.avatarColor,
-    avatarUrl:
-      typeof data.avatarUrl === "string" ? data.avatarUrl : base.avatarUrl,
+    avatarUrl: normalizeAvatarUrl(
+      data.avatarUrl,
+      typeof data.displayName === "string" && data.displayName.length > 0 ? data.displayName : uid,
+    ),
     bio: typeof data.bio === "string" ? data.bio : base.bio,
     xp,
     tier: getTierForXp(xp).name,
@@ -117,6 +160,90 @@ function parseUser(uid: string, data: Record<string, unknown>): UserProfile {
     joinedEventIds: Array.isArray(data.joinedEventIds)
       ? data.joinedEventIds.filter((item): item is string => typeof item === "string")
       : [],
+    officerPosition:
+      data.officerPosition === "President" ||
+      data.officerPosition === "Vice President" ||
+      data.officerPosition === "Secretary" ||
+      data.officerPosition === "Treasurer" ||
+      data.officerPosition === "Reporter" ||
+      data.officerPosition === "Parliamentarian" ||
+      data.officerPosition === "Historian" ||
+      data.officerPosition === "Member"
+        ? data.officerPosition
+        : "Member",
+    chapterRoles: Array.isArray(data.chapterRoles)
+      ? data.chapterRoles.filter(
+          (
+            item,
+          ): item is "Chapter Officer" | "Regional Officer" | "State Officer" | "National Officer" | "Alumni" =>
+            item === "Chapter Officer" ||
+            item === "Regional Officer" ||
+            item === "State Officer" ||
+            item === "National Officer" ||
+            item === "Alumni",
+        )
+      : [],
+    yearsServed: typeof data.yearsServed === "string" ? data.yearsServed : "",
+    schoolCity: typeof data.schoolCity === "string" ? data.schoolCity : "",
+    competitiveEvents: Array.isArray(data.competitiveEvents)
+      ? data.competitiveEvents.filter((item): item is string => typeof item === "string")
+      : [],
+    placements: Array.isArray(data.placements)
+      ? data.placements
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") {
+              return null;
+            }
+            const record = entry as Record<string, unknown>;
+            const eventName = typeof record.eventName === "string" ? record.eventName : "";
+            const place = record.place;
+            const competitionLevel = record.competitionLevel;
+            const rawYear = record.year;
+            const year = typeof rawYear === "number" ? rawYear : Number(rawYear);
+            if (
+              !eventName ||
+              !(
+                place === "1st" ||
+                place === "2nd" ||
+                place === "3rd" ||
+                place === "Top 10" ||
+                place === "Top 20" ||
+                place === "Qualified" ||
+                place === "Participant"
+              ) ||
+              !(competitionLevel === "DLC" || competitionLevel === "SLC" || competitionLevel === "NLC") ||
+              !Number.isFinite(year)
+            ) {
+              return null;
+            }
+            return {
+              id:
+                typeof record.id === "string" && record.id.trim().length > 0
+                  ? record.id
+                  : `${eventName}-${competitionLevel}-${year}`,
+              eventName,
+              place,
+              competitionLevel,
+              year,
+            };
+          })
+          .filter(
+            (
+              item,
+            ): item is {
+              id: string;
+              eventName: string;
+              place: "1st" | "2nd" | "3rd" | "Top 10" | "Top 20" | "Qualified" | "Participant";
+              competitionLevel: "DLC" | "SLC" | "NLC";
+              year: number;
+            } => Boolean(item),
+          )
+      : [],
+    roleExperiences: Array.isArray(data.roleExperiences)
+      ? data.roleExperiences.filter((item): item is string => typeof item === "string")
+      : [],
+    role: data.role === "admin" ? "admin" : "member",
+    banned: typeof data.banned === "boolean" ? data.banned : false,
     createdAt: toIso(data.createdAt),
     updatedAt: toIso(data.updatedAt),
   };
@@ -185,10 +312,61 @@ export async function fetchAllUsers(): Promise<UserProfile[]> {
 
 export async function updateUserProfileFields(
   uid: string,
-  fields: Partial<Pick<UserProfile, "displayName" | "bio" | "grade">>,
+  fields: Partial<UserProfile>,
 ): Promise<void> {
   await updateDoc(doc(db, "users", uid), {
     ...fields,
     updatedAt: serverTimestamp(),
   });
 }
+
+export async function setUserOnboardingCompleted(uid: string, completed: boolean): Promise<void> {
+  await updateDoc(doc(db, "users", uid), {
+    onboardingCompleted: completed,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+
+
+function extensionFromUri(uri: string): string {
+  const match = uri.toLowerCase().match(/\.(jpg|jpeg|png|webp|heic|heif)(\?|$)/);
+  return match?.[1] ?? "jpg";
+}
+
+async function uriToBlob(uri: string): Promise<Blob> {
+  const response = await fetch(uri);
+  if (!response.ok) {
+    throw new Error("Unable to read selected image.");
+  }
+  return await response.blob();
+}
+
+export async function uploadProfileAvatar(uid: string, localUri: string): Promise<string> {
+  const ext = extensionFromUri(localUri);
+  const path = `avatars/${uid}/${Date.now()}.${ext}`;
+  const storageRef = ref(storage, path);
+  const blob = await uriToBlob(localUri);
+  await uploadBytes(storageRef, blob, {
+    contentType: blob.type || `image/${ext === "jpg" ? "jpeg" : ext}`,
+  });
+  const downloadURL = await getDownloadURL(storageRef);
+  await updateDoc(doc(db, "users", uid), {
+    avatarUrl: downloadURL,
+    updatedAt: serverTimestamp(),
+  });
+  return downloadURL;
+}
+
+export async function clearProfileAvatar(uid: string): Promise<void> {
+  await updateDoc(doc(db, "users", uid), {
+    avatarUrl: "",
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteUserProfile(uid: string): Promise<void> {
+  await deleteDoc(doc(db, "users", uid));
+}
+
+

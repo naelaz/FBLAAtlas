@@ -1,11 +1,15 @@
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Search } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
-import { Badge, Card, Text, TextInput } from "react-native-paper";
+import { Text } from "react-native-paper";
 
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
+import { Badge } from "../components/ui/badge";
 import { EmptyState } from "../components/ui/EmptyState";
+import { GlassInput } from "../components/ui/GlassInput";
+import { GlassSurface } from "../components/ui/GlassSurface";
 import { SkeletonCard } from "../components/ui/SkeletonCard";
 import { useAuthContext } from "../context/AuthContext";
 import { useMessaging } from "../context/MessagingContext";
@@ -90,7 +94,7 @@ export function MessagesScreen() {
 
   if (!profile) {
     return (
-      <ScreenShell title="Messages" subtitle="Loading messages...">
+      <ScreenShell title="Messages" subtitle="Loading messages..." showBackButton={false}>
         <Text>Loading...</Text>
       </ScreenShell>
     );
@@ -102,18 +106,18 @@ export function MessagesScreen() {
       subtitle={`Unread: ${unreadCount} • Real-time conversations`}
       refreshing={refreshing}
       onRefresh={() => void refreshConversations()}
+      showBackButton={false}
     >
-      <Card mode="elevated" style={{ marginBottom: 12, backgroundColor: palette.colors.surface }}>
-        <Card.Content style={{ gap: 8 }}>
+      <GlassSurface strong elevation={3} style={{ marginBottom: 12, backgroundColor: palette.colors.surface, padding: 12 }}>
+        <View style={{ gap: 8 }}>
           <Text variant="titleMedium" style={{ fontWeight: "800" }}>
             Start New Conversation
           </Text>
-          <TextInput
-            mode="outlined"
+          <GlassInput
             value={query}
             onChangeText={setQuery}
             placeholder="Search a student by name"
-            left={<TextInput.Icon icon="magnify" />}
+            leftSlot={<Search size={16} color={palette.colors.textSecondary} />}
           />
 
           {loadingSearch ? (
@@ -137,35 +141,44 @@ export function MessagesScreen() {
                       console.warn("Create conversation failed:", error);
                     }
                   }}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: palette.colors.border,
-                    borderRadius: 12,
-                    padding: 10,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
+                  style={{ minHeight: 60 }}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <AvatarWithStatus uri={user.avatarUrl} size={36} online={false} />
-                    <View>
-                      <Text style={{ fontWeight: "700" }}>{user.displayName}</Text>
-                      <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
-                        {user.grade}th grade • {user.schoolName}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={{ color: palette.colors.primary, fontWeight: "700" }}>Chat</Text>
+                  {({ pressed }) => (
+                    <GlassSurface
+                      pressed={pressed}
+                      elevation={2}
+                      borderRadius={12}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: palette.colors.border,
+                        borderRadius: 12,
+                        padding: 10,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                        <AvatarWithStatus uri={user.avatarUrl} size={36} online={false} />
+                        <View>
+                          <Text style={{ fontWeight: "700" }}>{user.displayName}</Text>
+                          <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                            {user.grade}th grade • {user.schoolName}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={{ color: palette.colors.primary, fontWeight: "700" }}>Chat</Text>
+                    </GlassSurface>
+                  )}
                 </Pressable>
               ))}
             </View>
           )}
-        </Card.Content>
-      </Card>
+        </View>
+      </GlassSurface>
 
-      <Card mode="elevated" style={{ backgroundColor: palette.colors.surface }}>
-        <Card.Content style={{ gap: 10 }}>
+      <GlassSurface strong elevation={3} style={{ backgroundColor: palette.colors.surface, padding: 12 }}>
+        <View style={{ gap: 10 }}>
           <Text variant="titleMedium" style={{ fontWeight: "800" }}>
             Conversations
           </Text>
@@ -182,40 +195,57 @@ export function MessagesScreen() {
                   hapticTap();
                   navigation.navigate("Chat", { conversationId: conversation.id, targetUserId: otherId });
                 }}
-                style={{
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: palette.colors.border,
-                  padding: 12,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 10,
-                }}
+                style={{ minHeight: 68 }}
               >
-                <View>
-                  <AvatarWithStatus uri={other?.avatarUrl ?? ""} size={42} online={false} />
-                  {unread > 0 ? <Badge style={{ position: "absolute", right: -4, top: -2 }}>{unread}</Badge> : null}
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                    <Text style={{ fontWeight: "800", color: palette.colors.text }}>
-                      {other?.displayName ?? "Conversation"}
-                    </Text>
-                    <Text style={{ color: palette.colors.muted, fontSize: 12 }}>
-                      {formatDateTime(conversation.updatedAt)}
-                    </Text>
-                  </View>
-                  <Text
-                    numberOfLines={1}
+                {({ pressed }) => (
+                  <GlassSurface
+                    pressed={pressed}
+                    elevation={2}
+                    borderRadius={14}
                     style={{
-                      color: typing ? palette.colors.success : palette.colors.textSecondary,
-                      marginTop: 2,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: palette.colors.border,
+                      padding: 12,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
                     }}
                   >
-                    {typing ? "Typing..." : conversation.lastMessage || "No messages yet"}
-                  </Text>
-                </View>
+                    <View>
+                      <AvatarWithStatus uri={other?.avatarUrl ?? ""} size={42} online={false} />
+                      {unread > 0 ? (
+                        <Badge
+                          variant="blue"
+                          style={{ position: "absolute", right: -4, top: -2 }}
+                          capitalize={false}
+                        >
+                          {unread}
+                        </Badge>
+                      ) : null}
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                        <Text style={{ fontWeight: "800", color: palette.colors.text }}>
+                          {other?.displayName ?? "Conversation"}
+                        </Text>
+                        <Text style={{ color: palette.colors.muted, fontSize: 12 }}>
+                          {formatDateTime(conversation.updatedAt)}
+                        </Text>
+                      </View>
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          color: typing ? palette.colors.success : palette.colors.textSecondary,
+                          marginTop: 2,
+                        }}
+                      >
+                        {typing ? "Typing..." : conversation.lastMessage || "No messages yet"}
+                      </Text>
+                    </View>
+                  </GlassSurface>
+                )}
               </Pressable>
             );
           })}
@@ -226,8 +256,8 @@ export function MessagesScreen() {
               message="Start a chat by searching for a student above."
             />
           ) : null}
-        </Card.Content>
-      </Card>
+        </View>
+      </GlassSurface>
     </ScreenShell>
   );
 }

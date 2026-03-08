@@ -1,7 +1,22 @@
-﻿import { DarkTheme as NavDarkTheme, DefaultTheme as NavLightTheme, Theme as NavTheme } from "@react-navigation/native";
+import {
+  DarkTheme as NavDarkTheme,
+  DefaultTheme as NavLightTheme,
+  Theme as NavTheme,
+} from "@react-navigation/native";
 import { MD3DarkTheme, MD3LightTheme, MD3Theme } from "react-native-paper";
 
-export type AppThemeName = "midnight" | "sunrise" | "forest" | "ocean" | "candy" | "mono";
+export type AppThemeName =
+  | "midnight"
+  | "charcoal"
+  | "navy"
+  | "slate"
+  | "light"
+  | "cream"
+  | "sage"
+  | "dusk"
+  | "mocha";
+
+export type ThemeGroup = "dark" | "light";
 
 export type ShadowLevel = {
   shadowColor: string;
@@ -22,48 +37,48 @@ export const DESIGN_TOKENS = {
     xxl: 32,
   },
   radius: {
-    sm: 12,
-    md: 16,
-    lg: 20,
-    xl: 24,
-    xxl: 32,
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    xxl: 24,
     pill: 999,
   },
   blur: {
-    sm: 20,
-    md: 32,
-    lg: 48,
+    sm: 0,
+    md: 0,
+    lg: 0,
   },
   typography: {
-    display: { fontSize: 34, lineHeight: 51, fontWeight: "700" as const },
-    heading: { fontSize: 24, lineHeight: 36, fontWeight: "600" as const },
-    subheading: { fontSize: 18, lineHeight: 27, fontWeight: "500" as const },
-    body: { fontSize: 15, lineHeight: 22.5, fontWeight: "400" as const },
-    caption: { fontSize: 13, lineHeight: 19.5, fontWeight: "400" as const },
+    display: { fontSize: 34, lineHeight: 48, fontWeight: "700" as const },
+    heading: { fontSize: 24, lineHeight: 34, fontWeight: "700" as const },
+    subheading: { fontSize: 18, lineHeight: 27, fontWeight: "600" as const },
+    body: { fontSize: 15, lineHeight: 22, fontWeight: "400" as const },
+    caption: { fontSize: 13, lineHeight: 18, fontWeight: "400" as const },
     label: {
       fontSize: 12,
-      lineHeight: 18,
-      fontWeight: "500" as const,
-      letterSpacing: 1,
+      lineHeight: 16,
+      fontWeight: "600" as const,
+      letterSpacing: 0.5,
       textTransform: "uppercase" as const,
     },
   },
   motion: {
-    tap: { stiffness: 300, damping: 20, toValue: 0.96 },
-    longPress: { stiffness: 280, damping: 22, toValue: 0.93 },
-    screenEnter: { duration: 280, translateY: 12 },
-    tabSwitch: { duration: 200 },
-    listStaggerDelay: 40,
+    tap: { stiffness: 0, damping: 0, toValue: 1 },
+    longPress: { stiffness: 0, damping: 0, toValue: 1 },
+    screenEnter: { duration: 0, translateY: 0 },
+    tabSwitch: { duration: 0 },
+    listStaggerDelay: 0,
     toastDuration: 2500,
   },
 };
 
 export const ELEVATION_LEVELS = {
   level0: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
-  level1: { shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  level2: { shadowOpacity: 0.12, shadowRadius: 16, elevation: 6 },
-  level3: { shadowOpacity: 0.2, shadowRadius: 24, elevation: 10 },
-  level4: { shadowOpacity: 0.32, shadowRadius: 40, elevation: 16 },
+  level1: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
+  level2: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
+  level3: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
+  level4: { shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
 } as const;
 
 export const TIER_COLORS = {
@@ -94,157 +109,99 @@ export const AVATAR_FALLBACK_COLORS = [
   "#A855F7",
 ] as const;
 
-function alpha(hex: string, opacity: number): string {
+type CoreThemeColors = {
+  background: string;
+  surface: string;
+  surfaceAlt: string;
+  border: string;
+  text: string;
+  textMuted: string;
+  textFaint: string;
+  accent: string;
+  accentMuted: string;
+  success: string;
+  error: string;
+  warning: string;
+};
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const clean = hex.replace("#", "");
-  const normalized = clean.length === 3 ? clean.split("").map((c) => `${c}${c}`).join("") : clean;
-  const r = Number.parseInt(normalized.slice(0, 2), 16);
-  const g = Number.parseInt(normalized.slice(2, 4), 16);
-  const b = Number.parseInt(normalized.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  const normalized =
+    clean.length === 3
+      ? `${clean[0]}${clean[0]}${clean[1]}${clean[1]}${clean[2]}${clean[2]}`
+      : clean;
+  const num = Number.parseInt(normalized, 16);
+  return {
+    r: (num >> 16) & 255,
+    g: (num >> 8) & 255,
+    b: num & 255,
+  };
 }
 
-function makeShadow(color: string, level: keyof typeof ELEVATION_LEVELS): ShadowLevel {
+function withAlpha(hex: string, alpha: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`;
+}
+
+function contrastTextFor(bg: string): string {
+  const { r, g, b } = hexToRgb(bg);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.6 ? "#111111" : "#ffffff";
+}
+
+function makeShadow(level: keyof typeof ELEVATION_LEVELS): ShadowLevel {
   const token = ELEVATION_LEVELS[level];
   return {
-    shadowColor: color,
+    shadowColor: "#000000",
     shadowOpacity: token.shadowOpacity,
     shadowRadius: token.shadowRadius,
-    shadowOffset: { width: 0, height: Math.max(1, Math.floor(token.shadowRadius / 2)) },
+    shadowOffset: { width: 0, height: 0 },
     elevation: token.elevation,
   };
 }
 
-type RawTheme = {
-  name: AppThemeName;
-  label: string;
-  isDark: boolean;
-  base: string;
-  surface: string;
-  elevated: string;
-  textPrimary: string;
-  textSecondary: string;
-  textMuted: string;
-  accentPrimary: string;
-  accentSecondary: string;
-};
-
-function isLightHexColor(hex: string): boolean {
-  const clean = hex.replace("#", "");
-  const normalized = clean.length === 3 ? clean.split("").map((c) => `${c}${c}`).join("") : clean;
-  const r = Number.parseInt(normalized.slice(0, 2), 16);
-  const g = Number.parseInt(normalized.slice(2, 4), 16);
-  const b = Number.parseInt(normalized.slice(4, 6), 16);
-  // W3C relative luminance approximation threshold
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
-}
-
-const RAW_THEMES: RawTheme[] = [
-  {
-    name: "midnight",
-    label: "Midnight",
-    isDark: true,
-    base: "#0A0A0F",
-    surface: "#111118",
-    elevated: "#1C1C27",
-    textPrimary: "#F0F0FF",
-    textSecondary: "#8888AA",
-    textMuted: "#44445A",
-    accentPrimary: "#7C3AED",
-    accentSecondary: "#06B6D4",
-  },
-  {
-    name: "sunrise",
-    label: "Sunrise",
-    isDark: false,
-    base: "#FFF5EC",
-    surface: "#FFF1E6",
-    elevated: "#FFE5CF",
-    textPrimary: "#3A1E12",
-    textSecondary: "#7A4A30",
-    textMuted: "#9F7A68",
-    accentPrimary: "#F59E0B",
-    accentSecondary: "#F43F5E",
-  },
-  {
-    name: "forest",
-    label: "Forest",
-    isDark: true,
-    base: "#08120E",
-    surface: "#102019",
-    elevated: "#1A2E25",
-    textPrimary: "#E9FFF4",
-    textSecondary: "#94BFA7",
-    textMuted: "#4A6A58",
-    accentPrimary: "#10B981",
-    accentSecondary: "#84CC16",
-  },
-  {
-    name: "ocean",
-    label: "Ocean",
-    isDark: false,
-    base: "#ECF8FF",
-    surface: "#E6F4FF",
-    elevated: "#D6EAFE",
-    textPrimary: "#0B2A43",
-    textSecondary: "#335A79",
-    textMuted: "#5E7E98",
-    accentPrimary: "#0EA5E9",
-    accentSecondary: "#6366F1",
-  },
-  {
-    name: "candy",
-    label: "Candy",
-    isDark: false,
-    base: "#FFF0F7",
-    surface: "#FFE8F3",
-    elevated: "#FFDDED",
-    textPrimary: "#3C1231",
-    textSecondary: "#7C3E68",
-    textMuted: "#9A6690",
-    accentPrimary: "#EC4899",
-    accentSecondary: "#A855F7",
-  },
-  {
-    name: "mono",
-    label: "Monochrome",
-    isDark: true,
-    base: "#0D0D0D",
-    surface: "#171717",
-    elevated: "#222222",
-    textPrimary: "#F5F5F7",
-    textSecondary: "#A3A3A3",
-    textMuted: "#6B7280",
-    accentPrimary: "#FFFFFF",
-    accentSecondary: "#6B7280",
-  },
-];
-
 export type ThemePalette = {
   name: AppThemeName;
   label: string;
+  group: ThemeGroup;
   isDark: boolean;
   colors: {
     background: string;
     surface: string;
+    surfaceAlt: string;
+    border: string;
+    text: string;
+    textMuted: string;
+    textFaint: string;
+    accent: string;
+    accentMuted: string;
+    success: string;
+    error: string;
+    warning: string;
     surfaceSoft: string;
     elevated: string;
-    text: string;
     textSecondary: string;
     muted: string;
     primary: string;
     secondary: string;
     onPrimary: string;
-    border: string;
+    transparent: string;
     cardTint: string;
     glass: string;
     glassStrong: string;
     glassBorder: string;
+    glassHighlight: string;
+    glassInnerShadow: string;
+    glassInset: string;
+    glassPressed: string;
+    glassDisabled: string;
+    accentGlass: string;
+    dangerGlass: string;
+    successGlass: string;
     tabGlass: string;
     tabBorder: string;
     danger: string;
     onDanger: string;
-    success: string;
-    warning: string;
     info: string;
     online: string;
     divider: string;
@@ -260,6 +217,10 @@ export type ThemePalette = {
     readRow: string;
     unreadRow: string;
     leftAccent: string;
+    imageOverlay: string;
+    imageOverlayStrong: string;
+    onImageText: string;
+    onImageMuted: string;
   };
   radius: typeof DESIGN_TOKENS.radius;
   blur: typeof DESIGN_TOKENS.blur;
@@ -275,52 +236,64 @@ export type ThemePalette = {
   };
 };
 
-export const APP_THEMES: ThemePalette[] = RAW_THEMES.map((theme) => {
-  const lightBorder = alpha("#000000", 0.08);
-  const darkBorder = alpha("#FFFFFF", 0.18);
-  const border = theme.isDark ? darkBorder : lightBorder;
-
+function makeTheme(
+  name: AppThemeName,
+  label: string,
+  group: ThemeGroup,
+  core: CoreThemeColors,
+): ThemePalette {
+  const isDark = group === "dark";
+  const onAccent = contrastTextFor(core.accent);
   return {
-    name: theme.name,
-    label: theme.label,
-    isDark: theme.isDark,
+    name,
+    label,
+    group,
+    isDark,
     colors: {
-      background: theme.base,
-      surface: theme.surface,
-      surfaceSoft: alpha(theme.elevated, 0.92),
-      elevated: theme.elevated,
-      text: theme.textPrimary,
-      textSecondary: theme.textSecondary,
-      muted: theme.textMuted,
-      primary: theme.accentPrimary,
-      secondary: theme.accentSecondary,
-      onPrimary: isLightHexColor(theme.accentPrimary) ? "#0A0A0F" : "#F8FAFC",
-      border,
-      cardTint: alpha(theme.accentPrimary, theme.isDark ? 0.2 : 0.14),
-      glass: theme.isDark ? alpha(theme.surface, 0.72) : alpha(theme.surface, 0.75),
-      glassStrong: theme.isDark ? alpha(theme.elevated, 0.88) : alpha(theme.surface, 0.92),
-      glassBorder: border,
-      tabGlass: theme.isDark ? alpha(theme.elevated, 0.85) : alpha(theme.surface, 0.85),
-      tabBorder: border,
-      danger: "#EF4444",
-      onDanger: "#F8FAFC",
-      success: "#10B981",
-      warning: "#F59E0B",
-      info: theme.accentSecondary,
-      online: "#22C55E",
-      divider: theme.isDark ? alpha(theme.textPrimary, 0.12) : alpha(theme.textPrimary, 0.08),
-      overlay: alpha(theme.isDark ? "#0A0A0F" : "#111118", 0.58),
-      accentGlow: alpha(theme.accentPrimary, 0.4),
-      primarySoft: alpha(theme.accentPrimary, theme.isDark ? 0.2 : 0.18),
-      secondarySoft: alpha(theme.accentSecondary, theme.isDark ? 0.24 : 0.18),
-      chipSurface: theme.isDark ? alpha(theme.elevated, 0.78) : alpha(theme.surface, 0.92),
-      inputSurface: theme.isDark ? alpha(theme.elevated, 0.72) : alpha(theme.surface, 0.96),
-      inputMuted: theme.isDark ? alpha(theme.textSecondary, 0.3) : alpha(theme.textSecondary, 0.22),
-      placeholder: alpha(theme.textSecondary, 0.86),
-      subtleDot: alpha(theme.textSecondary, 0.9),
-      readRow: theme.isDark ? alpha(theme.surface, 0.7) : alpha(theme.surface, 0.68),
-      unreadRow: theme.isDark ? alpha(theme.elevated, 0.88) : alpha(theme.elevated, 0.86),
-      leftAccent: theme.accentPrimary,
+      ...core,
+      surfaceSoft: core.surfaceAlt,
+      elevated: core.surfaceAlt,
+      textSecondary: core.textMuted,
+      muted: core.textFaint,
+      primary: core.accent,
+      secondary: core.accent,
+      onPrimary: onAccent,
+      transparent: "transparent",
+      cardTint: core.surface,
+      glass: core.surface,
+      glassStrong: core.surface,
+      glassBorder: core.border,
+      glassHighlight: core.surfaceAlt,
+      glassInnerShadow: withAlpha(core.text, isDark ? 0.08 : 0.04),
+      glassInset: withAlpha(core.background, isDark ? 0.5 : 0.2),
+      glassPressed: core.surfaceAlt,
+      glassDisabled: core.surfaceAlt,
+      accentGlass: withAlpha(core.accent, isDark ? 0.24 : 0.16),
+      dangerGlass: withAlpha(core.error, isDark ? 0.2 : 0.14),
+      successGlass: withAlpha(core.success, isDark ? 0.2 : 0.14),
+      tabGlass: core.surface,
+      tabBorder: core.border,
+      danger: core.error,
+      onDanger: "#ffffff",
+      info: core.accent,
+      online: core.success,
+      divider: core.border,
+      overlay: isDark ? "rgba(0,0,0,0.62)" : "rgba(0,0,0,0.32)",
+      accentGlow: core.accentMuted,
+      primarySoft: core.accentMuted,
+      secondarySoft: core.accentMuted,
+      chipSurface: core.surfaceAlt,
+      inputSurface: core.surfaceAlt,
+      inputMuted: core.border,
+      placeholder: core.textFaint,
+      subtleDot: core.textMuted,
+      readRow: core.surface,
+      unreadRow: core.surfaceAlt,
+      leftAccent: core.accent,
+      imageOverlay: isDark ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.2)",
+      imageOverlayStrong: isDark ? "rgba(0,0,0,0.52)" : "rgba(0,0,0,0.32)",
+      onImageText: "#ffffff",
+      onImageMuted: isDark ? "#e5e5e5" : "#f3f3f3",
     },
     radius: DESIGN_TOKENS.radius,
     blur: DESIGN_TOKENS.blur,
@@ -328,19 +301,160 @@ export const APP_THEMES: ThemePalette[] = RAW_THEMES.map((theme) => {
     typography: DESIGN_TOKENS.typography,
     motion: DESIGN_TOKENS.motion,
     elevation: {
-      level0: makeShadow(theme.base, "level0"),
-      level1: makeShadow(theme.textPrimary, "level1"),
-      level2: makeShadow(theme.textPrimary, "level2"),
-      level3: makeShadow(theme.textPrimary, "level3"),
-      level4: makeShadow(theme.textPrimary, "level4"),
+      level0: makeShadow("level0"),
+      level1: makeShadow("level1"),
+      level2: makeShadow("level2"),
+      level3: makeShadow("level3"),
+      level4: makeShadow("level4"),
     },
-  } satisfies ThemePalette;
-});
+  };
+}
+
+const THEMES: Record<AppThemeName, ThemePalette> = {
+  midnight: makeTheme("midnight", "Midnight", "dark", {
+    background: "#0a0a0a",
+    surface: "#1a1a1a",
+    surfaceAlt: "#222222",
+    border: "#2a2a2a",
+    text: "#ffffff",
+    textMuted: "#888888",
+    textFaint: "#444444",
+    accent: "#4f7ef7",
+    accentMuted: "#1e3a6e",
+    success: "#3d9e6e",
+    error: "#c0392b",
+    warning: "#d4871a",
+  }),
+  charcoal: makeTheme("charcoal", "Charcoal", "dark", {
+    background: "#111010",
+    surface: "#1c1b1b",
+    surfaceAlt: "#242323",
+    border: "#2e2c2c",
+    text: "#f0ece8",
+    textMuted: "#8a8480",
+    textFaint: "#484442",
+    accent: "#c8a882",
+    accentMuted: "#3d3228",
+    success: "#5a8f6a",
+    error: "#a84040",
+    warning: "#b8892a",
+  }),
+  navy: makeTheme("navy", "Navy", "dark", {
+    background: "#090d14",
+    surface: "#111827",
+    surfaceAlt: "#1a2540",
+    border: "#1e2d4a",
+    text: "#e8edf5",
+    textMuted: "#6b7a99",
+    textFaint: "#2e3d5c",
+    accent: "#5b8dee",
+    accentMuted: "#1a2e5c",
+    success: "#3a8c6e",
+    error: "#a83838",
+    warning: "#c49030",
+  }),
+  slate: makeTheme("slate", "Slate", "dark", {
+    background: "#0d0f12",
+    surface: "#181b20",
+    surfaceAlt: "#1f232a",
+    border: "#272c35",
+    text: "#dde2ec",
+    textMuted: "#707888",
+    textFaint: "#404650",
+    accent: "#7b93c8",
+    accentMuted: "#253050",
+    success: "#4a8a68",
+    error: "#994040",
+    warning: "#b08030",
+  }),
+  light: makeTheme("light", "Light", "light", {
+    background: "#f5f5f5",
+    surface: "#ffffff",
+    surfaceAlt: "#efefef",
+    border: "#e0e0e0",
+    text: "#1a1a1a",
+    textMuted: "#666666",
+    textFaint: "#aaaaaa",
+    accent: "#4f7ef7",
+    accentMuted: "#dce6fd",
+    success: "#3a8c5a",
+    error: "#c0392b",
+    warning: "#d4871a",
+  }),
+  cream: makeTheme("cream", "Cream", "light", {
+    background: "#f2ede6",
+    surface: "#faf7f2",
+    surfaceAlt: "#ece6dc",
+    border: "#ddd5c8",
+    text: "#2c2420",
+    textMuted: "#7a6e66",
+    textFaint: "#b0a89e",
+    accent: "#8b6f47",
+    accentMuted: "#e8dece",
+    success: "#4a7a54",
+    error: "#b04040",
+    warning: "#b87820",
+  }),
+  sage: makeTheme("sage", "Sage", "light", {
+    background: "#eef2ee",
+    surface: "#f8faf8",
+    surfaceAlt: "#e4ebe4",
+    border: "#ccd8cc",
+    text: "#242e24",
+    textMuted: "#607060",
+    textFaint: "#98a898",
+    accent: "#4a7c59",
+    accentMuted: "#ccddd0",
+    success: "#3d7a4e",
+    error: "#9e3c3c",
+    warning: "#a87820",
+  }),
+  dusk: makeTheme("dusk", "Dusk", "dark", {
+    background: "#0e0c14",
+    surface: "#181520",
+    surfaceAlt: "#201c2c",
+    border: "#2a2638",
+    text: "#e8e4f0",
+    textMuted: "#7870a0",
+    textFaint: "#3a3450",
+    accent: "#9b82d4",
+    accentMuted: "#2e2450",
+    success: "#4a8a6a",
+    error: "#a04040",
+    warning: "#b08030",
+  }),
+  mocha: makeTheme("mocha", "Mocha", "dark", {
+    background: "#0f0b08",
+    surface: "#1c1510",
+    surfaceAlt: "#241c16",
+    border: "#302418",
+    text: "#f0e8de",
+    textMuted: "#907868",
+    textFaint: "#483828",
+    accent: "#c8844a",
+    accentMuted: "#3c2010",
+    success: "#5a8a4a",
+    error: "#a84040",
+    warning: "#c09030",
+  }),
+};
+
+export const APP_THEMES: ThemePalette[] = [
+  THEMES.midnight,
+  THEMES.charcoal,
+  THEMES.navy,
+  THEMES.slate,
+  THEMES.dusk,
+  THEMES.mocha,
+  THEMES.light,
+  THEMES.cream,
+  THEMES.sage,
+];
 
 export const DEFAULT_THEME: AppThemeName = "midnight";
 
 export function getThemeByName(name: AppThemeName): ThemePalette {
-  return APP_THEMES.find((theme) => theme.name === name) ?? APP_THEMES[0];
+  return THEMES[name] ?? THEMES[DEFAULT_THEME];
 }
 
 export function createPaperTheme(palette: ThemePalette): MD3Theme {
@@ -352,14 +466,23 @@ export function createPaperTheme(palette: ThemePalette): MD3Theme {
       ...base.colors,
       primary: palette.colors.primary,
       secondary: palette.colors.secondary,
+      tertiary: palette.colors.info,
       background: palette.colors.background,
       surface: palette.colors.surface,
+      surfaceDisabled: palette.colors.glassDisabled,
       surfaceVariant: palette.colors.surfaceSoft,
       onBackground: palette.colors.text,
       onSurface: palette.colors.text,
       onSurfaceVariant: palette.colors.textSecondary,
+      onPrimary: palette.colors.onPrimary,
+      primaryContainer: palette.colors.primarySoft,
+      secondaryContainer: palette.colors.secondarySoft,
       outline: palette.colors.border,
+      outlineVariant: palette.colors.glassBorder,
       error: palette.colors.danger,
+      errorContainer: palette.colors.dangerGlass,
+      inverseSurface: palette.colors.surface,
+      inverseOnSurface: palette.colors.text,
     },
   };
 }
@@ -379,3 +502,4 @@ export function createNavigationTheme(palette: ThemePalette): NavTheme {
     },
   };
 }
+

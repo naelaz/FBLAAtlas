@@ -1,9 +1,10 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { NavigationProp, useNavigation } from "@react-navigation/native";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 
 import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
+import { GlassIconButton } from "./ui/GlassIconButton";
 
 export function SettingsHeaderButton() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
@@ -11,15 +12,13 @@ export function SettingsHeaderButton() {
 
   return (
     <View style={{ flexDirection: "row", alignItems: "center", marginRight: 8 }}>
-      <Pressable
+      <GlassIconButton
         onPress={() => navigation.navigate("Settings")}
-        style={{ padding: 6 }}
-        accessibilityRole="button"
         accessibilityLabel="Open settings"
+        size={38}
       >
-        <MaterialCommunityIcons name="cog-outline" size={24} color={palette.colors.text} />
-      </Pressable>
+        <MaterialCommunityIcons name="cog-outline" size={20} color={palette.colors.text} />
+      </GlassIconButton>
     </View>
   );
 }
-

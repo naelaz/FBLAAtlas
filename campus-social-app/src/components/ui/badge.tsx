@@ -1,37 +1,31 @@
 import React from "react";
 import { StyleProp, Text, TextStyle, View, ViewStyle } from "react-native";
 
+import { ThemePalette } from "../../constants/themes";
 import { useThemeContext } from "../../context/ThemeContext";
 import { TierName } from "../../types/social";
 
-type VariantPalette = {
-  lightBg: string;
-  darkBg: string;
-  lightText: string;
-  darkText: string;
-};
-
-const variants = {
-  gray: { lightBg: "#8f8f8f", darkBg: "#8f8f8f", lightText: "#FFFFFF", darkText: "#FFFFFF" },
-  "gray-subtle": { lightBg: "#ebebeb", darkBg: "#1f1f1f", lightText: "#171717", darkText: "#ededed" },
-  blue: { lightBg: "#006bff", darkBg: "#006bff", lightText: "#FFFFFF", darkText: "#FFFFFF" },
-  "blue-subtle": { lightBg: "#e9f4ff", darkBg: "#022248", lightText: "#005ff2", darkText: "#47a8ff" },
-  purple: { lightBg: "#a000f8", darkBg: "#a000f8", lightText: "#FFFFFF", darkText: "#FFFFFF" },
-  "purple-subtle": { lightBg: "#f9f0ff", darkBg: "#341142", lightText: "#7d00cc", darkText: "#c472fb" },
-  amber: { lightBg: "#ffae00", darkBg: "#ffae00", lightText: "#000000", darkText: "#000000" },
-  "amber-subtle": { lightBg: "#fff4cf", darkBg: "#361900", lightText: "#aa4d00", darkText: "#ff9300" },
-  red: { lightBg: "#fc0035", darkBg: "#fc0035", lightText: "#FFFFFF", darkText: "#FFFFFF" },
-  "red-subtle": { lightBg: "#ffe8ea", darkBg: "#440d13", lightText: "#d8001b", darkText: "#ff565f" },
-  pink: { lightBg: "#f22782", darkBg: "#f22782", lightText: "#FFFFFF", darkText: "#FFFFFF" },
-  "pink-subtle": { lightBg: "#ffdfeb", darkBg: "#571032", lightText: "#c41562", darkText: "#ff4d8d" },
-  green: { lightBg: "#28a948", darkBg: "#28a948", lightText: "#FFFFFF", darkText: "#FFFFFF" },
-  "green-subtle": { lightBg: "#e5fce7", darkBg: "#00320b", lightText: "#107d32", darkText: "#00ca50" },
-  teal: { lightBg: "#00ac96", darkBg: "#00ac96", lightText: "#FFFFFF", darkText: "#FFFFFF" },
-  "teal-subtle": { lightBg: "#ccf9f1", darkBg: "#003d34", lightText: "#007f70", darkText: "#00cfb7" },
-  inverted: { lightBg: "#171717", darkBg: "#ededed", lightText: "#f2f2f2", darkText: "#1a1a1a" },
-  trial: { lightBg: "#0070F3", darkBg: "#0070F3", lightText: "#FFFFFF", darkText: "#FFFFFF" },
-  turbo: { lightBg: "#ff1e56", darkBg: "#ff1e56", lightText: "#FFFFFF", darkText: "#FFFFFF" },
-} satisfies Record<string, VariantPalette>;
+const BADGE_VARIANTS = [
+  "gray",
+  "gray-subtle",
+  "blue",
+  "blue-subtle",
+  "purple",
+  "purple-subtle",
+  "amber",
+  "amber-subtle",
+  "red",
+  "red-subtle",
+  "pink",
+  "pink-subtle",
+  "green",
+  "green-subtle",
+  "teal",
+  "teal-subtle",
+  "inverted",
+  "trial",
+  "turbo",
+] as const;
 
 const sizes = {
   sm: {
@@ -60,7 +54,7 @@ const sizes = {
   },
 } as const;
 
-export type BadgeVariant = keyof typeof variants;
+export type BadgeVariant = (typeof BADGE_VARIANTS)[number];
 export type BadgeSize = keyof typeof sizes;
 
 export interface BadgeProps {
@@ -71,6 +65,56 @@ export interface BadgeProps {
   icon?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
+}
+
+type BadgeColorPair = {
+  backgroundColor: string;
+  textColor: string;
+};
+
+function getBadgeColors(variant: BadgeVariant, palette: ThemePalette): BadgeColorPair {
+  switch (variant) {
+    case "gray":
+      return { backgroundColor: palette.colors.chipSurface, textColor: palette.colors.text };
+    case "gray-subtle":
+      return { backgroundColor: palette.colors.surfaceSoft, textColor: palette.colors.textSecondary };
+    case "blue":
+      return { backgroundColor: palette.colors.primary, textColor: palette.colors.onPrimary };
+    case "blue-subtle":
+      return { backgroundColor: palette.colors.primarySoft, textColor: palette.colors.primary };
+    case "purple":
+      return { backgroundColor: palette.colors.secondary, textColor: palette.colors.onPrimary };
+    case "purple-subtle":
+      return { backgroundColor: palette.colors.secondarySoft, textColor: palette.colors.secondary };
+    case "amber":
+      return { backgroundColor: palette.colors.warning, textColor: palette.colors.background };
+    case "amber-subtle":
+      return { backgroundColor: palette.colors.secondarySoft, textColor: palette.colors.warning };
+    case "red":
+      return { backgroundColor: palette.colors.danger, textColor: palette.colors.onDanger };
+    case "red-subtle":
+      return { backgroundColor: palette.colors.surfaceSoft, textColor: palette.colors.danger };
+    case "pink":
+      return { backgroundColor: palette.colors.primary, textColor: palette.colors.onPrimary };
+    case "pink-subtle":
+      return { backgroundColor: palette.colors.primarySoft, textColor: palette.colors.primary };
+    case "green":
+      return { backgroundColor: palette.colors.success, textColor: palette.colors.onDanger };
+    case "green-subtle":
+      return { backgroundColor: palette.colors.surfaceSoft, textColor: palette.colors.success };
+    case "teal":
+      return { backgroundColor: palette.colors.secondary, textColor: palette.colors.onPrimary };
+    case "teal-subtle":
+      return { backgroundColor: palette.colors.secondarySoft, textColor: palette.colors.secondary };
+    case "inverted":
+      return { backgroundColor: palette.colors.text, textColor: palette.colors.background };
+    case "trial":
+      return { backgroundColor: palette.colors.primary, textColor: palette.colors.onPrimary };
+    case "turbo":
+      return { backgroundColor: palette.colors.secondary, textColor: palette.colors.onPrimary };
+    default:
+      return { backgroundColor: palette.colors.chipSurface, textColor: palette.colors.text };
+  }
 }
 
 function withIconColor(icon: React.ReactNode, color: string, iconSize: number) {
@@ -118,9 +162,7 @@ export const Badge = ({
 }: BadgeProps) => {
   const { palette } = useThemeContext();
   const sizeStyle = sizes[size];
-  const variantStyle = variants[variant];
-  const backgroundColor = palette.isDark ? variantStyle.darkBg : variantStyle.lightBg;
-  const color = palette.isDark ? variantStyle.darkText : variantStyle.lightText;
+  const { backgroundColor, textColor } = getBadgeColors(variant, palette);
 
   return (
     <View
@@ -139,8 +181,8 @@ export const Badge = ({
         },
         style,
       ]}
-    >
-      {icon ? <View>{withIconColor(icon, color, sizeStyle.icon)}</View> : null}
+      >
+      {icon ? <View>{withIconColor(icon, textColor, sizeStyle.icon)}</View> : null}
       <Text
         style={[
           {
@@ -149,7 +191,7 @@ export const Badge = ({
             includeFontPadding: false,
             fontSize: sizeStyle.fontSize,
             letterSpacing: sizeStyle.letterSpacing,
-            color,
+            color: textColor,
             textTransform: capitalize ? "capitalize" : "none",
           },
           textStyle,

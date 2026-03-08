@@ -63,7 +63,7 @@ export function AppImage({
       )}
       {overlayReadable ? (
         <LinearGradient
-          colors={["transparent", palette.colors.overlay]}
+          colors={[palette.colors.transparent, palette.colors.overlay]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={StyleSheet.absoluteFill}

@@ -1,4 +1,5 @@
-﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as NavigationBar from "expo-navigation-bar";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { MD3Theme } from "react-native-paper";
 
@@ -12,16 +13,17 @@ import {
   getThemeByName,
 } from "../constants/themes";
 
+const THEME_STORAGE_KEY = "fbla_atlas_theme_v3";
+
 type ThemeContextValue = {
   themeName: AppThemeName;
   palette: ThemePalette;
   paperTheme: MD3Theme;
   navigationTheme: ReturnType<typeof createNavigationTheme>;
   ready: boolean;
+  availableThemes: ThemePalette[];
   setThemeName: (name: AppThemeName) => Promise<void>;
 };
-
-const STORAGE_KEY = "fbla_atlas_theme_name_v1";
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
@@ -30,54 +32,63 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-    const loadTheme = async () => {
+    let active = true;
+    const bootstrap = async () => {
       try {
-        const saved = await AsyncStorage.getItem(STORAGE_KEY);
-        if (!mounted) {
+        const stored = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+        if (!active || !stored) {
           return;
         }
-        if (saved) {
-          const matched = APP_THEMES.find((theme) => theme.name === saved);
-          if (matched) {
-            setThemeNameState(matched.name);
-          }
+        const exists = APP_THEMES.some((theme) => theme.name === stored);
+        if (exists) {
+          setThemeNameState(stored as AppThemeName);
         }
       } catch (error) {
-        console.warn("Theme load failed:", error);
+        console.warn("Theme bootstrap failed:", error);
       } finally {
-        if (mounted) {
+        if (active) {
           setReady(true);
         }
       }
     };
 
-    void loadTheme();
+    void bootstrap();
     return () => {
-      mounted = false;
+      active = false;
     };
   }, []);
 
+  const palette = useMemo(() => getThemeByName(themeName), [themeName]);
+
+  useEffect(() => {
+    void NavigationBar.setBackgroundColorAsync(palette.colors.background).catch(() => undefined);
+    void NavigationBar.setButtonStyleAsync(palette.isDark ? "light" : "dark").catch(() => undefined);
+  }, [palette.colors.background, palette.isDark]);
+
   const setThemeName = async (name: AppThemeName) => {
+    if (name === themeName) {
+      return;
+    }
     setThemeNameState(name);
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, name);
+      await AsyncStorage.setItem(THEME_STORAGE_KEY, name);
     } catch (error) {
-      console.warn("Theme save failed:", error);
+      console.warn("Persist theme failed:", error);
     }
   };
 
-  const value = useMemo(() => {
-    const palette = getThemeByName(themeName);
-    return {
+  const value = useMemo<ThemeContextValue>(
+    () => ({
       themeName,
       palette,
       paperTheme: createPaperTheme(palette),
       navigationTheme: createNavigationTheme(palette),
       ready,
+      availableThemes: APP_THEMES,
       setThemeName,
-    };
-  }, [themeName, ready]);
+    }),
+    [palette, ready, themeName],
+  );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
@@ -90,4 +101,7 @@ export function useThemeContext(): ThemeContextValue {
   return context;
 }
 
+export function useTheme(): ThemeContextValue {
+  return useThemeContext();
+}
 

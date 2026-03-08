@@ -2,6 +2,7 @@
   "expo": {
     "name": "FBLA Atlas",
     "slug": "fbla-atlas",
+    "scheme": "fblaatlas",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,7 +13,10 @@
       "backgroundColor": "#090A1A"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "FBLA Atlas uses your microphone so you can record and review presentation practice."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +25,11 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "RECORD_AUDIO",
+        "CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -30,7 +38,11 @@
       "expo-font",
       "expo-notifications",
       "expo-image",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-image-picker",
+      "expo-web-browser",
+      "expo-audio",
+      "expo-asset"
     ]
   }
 }

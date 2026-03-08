@@ -38,12 +38,20 @@ export type AccountSettings = {
   connectedApple: boolean;
 };
 
+export type CustomizeSettings = {
+  widgetDensity: "comfortable" | "compact" | "spacious";
+  showStoriesBar: boolean;
+  showCampusPulse: boolean;
+  showSocialFeed: boolean;
+};
+
 export type AppSettings = {
   notifications: NotificationSettings;
   accessibility: AccessibilitySettings;
   appearance: AppearanceSettings;
   privacy: PrivacySettings;
   account: AccountSettings;
+  customize: CustomizeSettings;
   updatedAt?: string;
 };
 

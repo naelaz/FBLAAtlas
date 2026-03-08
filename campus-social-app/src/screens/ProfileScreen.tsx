@@ -1,39 +1,91 @@
-import { useNavigation } from "@react-navigation/native";
+﻿import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { BlurView } from "expo-blur";
+import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
+import { ChevronDown, Plus, Search, X } from "lucide-react-native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, Share, View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { Button, Text, TextInput } from "react-native-paper";
+import { Alert, Modal, Pressable, ScrollView, Share, View } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
+import { Text } from "react-native-paper";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
-import { AppImage } from "../components/media/AppImage";
 import { Badge, getTierBadgeVariant } from "../components/ui/badge";
 import { EmptyState } from "../components/ui/EmptyState";
+import { GlassButton } from "../components/ui/GlassButton";
+import { GlassDropdown } from "../components/ui/GlassDropdown";
+import { GlassInput } from "../components/ui/GlassInput";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { ScreenShell } from "../components/ScreenShell";
 import { useAuthContext } from "../context/AuthContext";
-import { useSettings } from "../context/SettingsContext";
 import { useThemeContext } from "../context/ThemeContext";
+import { FBLA_COMPETITIVE_EVENTS } from "../constants/fblaEvents";
 import { getNextTier, getTierForXp, getXpProgress } from "../constants/gamification";
 import { RootStackParamList } from "../navigation/types";
 import { formatRelativeDateTime } from "../services/firestoreUtils";
 import { hapticSuccess, hapticTap } from "../services/haptics";
 import { fetchPostsOnce, fetchRecentActivityForUser, fetchSchoolUsersOnce } from "../services/socialService";
-import { updateUserProfileFields } from "../services/userService";
-import { APP_THEMES } from "../constants/themes";
-import { getCampusImage } from "../constants/media";
-import { ActivityItem, PostItem, UserProfile } from "../types/social";
+import { clearProfileAvatar, updateUserProfileFields, uploadProfileAvatar } from "../services/userService";
+import { ActivityItem, ChapterRole, OfficerPosition, PlacementLevel, PlacementResult, PostItem, UserPlacement, UserProfile } from "../types/social";
 import { formatCompactNumber } from "../utils/format";
 
 type StatSheetType = "posts" | "followers" | "following" | null;
 
+type EditSectionKey = "role" | "school" | "events" | "achievements" | "bio";
+
+type SchoolSearchResult = {
+  name: string;
+  city: string;
+  state: string;
+};
+
+const OFFICER_POSITIONS: OfficerPosition[] = [
+  "President",
+  "Vice President",
+  "Secretary",
+  "Treasurer",
+  "Reporter",
+  "Parliamentarian",
+  "Historian",
+  "Member",
+];
+
+const CHAPTER_ROLE_OPTIONS: ChapterRole[] = [
+  "Chapter Officer",
+  "Regional Officer",
+  "State Officer",
+  "National Officer",
+  "Alumni",
+];
+
+const PLACEMENT_OPTIONS: PlacementResult[] = [
+  "1st",
+  "2nd",
+  "3rd",
+  "Top 10",
+  "Top 20",
+  "Qualified",
+  "Participant",
+];
+
+const LEVEL_OPTIONS: PlacementLevel[] = ["DLC", "SLC", "NLC"];
+
+function placementEmoji(place: PlacementResult): string {
+  if (place === "1st") {
+    return "🥇";
+  }
+  if (place === "2nd") {
+    return "🥈";
+  }
+  if (place === "3rd") {
+    return "🥉";
+  }
+  return "🏅";
+}
+
 export function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile, refreshProfile } = useAuthContext();
-  const { settings, updateSettings } = useSettings();
   const { palette } = useThemeContext();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -45,11 +97,38 @@ export function ProfileScreen() {
 
   const [editName, setEditName] = useState("");
   const [editBio, setEditBio] = useState("");
+  const [editOfficerPosition, setEditOfficerPosition] = useState<OfficerPosition>("Member");
+  const [editChapterRoles, setEditChapterRoles] = useState<ChapterRole[]>([]);
+  const [editYearsServed, setEditYearsServed] = useState("");
+  const [editSchoolName, setEditSchoolName] = useState("");
+  const [editSchoolCity, setEditSchoolCity] = useState("");
+  const [editSchoolState, setEditSchoolState] = useState("");
+  const [schoolQuery, setSchoolQuery] = useState("");
+  const [schoolResults, setSchoolResults] = useState<SchoolSearchResult[]>([]);
+  const [schoolLoading, setSchoolLoading] = useState(false);
+  const [eventSearch, setEventSearch] = useState("");
+  const [editCompetitiveEvents, setEditCompetitiveEvents] = useState<string[]>([]);
+  const [maxEventsError, setMaxEventsError] = useState(false);
+  const [editPlacements, setEditPlacements] = useState<UserPlacement[]>([]);
+  const [newPlacementEvent, setNewPlacementEvent] = useState("");
+  const [newPlacementPlace, setNewPlacementPlace] = useState<PlacementResult>("Participant");
+  const [newPlacementLevel, setNewPlacementLevel] = useState<PlacementLevel>("DLC");
+  const [newPlacementYear, setNewPlacementYear] = useState(String(new Date().getFullYear()));
+  const [placementSearch, setPlacementSearch] = useState("");
+  const [roleExperienceInput, setRoleExperienceInput] = useState("");
+  const [editRoleExperiences, setEditRoleExperiences] = useState<string[]>([]);
+  const [expandedSections, setExpandedSections] = useState<Record<EditSectionKey, boolean>>({
+    role: true,
+    school: false,
+    events: false,
+    achievements: false,
+    bio: true,
+  });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const shareCardRef = useRef<ViewShot>(null);
 
-  const fill = useSharedValue(0);
 
   const refresh = async () => {
     if (!profile) {
@@ -81,6 +160,15 @@ export function ProfileScreen() {
 
     setEditName(profile.displayName);
     setEditBio(profile.bio);
+    setEditOfficerPosition(profile.officerPosition ?? "Member");
+    setEditChapterRoles(profile.chapterRoles ?? []);
+    setEditYearsServed(profile.yearsServed ?? "");
+    setEditSchoolName(profile.schoolName ?? "");
+    setEditSchoolCity(profile.schoolCity ?? "");
+    setEditSchoolState(profile.state ?? "");
+    setEditCompetitiveEvents(profile.competitiveEvents ?? []);
+    setEditPlacements(profile.placements ?? []);
+    setEditRoleExperiences(profile.roleExperiences ?? []);
 
     void Promise.all([
       fetchRecentActivityForUser(profile.schoolId, profile.uid),
@@ -97,27 +185,164 @@ export function ProfileScreen() {
       });
   }, [profile?.uid, profile?.schoolId]);
 
-  const progressValue = profile ? getXpProgress(profile.xp).progress : 0;
   useEffect(() => {
-    fill.value = withTiming(progressValue, { duration: 560 });
-  }, [fill, progressValue]);
+    const queryValue = schoolQuery.trim();
+    if (queryValue.length < 2) {
+      setSchoolResults([]);
+      setSchoolLoading(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          setSchoolLoading(true);
+          const where = encodeURIComponent(`search(name,"${queryValue.replace(/"/g, "")}")`);
+          const response = await fetch(
+            `https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/us-public-schools/records?limit=20&where=${where}`,
+          );
+          if (!response.ok) {
+            throw new Error("School search request failed.");
+          }
+          const payload = (await response.json()) as {
+            results?: Array<Record<string, unknown>>;
+          };
+          const next = (payload.results ?? [])
+            .map((item) => {
+              const name = typeof item.name === "string" ? item.name : "";
+              const city =
+                typeof item.city === "string"
+                  ? item.city
+                  : typeof item.city_name === "string"
+                    ? item.city_name
+                    : "";
+              const state =
+                typeof item.state === "string"
+                  ? item.state
+                  : typeof item.state_name === "string"
+                    ? item.state_name
+                    : "";
+              if (!name || !state) {
+                return null;
+              }
+              return {
+                name,
+                city,
+                state,
+              } satisfies SchoolSearchResult;
+            })
+            .filter((item): item is SchoolSearchResult => Boolean(item));
+          setSchoolResults(next);
+        } catch (error) {
+          console.warn("School search failed:", error);
+          setSchoolResults([]);
+        } finally {
+          setSchoolLoading(false);
+        }
+      })();
+    }, 350);
 
-  const barStyle = useAnimatedStyle(() => ({
-    width: `${Math.max(0, Math.min(100, fill.value * 100))}%`,
-  }));
+    return () => clearTimeout(timer);
+  }, [schoolQuery]);
+
+  const toggleSection = (section: EditSectionKey) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const toggleChapterRole = (role: ChapterRole) => {
+    setEditChapterRoles((prev) =>
+      prev.includes(role) ? prev.filter((item) => item !== role) : [...prev, role],
+    );
+  };
+
+  const addCompetitiveEvent = (eventName: string) => {
+    setMaxEventsError(false);
+    setEditCompetitiveEvents((prev) => {
+      if (prev.includes(eventName)) {
+        return prev;
+      }
+      if (prev.length >= 3) {
+        setMaxEventsError(true);
+        return prev;
+      }
+      return [...prev, eventName];
+    });
+  };
+
+  const removeCompetitiveEvent = (eventName: string) => {
+    setEditCompetitiveEvents((prev) => prev.filter((item) => item !== eventName));
+    setMaxEventsError(false);
+  };
+
+  const addPlacement = () => {
+    const eventName = newPlacementEvent.trim();
+    const yearValue = Number(newPlacementYear);
+    if (!eventName || !Number.isFinite(yearValue)) {
+      return;
+    }
+    const placement: UserPlacement = {
+      id: `${eventName}-${newPlacementLevel}-${yearValue}-${Date.now().toString(36)}`,
+      eventName,
+      place: newPlacementPlace,
+      competitionLevel: newPlacementLevel,
+      year: yearValue,
+    };
+    setEditPlacements((prev) => [placement, ...prev]);
+    setNewPlacementEvent("");
+    setPlacementSearch("");
+  };
+
+  const addRoleExperience = () => {
+    const next = roleExperienceInput.trim();
+    if (!next) {
+      return;
+    }
+    if (editRoleExperiences.includes(next)) {
+      setRoleExperienceInput("");
+      return;
+    }
+    setEditRoleExperiences((prev) => [next, ...prev]);
+    setRoleExperienceInput("");
+  };
+
+  const removeRoleExperience = (value: string) => {
+    setEditRoleExperiences((prev) => prev.filter((item) => item !== value));
+  };
+
+  const renderEditSection = (key: EditSectionKey, title: string, body: React.ReactNode) => {
+    const expanded = expandedSections[key];
+    return (
+      <GlassSurface style={{ padding: 10, marginTop: 10 }}>
+        <Pressable
+          onPress={() => {
+            hapticTap();
+            toggleSection(key);
+          }}
+          style={{ minHeight: 44, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
+        >
+          <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{title}</Text>
+          <ChevronDown
+            size={18}
+            color={palette.colors.textSecondary}
+            style={{ transform: [{ rotate: expanded ? "180deg" : "0deg" }] }}
+          />
+        </Pressable>
+        {expanded ? <View style={{ marginTop: 8, gap: 8 }}>{body}</View> : null}
+      </GlassSurface>
+    );
+  };
+
+  const progressValue = profile ? getXpProgress(profile.xp).progress : 0;
 
   if (!profile) {
     return (
-      <ScreenShell title="Profile" subtitle="Loading profile...">
+      <ScreenShell title="Profile" subtitle="Loading profile..." showBackButton={false}>
         <EmptyState title="Loading" message="Fetching your profile..." />
       </ScreenShell>
     );
   }
 
-  const progressInfo = getXpProgress(profile.xp);
   const tier = getTierForXp(profile.xp);
   const nextTier = getNextTier(profile.xp);
-  const profileHeaderImage = posts[0]?.imageUrl ?? profile.avatarUrl ?? getCampusImage(profile.uid);
 
   const followers = profile.followerIds.map((id) => usersById.get(id)).filter(Boolean) as UserProfile[];
   const following = profile.followingIds.map((id) => usersById.get(id)).filter(Boolean) as UserProfile[];
@@ -131,6 +356,22 @@ export function ProfileScreen() {
           subtitle: `${user.grade}th grade`,
           avatarUrl: user.avatarUrl,
         }));
+
+  const filteredEvents = useMemo(() => {
+    const q = eventSearch.trim().toLowerCase();
+    if (!q) {
+      return FBLA_COMPETITIVE_EVENTS;
+    }
+    return FBLA_COMPETITIVE_EVENTS.filter((item) => item.toLowerCase().includes(q));
+  }, [eventSearch]);
+
+  const filteredPlacementEvents = useMemo(() => {
+    const q = placementSearch.trim().toLowerCase();
+    if (!q) {
+      return FBLA_COMPETITIVE_EVENTS.slice(0, 50);
+    }
+    return FBLA_COMPETITIVE_EVENTS.filter((item) => item.toLowerCase().includes(q)).slice(0, 50);
+  }, [placementSearch]);
 
   const handleShareProfile = async () => {
     try {
@@ -150,21 +391,90 @@ export function ProfileScreen() {
     }
   };
 
+  const applyAvatarUri = async (localUri: string) => {
+    if (!localUri) {
+      return;
+    }
+    setUploadingAvatar(true);
+    try {
+      await uploadProfileAvatar(profile.uid, localUri);
+      await refreshProfile();
+      hapticSuccess();
+    } catch (error) {
+      console.warn("Avatar upload failed:", error);
+      Alert.alert("Avatar Upload Failed", "We could not upload that image. Try another photo.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const pickFromLibrary = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission Needed", "Allow photo library access to set your profile photo.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+    if (result.canceled) {
+      return;
+    }
+    const asset = result.assets?.[0];
+    if (asset?.uri) {
+      await applyAvatarUri(asset.uri);
+    }
+  };
+
+  const takePhoto = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission Needed", "Allow camera access to take a profile photo.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+    if (result.canceled) {
+      return;
+    }
+    const asset = result.assets?.[0];
+    if (asset?.uri) {
+      await applyAvatarUri(asset.uri);
+    }
+  };
+
+  const resetToInitialsAvatar = async () => {
+    setUploadingAvatar(true);
+    try {
+      await clearProfileAvatar(profile.uid);
+      await refreshProfile();
+      hapticSuccess();
+    } catch (error) {
+      console.warn("Reset avatar failed:", error);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   return (
     <ScreenShell
       title="Profile"
       subtitle="Your XP, streaks, badges, and account controls."
       refreshing={refreshing}
       onRefresh={() => void refresh()}
+      showBackButton={false}
     >
-      <View style={{ borderRadius: 20, overflow: "hidden", marginBottom: 12 }}>
-        <AppImage uri={profileHeaderImage} style={{ width: "100%", height: 208 }} />
-        <BlurView intensity={80} tint="dark" style={{ position: "absolute", left: 0, right: 0, bottom: 0, top: 0 }} />
-
-        <View style={{ position: "absolute", left: 0, right: 0, top: 14, alignItems: "center" }}>
-          <AvatarWithStatus uri={profile.avatarUrl} size={84} online />
-          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 10, gap: 8 }}>
-            <Text style={{ color: "white", fontWeight: "900", fontSize: 22 }}>{profile.displayName}</Text>
+      <View style={{ paddingTop: 8 }}>
+        <View style={{ alignItems: "center", marginBottom: 16 }}>
+          <AvatarWithStatus uri={profile.avatarUrl} seed={profile.displayName} size={88} online />
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 12, gap: 8 }}>
+            <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 22 }}>{profile.displayName}</Text>
             <View
               style={{
                 borderRadius: 999,
@@ -172,25 +482,65 @@ export function ProfileScreen() {
                 paddingVertical: 5,
                 backgroundColor: tier.color,
                 shadowColor: tier.color,
-                shadowOpacity: 0.45,
-                shadowRadius: 12,
-                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.35,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 2 },
               }}
             >
-              <Text style={{ color: "white", fontWeight: "800" }}>{profile.tier}</Text>
+              <Text style={{ color: palette.colors.onImageText, fontWeight: "800" }}>{profile.tier}</Text>
             </View>
           </View>
-          <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>{profile.schoolName}</Text>
-          <Text style={{ color: palette.colors.warning, marginTop: 3 }}>🔥 {profile.streakCount} day streak</Text>
+          {profile.officerPosition && profile.officerPosition !== "Member" ? (
+            <View
+              style={{
+                marginTop: 8,
+                borderRadius: 999,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                backgroundColor: palette.colors.inputSurface,
+                borderWidth: 1,
+                borderColor: palette.colors.border,
+              }}
+            >
+              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
+                {profile.officerPosition}
+              </Text>
+            </View>
+          ) : null}
+          {profile.schoolName ? (
+            <Text style={{ marginTop: 6, color: palette.colors.textSecondary }}>
+              {profile.schoolName}
+            </Text>
+          ) : null}
+          {profile.competitiveEvents && profile.competitiveEvents.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 6, marginTop: 10 }}
+            >
+              {profile.competitiveEvents.map((eventName, index) => (
+                <View
+                  key={`${eventName}-${index}`}
+                  style={{
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    backgroundColor: palette.colors.inputSurface,
+                    borderWidth: 1,
+                    borderColor: palette.colors.border,
+                  }}
+                >
+                  <Text style={{ color: palette.colors.text, fontSize: 12 }}>{eventName}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          ) : null}
         </View>
 
         <GlassSurface
           style={{
-            position: "absolute",
-            left: 12,
-            right: 12,
-            bottom: 12,
             padding: 10,
+            marginBottom: 16,
             backgroundColor: palette.colors.glassStrong,
             borderColor: palette.colors.glassBorder,
           }}
@@ -203,7 +553,7 @@ export function ProfileScreen() {
               }}
               style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
             >
-              <Text style={{ color: "white", fontWeight: "800" }}>{formatCompactNumber(posts.length)}</Text>
+              <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{formatCompactNumber(posts.length)}</Text>
               <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>Posts</Text>
             </Pressable>
             <Pressable
@@ -213,7 +563,7 @@ export function ProfileScreen() {
               }}
               style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
             >
-              <Text style={{ color: "white", fontWeight: "800" }}>{formatCompactNumber(profile.followerIds.length)}</Text>
+              <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{formatCompactNumber(profile.followerIds.length)}</Text>
               <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>Followers</Text>
             </Pressable>
             <Pressable
@@ -223,7 +573,7 @@ export function ProfileScreen() {
               }}
               style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
             >
-              <Text style={{ color: "white", fontWeight: "800" }}>{formatCompactNumber(profile.followingIds.length)}</Text>
+              <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{formatCompactNumber(profile.followingIds.length)}</Text>
               <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>Following</Text>
             </Pressable>
           </View>
@@ -233,7 +583,7 @@ export function ProfileScreen() {
       <GlassSurface
         style={{
           padding: 12,
-          marginBottom: 12,
+          marginBottom: 16,
           backgroundColor: palette.colors.glass,
           borderColor: palette.colors.glassBorder,
         }}
@@ -247,91 +597,58 @@ export function ProfileScreen() {
           </Text>
         </View>
         <View style={{ height: 12, borderRadius: 999, backgroundColor: palette.colors.inputMuted, overflow: "hidden" }}>
-          <Animated.View style={[{ height: 12, backgroundColor: tier.color, borderRadius: 999 }, barStyle]} />
+          <View
+            style={{
+              height: 12,
+              width: `${Math.max(0, Math.min(100, progressValue * 100))}%`,
+              backgroundColor: tier.color,
+              borderRadius: 999,
+            }}
+          />
         </View>
       </GlassSurface>
 
-      <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-        <Button
-          mode="outlined"
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+        <GlassButton
+          variant="ghost"
+          label="Edit Profile"
           style={{ flex: 1 }}
           onPress={() => {
             hapticTap();
             setEditOpen(true);
           }}
-        >
-          Edit Profile
-        </Button>
-        <Button
-          mode="outlined"
+        />
+        <GlassButton
+          variant="ghost"
+          label="Share Profile"
           style={{ flex: 1 }}
           onPress={() => {
             hapticTap();
             void handleShareProfile();
           }}
-        >
-          Share Profile
-        </Button>
+        />
       </View>
 
-      <Button
-        mode="contained-tonal"
-        style={{ marginBottom: 12 }}
+      <GlassButton
+        variant="solid"
+        label="Invite Friends"
+        style={{ marginBottom: 16 }}
         onPress={() => {
           hapticTap();
           void Share.share({
             message: "Join me on FBLA Atlas! Track events, XP tiers, and campus updates together.",
           });
         }}
-      >
-        Invite Friends
-      </Button>
+      />
 
-      <GlassSurface style={{ marginBottom: 12, padding: 12 }}>
-        <Text variant="titleMedium" style={{ fontWeight: "800", marginBottom: 8 }}>
-          Theme Picker
-        </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-          {APP_THEMES.map((theme) => {
-            const selected = settings.appearance.themeName === theme.name;
-            return (
-              <Pressable
-                key={theme.name}
-                onPress={() => {
-                  hapticTap();
-                  void updateSettings((prev) => ({
-                    ...prev,
-                    appearance: {
-                      ...prev.appearance,
-                      themeName: theme.name,
-                    },
-                  }));
-                }}
-                style={{
-                  width: 58,
-                  height: 58,
-                  borderRadius: 29,
-                  borderWidth: selected ? 3 : 1,
-                  borderColor: selected ? theme.colors.primary : palette.colors.border,
-                  overflow: "hidden",
-                }}
-              >
-                <View style={{ flex: 1, backgroundColor: theme.colors.background }} />
-                <View style={{ height: 20, backgroundColor: theme.colors.primary }} />
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </GlassSurface>
-
-      <GlassSurface style={{ marginBottom: 12, padding: 12 }}>
+      <GlassSurface style={{ marginBottom: 16, padding: 12 }}>
         <Text variant="titleMedium" style={{ fontWeight: "800", marginBottom: 8 }}>
           Badges
         </Text>
         {profile.badges.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-            {profile.badges.map((badge) => (
-              <Badge key={badge} variant={getTierBadgeVariant(profile.tier)} size="sm" capitalize={false}>
+            {profile.badges.map((badge, index) => (
+              <Badge key={`${badge}-${index}`} variant={getTierBadgeVariant(profile.tier)} size="sm" capitalize={false}>
                 {badge}
               </Badge>
             ))}
@@ -341,7 +658,35 @@ export function ProfileScreen() {
         )}
       </GlassSurface>
 
-      <GlassSurface style={{ padding: 12 }}>
+      <GlassSurface style={{ marginBottom: 16, padding: 12 }}>
+        <Text variant="titleMedium" style={{ fontWeight: "800", marginBottom: 8 }}>
+          Achievements
+        </Text>
+        {profile.placements && profile.placements.length > 0 ? (
+          profile.placements.map((placement) => (
+            <View
+              key={placement.id}
+              style={{
+                borderBottomWidth: 1,
+                borderBottomColor: palette.colors.divider,
+                paddingBottom: 8,
+                marginBottom: 8,
+              }}
+            >
+              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
+                {placementEmoji(placement.place)} {placement.place} Place - {placement.eventName}
+              </Text>
+              <Text style={{ color: palette.colors.textSecondary }}>
+                {placement.competitionLevel} {placement.year}
+              </Text>
+            </View>
+          ))
+        ) : (
+          <Text style={{ color: palette.colors.textSecondary }}>No placements added yet.</Text>
+        )}
+      </GlassSurface>
+
+      <GlassSurface style={{ padding: 12, marginBottom: 16 }}>
         <Text variant="titleMedium" style={{ fontWeight: "800", marginBottom: 8 }}>
           Recent Activity
         </Text>
@@ -357,7 +702,7 @@ export function ProfileScreen() {
               }}
             >
               <Text style={{ color: palette.colors.text }}>{item.message}</Text>
-              <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+              <Text style={{ color: palette.colors.onImageMuted, fontSize: 12 }}>
                 {formatRelativeDateTime(item.createdAt)}
               </Text>
             </View>
@@ -399,12 +744,397 @@ export function ProfileScreen() {
       <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => setEditOpen(false)}>
         <Pressable style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }} onPress={() => setEditOpen(false)}>
           <Pressable>
-            <View style={{ backgroundColor: palette.colors.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, gap: 10 }}>
+            <View style={{ backgroundColor: palette.colors.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, gap: 10, maxHeight: "90%" }}>
               <Text variant="titleLarge" style={{ fontWeight: "900" }}>Edit Profile</Text>
-              <TextInput mode="outlined" label="Display Name" value={editName} onChangeText={setEditName} />
-              <TextInput mode="outlined" label="Bio" value={editBio} onChangeText={setEditBio} multiline />
-              <Button
-                mode="contained"
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <GlassButton
+                  variant="ghost"
+                  label={uploadingAvatar ? "Uploading..." : "Camera Roll"}
+                  style={{ flex: 1 }}
+                  disabled={uploadingAvatar}
+                  onPress={() => {
+                    void pickFromLibrary();
+                  }}
+                />
+                <GlassButton
+                  variant="ghost"
+                  label="Take Photo"
+                  style={{ flex: 1 }}
+                  disabled={uploadingAvatar}
+                  onPress={() => {
+                    void takePhoto();
+                  }}
+                />
+              </View>
+              <GlassButton
+                variant="ghost"
+                label="Use Initials Avatar"
+                disabled={uploadingAvatar}
+                onPress={() => {
+                  void resetToInitialsAvatar();
+                }}
+              />
+              <GlassInput label="Display Name" value={editName} onChangeText={setEditName} />
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
+                {renderEditSection(
+                  "role",
+                  "FBLA ROLE & POSITION",
+                  <>
+                    <GlassDropdown
+                      label="Officer Position"
+                      value={editOfficerPosition}
+                      options={OFFICER_POSITIONS.map((position) => ({ label: position, value: position }))}
+                      onValueChange={(value) => {
+                        if (OFFICER_POSITIONS.includes(value as OfficerPosition)) {
+                          setEditOfficerPosition(value as OfficerPosition);
+                        }
+                      }}
+                    />
+                    <Text style={{ color: palette.colors.textSecondary, fontWeight: "700", fontSize: 12 }}>
+                      Chapter Role
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      {CHAPTER_ROLE_OPTIONS.map((roleOption) => {
+                        const active = editChapterRoles.includes(roleOption);
+                        return (
+                          <Pressable
+                            key={roleOption}
+                            onPress={() => toggleChapterRole(roleOption)}
+                            style={{
+                              borderRadius: 999,
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderWidth: 1,
+                              borderColor: active ? palette.colors.primary : palette.colors.border,
+                              backgroundColor: active ? palette.colors.inputSurface : palette.colors.surface,
+                            }}
+                          >
+                            <Text style={{ color: palette.colors.text, fontSize: 12 }}>{roleOption}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    {editChapterRoles.length > 0 ? (
+                      <GlassInput
+                        value={editYearsServed}
+                        onChangeText={setEditYearsServed}
+                        label="Year(s) Served"
+                        placeholder="e.g. 2024-2026"
+                      />
+                    ) : null}
+                  </>,
+                )}
+
+                {renderEditSection(
+                  "school",
+                  "SCHOOL",
+                  <>
+                    {editSchoolName ? (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                          borderRadius: 999,
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderWidth: 1,
+                          borderColor: palette.colors.border,
+                          backgroundColor: palette.colors.inputSurface,
+                        }}
+                      >
+                        <Text style={{ color: palette.colors.text, flex: 1 }}>
+                          {editSchoolName}
+                          {editSchoolState ? ` (${editSchoolState})` : ""}
+                        </Text>
+                        <Pressable
+                          onPress={() => {
+                            setEditSchoolName("");
+                            setEditSchoolCity("");
+                            setEditSchoolState("");
+                          }}
+                          style={{ minHeight: 28, minWidth: 28, alignItems: "center", justifyContent: "center" }}
+                        >
+                          <X size={16} color={palette.colors.textSecondary} />
+                        </Pressable>
+                      </View>
+                    ) : null}
+
+                    <GlassInput
+                      value={schoolQuery}
+                      onChangeText={setSchoolQuery}
+                      label="Search School"
+                      placeholder="Type school name"
+                      leftSlot={<Search size={16} color={palette.colors.textSecondary} />}
+                    />
+                    {schoolLoading ? (
+                      <Text style={{ color: palette.colors.textSecondary }}>Searching schools...</Text>
+                    ) : null}
+                    {schoolResults.length > 0 ? (
+                      <GlassSurface style={{ padding: 8, maxHeight: 180 }}>
+                        <ScrollView>
+                          {schoolResults.map((school) => (
+                            <Pressable
+                              key={`${school.name}-${school.state}-${school.city}`}
+                              onPress={() => {
+                                setEditSchoolName(school.name);
+                                setEditSchoolCity(school.city);
+                                setEditSchoolState(school.state);
+                                setSchoolQuery("");
+                                setSchoolResults([]);
+                              }}
+                              style={{
+                                paddingVertical: 8,
+                                borderBottomWidth: 1,
+                                borderBottomColor: palette.colors.divider,
+                              }}
+                            >
+                              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{school.name}</Text>
+                              <Text style={{ color: palette.colors.textSecondary }}>
+                                {school.city ? `${school.city}, ` : ""}
+                                {school.state}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                      </GlassSurface>
+                    ) : null}
+                  </>,
+                )}
+
+                {renderEditSection(
+                  "events",
+                  "COMPETITIVE EVENTS",
+                  <>
+                    {editCompetitiveEvents.length > 0 ? (
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                        {editCompetitiveEvents.map((eventName, index) => (
+                          <View
+                            key={`${eventName}-${index}`}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 6,
+                              borderRadius: 999,
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderWidth: 1,
+                              borderColor: palette.colors.border,
+                              backgroundColor: palette.colors.inputSurface,
+                            }}
+                          >
+                            <Text style={{ color: palette.colors.text, fontSize: 12 }}>{eventName}</Text>
+                            <Pressable onPress={() => removeCompetitiveEvent(eventName)}>
+                              <X size={14} color={palette.colors.textSecondary} />
+                            </Pressable>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                    <GlassInput
+                      value={eventSearch}
+                      onChangeText={setEventSearch}
+                      label="Search Events"
+                      placeholder="Filter FBLA events"
+                    />
+                    {maxEventsError ? (
+                      <View
+                        style={{
+                          borderRadius: 999,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          backgroundColor: palette.colors.inputSurface,
+                          alignSelf: "flex-start",
+                        }}
+                      >
+                        <Text style={{ color: palette.colors.danger, fontWeight: "700" }}>Max 3 events</Text>
+                      </View>
+                    ) : null}
+                    <GlassSurface style={{ padding: 8, maxHeight: 180 }}>
+                      <ScrollView>
+                        {filteredEvents.map((eventName, index) => (
+                          <Pressable
+                            key={`${eventName}-${index}`}
+                            onPress={() => addCompetitiveEvent(eventName)}
+                            style={{
+                              minHeight: 44,
+                              justifyContent: "center",
+                              borderBottomWidth: 1,
+                              borderBottomColor: palette.colors.divider,
+                            }}
+                          >
+                            <Text style={{ color: palette.colors.text }}>{eventName}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </GlassSurface>
+                  </>,
+                )}
+
+                {renderEditSection(
+                  "achievements",
+                  "QUALIFICATIONS & ACHIEVEMENTS",
+                  <>
+                    <Text style={{ color: palette.colors.textSecondary, fontWeight: "700", fontSize: 12 }}>
+                      Add Placement
+                    </Text>
+                    <GlassInput
+                      value={placementSearch}
+                      onChangeText={setPlacementSearch}
+                      label="Event Search"
+                      placeholder="Search event for placement"
+                    />
+                    <GlassSurface style={{ padding: 8, maxHeight: 140 }}>
+                      <ScrollView>
+                        {filteredPlacementEvents.slice(0, 25).map((eventName, index) => (
+                          <Pressable
+                            key={`${eventName}-${index}`}
+                            onPress={() => {
+                              setNewPlacementEvent(eventName);
+                              setPlacementSearch(eventName);
+                            }}
+                            style={{
+                              minHeight: 40,
+                              justifyContent: "center",
+                              borderBottomWidth: 1,
+                              borderBottomColor: palette.colors.divider,
+                            }}
+                          >
+                            <Text style={{ color: palette.colors.text }}>{eventName}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </GlassSurface>
+                    <GlassInput
+                      value={newPlacementEvent}
+                      onChangeText={setNewPlacementEvent}
+                      label="Selected Event"
+                      placeholder="Business Law"
+                    />
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <GlassDropdown
+                        style={{ flex: 1 }}
+                        label="Place"
+                        value={newPlacementPlace}
+                        options={PLACEMENT_OPTIONS.map((place) => ({ label: place, value: place }))}
+                        onValueChange={(value) => {
+                          if (PLACEMENT_OPTIONS.includes(value as PlacementResult)) {
+                            setNewPlacementPlace(value as PlacementResult);
+                          }
+                        }}
+                      />
+                      <GlassDropdown
+                        style={{ flex: 1 }}
+                        label="Level"
+                        value={newPlacementLevel}
+                        options={LEVEL_OPTIONS.map((level) => ({ label: level, value: level }))}
+                        onValueChange={(value) => {
+                          if (LEVEL_OPTIONS.includes(value as PlacementLevel)) {
+                            setNewPlacementLevel(value as PlacementLevel);
+                          }
+                        }}
+                      />
+                    </View>
+                    <GlassInput
+                      value={newPlacementYear}
+                      onChangeText={setNewPlacementYear}
+                      keyboardType="numeric"
+                      label="Year"
+                      placeholder="2024"
+                    />
+                    <GlassButton
+                      variant="ghost"
+                      label="Add Placement"
+                      icon={<Plus size={16} color={palette.colors.text} />}
+                      onPress={addPlacement}
+                    />
+
+                    {editPlacements.map((placement) => (
+                      <Swipeable
+                        key={placement.id}
+                        renderRightActions={() => (
+                          <View
+                            style={{
+                              justifyContent: "center",
+                              alignItems: "center",
+                              backgroundColor: palette.colors.inputSurface,
+                              paddingHorizontal: 14,
+                              borderRadius: 12,
+                              marginBottom: 8,
+                            }}
+                          >
+                            <Text style={{ color: palette.colors.danger, fontWeight: "800" }}>Delete</Text>
+                          </View>
+                        )}
+                        onSwipeableOpen={() => {
+                          setEditPlacements((prev) => prev.filter((item) => item.id !== placement.id));
+                        }}
+                      >
+                        <GlassSurface style={{ padding: 10, marginBottom: 8 }}>
+                          <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
+                            {placement.place} Place - {placement.eventName} - {placement.competitionLevel} {placement.year}
+                          </Text>
+                        </GlassSurface>
+                      </Swipeable>
+                    ))}
+
+                    <Text style={{ color: palette.colors.textSecondary, fontWeight: "700", fontSize: 12 }}>
+                      Add Role/Experience
+                    </Text>
+                    <GlassInput
+                      value={roleExperienceInput}
+                      onChangeText={setRoleExperienceInput}
+                      label="Role/Experience"
+                      placeholder="Conference volunteer"
+                    />
+                    <GlassButton
+                      variant="ghost"
+                      label="Add Role/Experience"
+                      icon={<Plus size={16} color={palette.colors.text} />}
+                      onPress={addRoleExperience}
+                    />
+                    {editRoleExperiences.length > 0 ? (
+                      <View style={{ gap: 6 }}>
+                        {editRoleExperiences.map((entry, index) => (
+                          <GlassSurface key={`${entry}-${index}`} style={{ padding: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                            <Text style={{ color: palette.colors.text }}>{entry}</Text>
+                            <Pressable onPress={() => removeRoleExperience(entry)}>
+                              <X size={16} color={palette.colors.textSecondary} />
+                            </Pressable>
+                          </GlassSurface>
+                        ))}
+                      </View>
+                    ) : null}
+                  </>,
+                )}
+
+                {renderEditSection(
+                  "bio",
+                  "BIO",
+                  <>
+                    <GlassInput
+                      label="Bio"
+                      value={editBio}
+                      onChangeText={(value) => {
+                        if (value.length <= 150) {
+                          setEditBio(value);
+                        }
+                      }}
+                      multiline
+                      placeholder="Tell your chapter about yourself..."
+                      inputWrapperStyle={{ borderRadius: 18, minHeight: 110 }}
+                    />
+                    <Text style={{ alignSelf: "flex-end", color: palette.colors.textSecondary }}>
+                      {editBio.length}/150
+                    </Text>
+                  </>,
+                )}
+              </ScrollView>
+
+              <GlassButton
+                variant="solid"
+                label={savingEdit ? "Saving..." : "Save"}
                 loading={savingEdit}
                 disabled={!editName.trim() || savingEdit}
                 onPress={async () => {
@@ -413,6 +1143,15 @@ export function ProfileScreen() {
                     await updateUserProfileFields(profile.uid, {
                       displayName: editName.trim(),
                       bio: editBio.trim(),
+                      officerPosition: editOfficerPosition,
+                      chapterRoles: editChapterRoles,
+                      yearsServed: editChapterRoles.length > 0 ? editYearsServed.trim() : "",
+                      schoolName: editSchoolName.trim() || profile.schoolName,
+                      schoolCity: editSchoolCity.trim(),
+                      state: editSchoolState.trim() || profile.state,
+                      competitiveEvents: editCompetitiveEvents,
+                      placements: editPlacements,
+                      roleExperiences: editRoleExperiences,
                     });
                     hapticSuccess();
                     setEditOpen(false);
@@ -423,9 +1162,7 @@ export function ProfileScreen() {
                     setSavingEdit(false);
                   }
                 }}
-              >
-                Save
-              </Button>
+              />
             </View>
           </Pressable>
         </Pressable>
@@ -434,22 +1171,22 @@ export function ProfileScreen() {
       <View style={{ position: "absolute", left: -1000, top: -1000 }}>
         <ViewShot ref={shareCardRef} options={{ format: "png", quality: 1 }}>
           <View style={{ width: 360, backgroundColor: palette.colors.background, borderRadius: 18, padding: 16 }}>
-            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>FBLA Atlas</Text>
+            <Text style={{ color: palette.colors.onImageText, fontSize: 24, fontWeight: "900" }}>FBLA Atlas</Text>
             <Text style={{ color: palette.colors.secondary, marginTop: 4 }}>{profile.schoolName}</Text>
             <View style={{ marginTop: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <AppImage uri={profile.avatarUrl} style={{ width: 62, height: 62, borderRadius: 31 }} />
+              <AvatarWithStatus uri={profile.avatarUrl} seed={profile.displayName} size={62} online={false} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: "white", fontWeight: "900", fontSize: 18 }}>{profile.displayName}</Text>
+                <Text style={{ color: palette.colors.onImageText, fontWeight: "900", fontSize: 18 }}>{profile.displayName}</Text>
                 <Text style={{ color: palette.colors.textSecondary }}>
-                  {profile.tier} Tier • {formatCompactNumber(profile.xp)} XP
+                  {profile.tier} Tier - {formatCompactNumber(profile.xp)} XP
                 </Text>
               </View>
             </View>
             <Text style={{ color: palette.colors.textSecondary, marginTop: 12 }}>Top Badges</Text>
             <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
-              {profile.badges.slice(0, 3).map((badge) => (
+              {profile.badges.slice(0, 3).map((badge, index) => (
                 <View
-                  key={badge}
+                  key={`${badge}-${index}`}
                   style={{
                     backgroundColor: palette.colors.inputMuted,
                     borderRadius: 999,
@@ -465,10 +1202,17 @@ export function ProfileScreen() {
         </ViewShot>
       </View>
 
-      <Button mode="outlined" style={{ marginTop: 12 }} onPress={() => navigation.navigate("Leaderboard")}>
-        View Leaderboard
-      </Button>
+      <GlassButton
+        variant="ghost"
+        label="View Leaderboard"
+        style={{ marginTop: 0 }}
+        onPress={() => navigation.navigate("Leaderboard")}
+      />
     </ScreenShell>
   );
 }
+
+
+
+
 

@@ -1,7 +1,15 @@
 ﻿import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import Animated, {
+  Easing,
+  cancelAnimation,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ConfettiLayer } from "../components/social/ConfettiLayer";
 import { awardDailyLoginIfNeeded } from "../services/gamificationService";
@@ -51,19 +59,19 @@ function formatAwardMessage(
 
   switch (action) {
     case "attending_event":
-      return `🎉 +${pointsAwarded} XP — You're going to ${options?.eventName ?? "that event"}!`;
+      return `🎯 +${pointsAwarded} XP — You're going to ${options?.eventName ?? "that event"}!`;
     case "posting":
-      return `✏️ +${pointsAwarded} XP — Nice post!`;
+      return `🎯 +${pointsAwarded} XP — Nice post!`;
     case "commenting":
-      return `💬 +${pointsAwarded} XP — Keep the convo going!`;
+      return `🎯 +${pointsAwarded} XP — Keep the convo going!`;
     case "likes_received":
-      return `❤️ +${pointsAwarded} XP — Someone liked your post!`;
+      return `🎯 +${pointsAwarded} XP — Someone liked your post!`;
     case "daily_login":
       return `🔥 +${pointsAwarded} XP — Day ${streakCount ?? 1} streak!`;
     case "following_user":
-      return `➕ +${pointsAwarded} XP — Growing your network!`;
+      return `🎯 +${pointsAwarded} XP — Growing your network!`;
     case "messaging_new":
-      return `📨 +${pointsAwarded} XP — New conversation started!`;
+      return `🎯 +${pointsAwarded} XP — New conversation started!`;
     default:
       return `+${pointsAwarded} XP`;
   }
@@ -75,19 +83,17 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   const { enabled: pushEnabled } = usePushNotifications();
   const { settings } = useSettings();
   const { palette } = useThemeContext();
+  const insets = useSafeAreaInsets();
 
   const [queue, setQueue] = useState<XpToastState[]>([]);
   const [activeToast, setActiveToast] = useState<XpToastState | null>(null);
   const [tierUpgrade, setTierUpgrade] = useState<TierUpgradeState | null>(null);
-
-  const toastTranslate = useSharedValue(110);
-  const toastOpacity = useSharedValue(0);
   const processedNotificationIds = useRef<Set<string>>(new Set());
   const recentMessages = useRef<Map<string, number>>(new Map());
+  const toastTranslateY = useSharedValue(-150);
 
-  const toastStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: toastTranslate.value }],
-    opacity: toastOpacity.value,
+  const animatedToastStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: toastTranslateY.value }],
   }));
 
   const enqueueToast = useCallback((points: number, color: string, message: string) => {
@@ -118,20 +124,48 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       return;
     }
 
-    toastTranslate.value = 110;
-    toastOpacity.value = 0;
-
-    toastTranslate.value = withTiming(0, { duration: 280 });
-    toastOpacity.value = withTiming(1, { duration: 220 });
+    toastTranslateY.value = -150;
+    toastTranslateY.value = withTiming(0, {
+      duration: 400,
+      easing: Easing.out(Easing.back(1.5)),
+    });
 
     const timer = setTimeout(() => {
-      toastTranslate.value = withTiming(110, { duration: 260 });
-      toastOpacity.value = withTiming(0, { duration: 220 });
-      setTimeout(() => setActiveToast(null), 260);
-    }, 2500);
+      toastTranslateY.value = withTiming(
+        -150,
+        {
+          duration: 300,
+          easing: Easing.in(Easing.cubic),
+        },
+        (finished) => {
+          if (finished) {
+            runOnJS(setActiveToast)(null);
+          }
+        },
+      );
+    }, 3500);
 
-    return () => clearTimeout(timer);
-  }, [activeToast, toastOpacity, toastTranslate]);
+    return () => {
+      clearTimeout(timer);
+      cancelAnimation(toastTranslateY);
+    };
+  }, [activeToast, toastTranslateY]);
+
+  const toastDayMatch = activeToast?.message.match(/Day\s+\d+/i)?.[0] ?? null;
+  const toastStreakText = toastDayMatch ? `🔥 ${toastDayMatch}` : "🎯 Progress update";
+  const toastXpText = `⚡ +${activeToast?.points ?? 0} XP`;
+  const toastSubtitle =
+    toastDayMatch ? "Welcome back. Keep your streak alive." : "XP earned. Keep building momentum.";
+
+  useEffect(() => {
+    if (!activeToast) {
+      return;
+    }
+    console.log("[LoginBanner] rawMessage", JSON.stringify(activeToast.message));
+    console.log("[LoginBanner] streakText", JSON.stringify(toastStreakText));
+    console.log("[LoginBanner] xpText", JSON.stringify(toastXpText));
+    console.log("[LoginBanner] subtitle", JSON.stringify(toastSubtitle));
+  }, [activeToast, toastStreakText, toastSubtitle, toastXpText]);
 
   const handleAwardResult = useCallback(
     (result: PointAwardResult | null | undefined, options?: AwardMessageOptions) => {
@@ -257,11 +291,11 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
               position: "absolute",
               left: 16,
               right: 16,
-              bottom: 88,
+              top: insets.top + 8,
               borderRadius: 16,
               borderWidth: 1,
               borderColor: activeToast.color,
-              backgroundColor: palette.colors.glassStrong,
+              backgroundColor: palette.colors.surface,
               paddingHorizontal: 14,
               paddingVertical: 12,
               shadowColor: palette.colors.background,
@@ -270,13 +304,16 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
               shadowOffset: { width: 0, height: 8 },
               elevation: 10,
             },
-            toastStyle,
+            animatedToastStyle,
           ]}
         >
-          <Text style={{ color: palette.colors.onPrimary, fontWeight: "800", marginBottom: 2 }}>
-            +{activeToast.points} XP
+          <Text style={{ color: palette.colors.text, fontWeight: "700", marginBottom: 2 }}>
+            {toastStreakText}
           </Text>
-          <Text style={{ color: palette.colors.textSecondary }}>{activeToast.message}</Text>
+          <Text style={{ color: palette.colors.warning, fontWeight: "700", marginBottom: 2 }}>
+            {toastXpText}
+          </Text>
+          <Text style={{ color: palette.colors.textSecondary, fontSize: 13 }}>{toastSubtitle}</Text>
         </Animated.View>
       ) : null}
 

@@ -112,19 +112,21 @@ export function getNewsBannerImage(seed: string): string {
 }
 
 export function getUserAvatarUrl(seed: string): string {
-  const cleaned = seed.trim() || "student";
-  const style = hashSeed(cleaned) % 2 === 0 ? "avataaars" : "lorelei";
-  return `https://api.dicebear.com/7.x/${style}/svg?seed=${encodeURIComponent(cleaned)}`;
+  return getUserAvatarFallbackUrl(seed);
 }
 
 export function getUserAvatarFallbackUrl(name: string): string {
   const cleaned = name.trim() || "student";
-  return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleaned)}&backgroundColor=7C3AED`;
+  return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleaned)}&backgroundColor=2A2A2A&textColor=FFFFFF&fontFamily=Arial`;
+}
+
+function isLegacyGeneratedAvatar(url: string): boolean {
+  return /api\.dicebear\.com\/7\.x\/(avataaars|lorelei)\//i.test(url);
 }
 
 export function resolveAvatarUrl(preferredUrl: string | null | undefined, seed: string): string {
-  if (preferredUrl && preferredUrl.trim().length > 0) {
-    return preferredUrl;
+  if (preferredUrl && preferredUrl.trim().length > 0 && !isLegacyGeneratedAvatar(preferredUrl)) {
+    return preferredUrl.trim();
   }
-  return getUserAvatarUrl(seed);
+  return getUserAvatarFallbackUrl(seed);
 }

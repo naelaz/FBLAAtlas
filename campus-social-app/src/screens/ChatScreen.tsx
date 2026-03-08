@@ -8,15 +8,11 @@ import {
   TextInput as NativeTextInput,
   View,
 } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from "react-native-reanimated";
-import { Button, Text } from "react-native-paper";
+import { Text } from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BackButton } from "../components/navigation/BackButton";
+import { GlassButton } from "../components/ui/GlassButton";
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { useAuthContext } from "../context/AuthContext";
@@ -40,24 +36,12 @@ import { ConversationItem, MessageItem, UserProfile } from "../types/social";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
 function TypingDots({ color }: { color: string }) {
-  const opacity = useSharedValue(0.2);
-
-  useEffect(() => {
-    opacity.value = withRepeat(
-      withSequence(withTiming(1, { duration: 450 }), withTiming(0.2, { duration: 450 })),
-      -1,
-      false,
-    );
-  }, [opacity]);
-
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-
   return (
-    <Animated.View style={[style, { flexDirection: "row", gap: 4, marginTop: 2 }]}>
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-    </Animated.View>
+    <View style={{ flexDirection: "row", gap: 4, marginTop: 2 }}>
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color, opacity: 0.5 }} />
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color, opacity: 0.75 }} />
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color, opacity: 1 }} />
+    </View>
   );
 }
 
@@ -134,10 +118,6 @@ export function ChatScreen({ route, navigation }: Props) {
     }
     void markConversationRead(conversationId, profile.uid);
   }, [conversationId, profile?.uid]);
-
-  useEffect(() => {
-    navigation.setOptions({ title: "Chat" });
-  }, [navigation]);
 
   const otherUser = useMemo(() => {
     if (!profile || !conversation) {
@@ -239,11 +219,18 @@ export function ChatScreen({ route, navigation }: Props) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: palette.colors.background }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={{ flex: 1, paddingHorizontal: 12, paddingTop: 10 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }} edges={["top", "left", "right"]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingTop: 4 }}>
+          <BackButton onPress={() => navigation.goBack()} />
+          <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "800" }}>
+            Chat
+          </Text>
+        </View>
+        <View style={{ flex: 1, paddingHorizontal: 12, paddingTop: 10 }}>
         {otherUser ? (
           <GlassSurface style={{ padding: 10, marginBottom: 10, backgroundColor: palette.colors.glassStrong }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -360,16 +347,17 @@ export function ChatScreen({ route, navigation }: Props) {
             </Pressable>
           </View>
         </GlassSurface>
-        <Button
-          mode="text"
+        <GlassButton
+          variant="pill-sm"
+          label="Reply"
+          fullWidth={false}
           onPress={() => {
             hapticTap();
             inputRef.current?.focus();
           }}
-        >
-          Reply
-        </Button>
-      </View>
-    </KeyboardAvoidingView>
+        />
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

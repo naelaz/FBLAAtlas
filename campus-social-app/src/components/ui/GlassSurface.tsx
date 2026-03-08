@@ -1,6 +1,5 @@
-import { BlurView } from "expo-blur";
 import React from "react";
-import { Platform, StyleProp, StyleSheet, View, ViewStyle } from "react-native";
+import { StyleProp, View, ViewStyle } from "react-native";
 
 import { useThemeContext } from "../../context/ThemeContext";
 
@@ -11,38 +10,53 @@ type GlassSurfaceProps = {
   borderColor?: string;
   intensity?: number;
   borderRadius?: number;
+  tone?: "neutral" | "accent" | "danger" | "success";
+  elevation?: 1 | 2 | 3 | 4;
+  strong?: boolean;
+  pressed?: boolean;
+  disabled?: boolean;
+  showHighlights?: boolean;
+  accentColor?: string;
 };
+
+function toneColor(_tone: GlassSurfaceProps["tone"], palettePrimary: string): string {
+  return palettePrimary;
+}
 
 export function GlassSurface({
   children,
   style,
   backgroundColor,
   borderColor,
-  intensity,
-  borderRadius = 16,
+  borderRadius = 12,
+  tone = "neutral",
+  pressed = false,
+  disabled = false,
+  accentColor,
 }: GlassSurfaceProps) {
   const { palette } = useThemeContext();
+  const baseColor =
+    backgroundColor ??
+    (tone === "accent"
+      ? toneColor(tone, accentColor ?? palette.colors.accentMuted)
+      : tone === "danger"
+        ? palette.colors.dangerGlass
+        : tone === "success"
+          ? palette.colors.successGlass
+          : palette.colors.surface);
 
   return (
     <View
       style={[
         {
           borderRadius,
-          overflow: "hidden",
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: borderColor ?? palette.colors.glassBorder,
-          backgroundColor: backgroundColor ?? palette.colors.glass,
+          borderWidth: 1,
+          borderColor: borderColor ?? palette.colors.border,
+          backgroundColor: disabled ? palette.colors.glassDisabled : pressed ? palette.colors.glassPressed : baseColor,
         },
         style,
       ]}
     >
-      {Platform.OS === "ios" ? (
-        <BlurView
-          intensity={intensity ?? palette.blur.md}
-          tint={palette.isDark ? "dark" : "light"}
-          style={StyleSheet.absoluteFill}
-        />
-      ) : null}
       {children}
     </View>
   );

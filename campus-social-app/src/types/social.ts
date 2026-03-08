@@ -22,11 +22,53 @@ export type PointAction =
   | "messaging_new"
   | "following_user";
 
+export type OfficerPosition =
+  | "President"
+  | "Vice President"
+  | "Secretary"
+  | "Treasurer"
+  | "Reporter"
+  | "Parliamentarian"
+  | "Historian"
+  | "Member";
+
+export type ChapterRole =
+  | "Chapter Officer"
+  | "Regional Officer"
+  | "State Officer"
+  | "National Officer"
+  | "Alumni";
+
+export type PlacementLevel = "DLC" | "SLC" | "NLC";
+
+export type PlacementResult =
+  | "1st"
+  | "2nd"
+  | "3rd"
+  | "Top 10"
+  | "Top 20"
+  | "Qualified"
+  | "Participant";
+
+export type UserPlacement = {
+  id: string;
+  eventName: string;
+  place: PlacementResult;
+  competitionLevel: PlacementLevel;
+  year: number;
+};
+
 export type UserProfile = {
   uid: string;
   displayName: string;
   schoolId: string;
   schoolName: string;
+  state?: string;
+  chapterName?: string;
+  membershipId?: string | null;
+  onboardingCompleted?: boolean;
+  authProvider?: "email" | "google" | "fbla_connect" | "guest";
+  isGuest?: boolean;
   grade: string;
   avatarColor: string;
   avatarUrl: string;
@@ -43,6 +85,15 @@ export type UserProfile = {
   pointsByAction: Partial<Record<PointAction, number>>;
   lastDailyLoginDate: string | null;
   joinedEventIds?: string[];
+  officerPosition?: OfficerPosition;
+  chapterRoles?: ChapterRole[];
+  yearsServed?: string;
+  schoolCity?: string;
+  competitiveEvents?: string[];
+  placements?: UserPlacement[];
+  roleExperiences?: string[];
+  role?: "admin" | "member";
+  banned?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -195,3 +246,4 @@ export type PointAwardResult = {
   streakCount?: number;
   context?: Record<string, string>;
 };
+

@@ -36,19 +36,19 @@ function labelForRoute(routeName: keyof MainTabParamList): string {
 function iconForRoute(routeName: keyof MainTabParamList, color: string) {
   switch (routeName) {
     case "Home":
-      return <SchoolCrestIcon size={20} initials="FA" />;
+      return <SchoolCrestIcon size={24} initials="FA" />;
     case "Events":
-      return <CalendarDays size={20} color={color} strokeWidth={2.2} />;
+      return <CalendarDays size={24} color={color} strokeWidth={2.2} />;
     case "Finn":
-      return <FinnRobotIcon size={20} />;
+      return <FinnRobotIcon size={24} />;
     case "Messages":
-      return <MessageCircle size={20} color={color} strokeWidth={2.2} />;
+      return <MessageCircle size={24} color={color} strokeWidth={2.2} />;
     case "Profile":
-      return <CircleUserRound size={20} color={color} strokeWidth={2.2} />;
+      return <CircleUserRound size={24} color={color} strokeWidth={2.2} />;
     case "SettingsTab":
-      return <Cog size={20} color={color} strokeWidth={2.2} />;
+      return <Cog size={24} color={color} strokeWidth={2.2} />;
     default:
-      return <House size={20} color={color} strokeWidth={2.2} />;
+      return <House size={24} color={color} strokeWidth={2.2} />;
   }
 }
 

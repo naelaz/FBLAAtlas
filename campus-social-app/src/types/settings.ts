@@ -2,14 +2,11 @@
 
 export type NotificationSettings = {
   globalPush: boolean;
-  likes: boolean;
-  comments: boolean;
-  follows: boolean;
-  events: boolean;
-  xp: boolean;
-  streaks: boolean;
-  news: boolean;
-  sound: boolean;
+  eventReminders: boolean;
+  practiceReminders: boolean;
+  chapterUpdates: boolean;
+  messageNotifications: boolean;
+  xpAlerts: boolean;
 };
 
 export type AccessibilitySettings = {
@@ -26,7 +23,7 @@ export type AppearanceSettings = {
 };
 
 export type PrivacySettings = {
-  profileVisibility: "school" | "friends" | "private";
+  profileVisibility: "school" | "public" | "private";
   showOnlineStatus: boolean;
   showMood: boolean;
   allowFriendSuggestions: boolean;

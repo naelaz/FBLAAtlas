@@ -1,5 +1,5 @@
-﻿import React, { useMemo, useState } from "react";
-import { ScrollView, View } from "react-native";
+﻿import React, { useEffect, useMemo, useState } from "react";
+import { Modal, Pressable, ScrollView, View } from "react-native";
 import { Text } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -15,12 +15,18 @@ import { useOnboarding } from "../context/OnboardingContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { useAuthContext } from "../context/AuthContext";
 import { setUserOnboardingCompleted } from "../services/userService";
+import {
+  Chapter,
+  getChapterJoinRequestStatus,
+  searchChapters,
+  submitChapterJoinRequest,
+} from "../services/chapterService";
 
 export function OnboardingScreen() {
   const { completeOnboarding } = useOnboarding();
   const { palette } = useThemeContext();
   const { updateChapterProfile, setSelectedCompetitiveEvents, setConferenceDate } = useDashboard();
-  const { uid } = useAuthContext();
+  const { uid, profile } = useAuthContext();
 
   const [step, setStep] = useState(0);
   const [chapterName, setChapterName] = useState("");
@@ -31,6 +37,60 @@ export function OnboardingScreen() {
   const [dlcDate, setDlcDate] = useState("");
   const [slcDate, setSlcDate] = useState("");
   const [nlcDate, setNlcDate] = useState("");
+  const [chapterModalOpen, setChapterModalOpen] = useState(false);
+  const [chapterQuery, setChapterQuery] = useState("");
+  const [chapterResults, setChapterResults] = useState<Chapter[]>([]);
+  const [chapterSelected, setChapterSelected] = useState<Chapter | null>(null);
+  const [chapterRequestStatus, setChapterRequestStatus] = useState<"pending" | "approved" | "denied" | null>(null);
+  const [chapterBusy, setChapterBusy] = useState(false);
+
+  useEffect(() => {
+    if (!chapterModalOpen) {
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const rows = await searchChapters(chapterQuery);
+        if (!cancelled) {
+          setChapterResults(rows);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("Onboarding chapter search failed:", error);
+          setChapterResults([]);
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [chapterModalOpen, chapterQuery]);
+
+  useEffect(() => {
+    if (!profile?.uid || !chapterSelected?.id) {
+      setChapterRequestStatus(null);
+      return;
+    }
+    let cancelled = false;
+    const loadStatus = async () => {
+      try {
+        const status = await getChapterJoinRequestStatus(chapterSelected.id, profile.uid);
+        if (!cancelled) {
+          setChapterRequestStatus(status);
+        }
+      } catch {
+        if (!cancelled) {
+          setChapterRequestStatus(null);
+        }
+      }
+    };
+    void loadStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [chapterSelected?.id, profile?.uid]);
 
   const doneDisabled = useMemo(
     () => !selectedEvents.length || !chapterName.trim(),
@@ -91,6 +151,16 @@ export function OnboardingScreen() {
             <GlassInput value={chapterName} onChangeText={setChapterName} label="Chapter Name" />
             <GlassInput value={chapterState} onChangeText={setChapterState} label="State" />
             <GlassInput value={officerRole} onChangeText={setOfficerRole} label="Officer Role (optional)" />
+            <GlassButton
+              variant="ghost"
+              label="Join Existing Chapter"
+              onPress={() => setChapterModalOpen(true)}
+            />
+            {chapterSelected ? (
+              <Text style={{ color: palette.colors.textSecondary }}>
+                Selected: {chapterSelected.name} ({chapterSelected.state})
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -184,7 +254,127 @@ export function OnboardingScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal visible={chapterModalOpen} animationType="slide" onRequestClose={() => setChapterModalOpen(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }}>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+            <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 22 }}>
+              Join Chapter
+            </Text>
+            <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
+              Search by school or chapter name, then send a join request.
+            </Text>
+            <GlassSurface style={{ marginTop: 12, padding: 16 }}>
+              <GlassInput
+                label="Search"
+                placeholder="Type school or chapter"
+                value={chapterQuery}
+                onChangeText={setChapterQuery}
+              />
+            </GlassSurface>
+            <GlassSurface style={{ marginTop: 12, padding: 16 }}>
+              {chapterResults.length === 0 ? (
+                <Text style={{ color: palette.colors.textSecondary }}>No chapters found.</Text>
+              ) : (
+                chapterResults.map((chapter) => (
+                  <Pressable
+                    key={chapter.id}
+                    onPress={() => {
+                      setChapterSelected(chapter);
+                      setChapterName(chapter.name);
+                      setChapterState(chapter.state);
+                    }}
+                    style={{ marginBottom: 8 }}
+                  >
+                    {({ pressed }) => (
+                      <GlassSurface
+                        pressed={pressed}
+                        style={{
+                          padding: 10,
+                          borderColor:
+                            chapterSelected?.id === chapter.id ? palette.colors.primary : palette.colors.border,
+                        }}
+                      >
+                        <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{chapter.name}</Text>
+                        <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                          {chapter.school} • {chapter.city}, {chapter.state}
+                        </Text>
+                        <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                          Members: {chapter.memberCount}
+                        </Text>
+                      </GlassSurface>
+                    )}
+                  </Pressable>
+                ))
+              )}
+            </GlassSurface>
+            {chapterSelected ? (
+              <GlassSurface style={{ marginTop: 12, padding: 16 }}>
+                <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{chapterSelected.name}</Text>
+                <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
+                  {chapterSelected.school} • {chapterSelected.city}, {chapterSelected.state}
+                </Text>
+                <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
+                  Members: {chapterSelected.memberCount}
+                </Text>
+                <Text
+                  style={{
+                    color: palette.colors.textSecondary,
+                    marginTop: 16,
+                    marginBottom: 8,
+                    fontSize: 13,
+                    fontWeight: "600",
+                    letterSpacing: 0.8,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Officers
+                </Text>
+                {chapterSelected.officers.map((officer, index) => (
+                  <Text key={`${officer}-${index}`} style={{ color: palette.colors.text, marginBottom: 4 }}>
+                    {officer}
+                  </Text>
+                ))}
+                <GlassButton
+                  variant="solid"
+                  label={
+                    chapterRequestStatus === "pending"
+                      ? "Request Sent"
+                      : chapterRequestStatus === "approved"
+                        ? "Joined"
+                        : "Request to Join"
+                  }
+                  disabled={chapterRequestStatus === "pending" || chapterRequestStatus === "approved" || chapterBusy}
+                  loading={chapterBusy}
+                  style={{ marginTop: 12 }}
+                  onPress={async () => {
+                    if (!profile) {
+                      return;
+                    }
+                    try {
+                      setChapterBusy(true);
+                      await submitChapterJoinRequest(chapterSelected, profile);
+                      setChapterRequestStatus("pending");
+                    } catch (error) {
+                      console.warn("Onboarding chapter request failed:", error);
+                    } finally {
+                      setChapterBusy(false);
+                    }
+                  }}
+                />
+              </GlassSurface>
+            ) : null}
+            <GlassButton
+              variant="ghost"
+              label="Done"
+              style={{ marginTop: 12 }}
+              onPress={() => setChapterModalOpen(false)}
+            />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
+
 

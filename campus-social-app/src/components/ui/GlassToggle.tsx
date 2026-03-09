@@ -1,6 +1,7 @@
 import React from "react";
 import { Pressable, StyleProp, View, ViewStyle } from "react-native";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
 import { hapticTap } from "../../services/haptics";
 import { GlassSurface } from "./GlassSurface";
@@ -14,6 +15,8 @@ type GlassToggleProps = {
   size?: GlassToggleSize;
   accentColor?: string;
   style?: StyleProp<ViewStyle>;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
 const SIZE_MAP: Record<GlassToggleSize, { width: number; height: number; thumb: number }> = {
@@ -29,10 +32,15 @@ export function GlassToggle({
   size = "md",
   accentColor,
   style,
+  accessibilityLabel,
+  accessibilityHint,
 }: GlassToggleProps) {
   const { palette } = useThemeContext();
+  const { getAccessibilityHint } = useAccessibility();
   const dimensions = SIZE_MAP[size];
   const thumbLeft = value ? dimensions.width - dimensions.thumb - 3 : 3;
+  const resolvedHint =
+    accessibilityHint ?? `Turns ${accessibilityLabel?.toLowerCase() ?? "this setting"} ${value ? "off" : "on"}`;
 
   return (
     <Pressable
@@ -47,6 +55,8 @@ export function GlassToggle({
       style={style}
       accessibilityRole="switch"
       accessibilityState={{ disabled, checked: value }}
+      accessibilityLabel={accessibilityLabel ?? "Toggle"}
+      accessibilityHint={getAccessibilityHint(resolvedHint)}
     >
       <GlassSurface
         borderRadius={999}

@@ -76,7 +76,7 @@ export async function getHomeFeed(): Promise<HomeFeedResponse> {
 
     return { items, source: "firestore" };
   } catch (error) {
-    console.log("Using fallback feed because Firestore is unavailable:", error);
+    console.warn("Using fallback feed because Firestore is unavailable:", error);
     return { items: fallbackFeed, source: "fallback" };
   }
 }

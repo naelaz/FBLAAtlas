@@ -60,6 +60,7 @@ export function createDefaultUserProfile(uid: string): Omit<UserProfile, "create
     displayName: `Student ${uid.slice(0, 4).toUpperCase()}`,
     schoolId: DEFAULT_SCHOOL_ID,
     schoolName: DEFAULT_SCHOOL_NAME,
+    chapterId: "",
     state: "CA",
     chapterName: "FBLA Atlas Chapter",
     membershipId: null,
@@ -74,8 +75,15 @@ export function createDefaultUserProfile(uid: string): Omit<UserProfile, "create
     tier: tier.name,
     graduationYear: graduationYearFromGrade("11"),
     streakCount: 0,
+    currentStreak: 0,
+    longestStreak: 0,
+    lastLoginDate: null,
     moodEmoji: null,
     moodUpdatedAt: null,
+    profileVisibility: "school",
+    showOnlineStatus: true,
+    showMood: true,
+    allowFriendSuggestions: true,
     badges: ["First Login"],
     followerIds: [],
     followingIds: [],
@@ -97,6 +105,18 @@ export function createDefaultUserProfile(uid: string): Omit<UserProfile, "create
 function parseUser(uid: string, data: Record<string, unknown>): UserProfile {
   const base = createDefaultUserProfile(uid);
   const xp = typeof data.xp === "number" ? data.xp : base.xp;
+  const currentStreak =
+    typeof data.currentStreak === "number"
+      ? data.currentStreak
+      : typeof data.streakCount === "number"
+        ? data.streakCount
+        : base.currentStreak;
+  const lastLoginDate =
+    typeof data.lastLoginDate === "string"
+      ? data.lastLoginDate
+      : typeof data.lastDailyLoginDate === "string"
+        ? data.lastDailyLoginDate
+        : null;
   return {
     uid,
     displayName:
@@ -111,6 +131,7 @@ function parseUser(uid: string, data: Record<string, unknown>): UserProfile {
       typeof data.schoolName === "string" && data.schoolName.length > 0
         ? data.schoolName
         : base.schoolName,
+    chapterId: typeof data.chapterId === "string" ? data.chapterId : "",
     state: typeof data.state === "string" ? data.state : base.state,
     chapterName: typeof data.chapterName === "string" ? data.chapterName : base.chapterName,
     membershipId: typeof data.membershipId === "string" ? data.membershipId : null,
@@ -137,11 +158,27 @@ function parseUser(uid: string, data: Record<string, unknown>): UserProfile {
       typeof data.graduationYear === "number"
         ? data.graduationYear
         : graduationYearFromGrade(typeof data.grade === "string" ? data.grade : base.grade),
-    streakCount:
-      typeof data.streakCount === "number" ? data.streakCount : base.streakCount,
+    streakCount: currentStreak,
+    currentStreak,
+    longestStreak:
+      typeof data.longestStreak === "number" ? data.longestStreak : Math.max(currentStreak, base.longestStreak),
+    lastLoginDate,
     moodEmoji: typeof data.moodEmoji === "string" ? data.moodEmoji : null,
     moodUpdatedAt:
       typeof data.moodUpdatedAt === "string" ? data.moodUpdatedAt : null,
+    profileVisibility:
+      data.profileVisibility === "public" ||
+      data.profileVisibility === "private" ||
+      data.profileVisibility === "school"
+        ? data.profileVisibility
+        : "school",
+    showOnlineStatus:
+      typeof data.showOnlineStatus === "boolean" ? data.showOnlineStatus : true,
+    showMood: typeof data.showMood === "boolean" ? data.showMood : true,
+    allowFriendSuggestions:
+      typeof data.allowFriendSuggestions === "boolean"
+        ? data.allowFriendSuggestions
+        : true,
     badges: Array.isArray(data.badges)
       ? data.badges.filter((item): item is string => typeof item === "string")
       : base.badges,
@@ -156,7 +193,7 @@ function parseUser(uid: string, data: Record<string, unknown>): UserProfile {
         ? (data.pointsByAction as UserProfile["pointsByAction"])
         : {},
     lastDailyLoginDate:
-      typeof data.lastDailyLoginDate === "string" ? data.lastDailyLoginDate : null,
+      typeof data.lastDailyLoginDate === "string" ? data.lastDailyLoginDate : lastLoginDate,
     joinedEventIds: Array.isArray(data.joinedEventIds)
       ? data.joinedEventIds.filter((item): item is string => typeof item === "string")
       : [],

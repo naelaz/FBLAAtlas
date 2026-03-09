@@ -5,9 +5,10 @@ import { Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
-import { Badge, getTierBadgeVariant } from "../components/ui/badge";
+import { Badge } from "../components/ui/badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassSurface } from "../components/ui/GlassSurface";
+import { TierBadge } from "../components/ui/TierBadge";
 import { useAuthContext } from "../context/AuthContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
@@ -54,18 +55,51 @@ export function StudentProfileScreen({ route, navigation }: Props) {
     );
   }
 
+  const canViewFullProfile = (() => {
+    if (!profile || profile.uid === user.uid) {
+      return true;
+    }
+    const visibility = user.profileVisibility ?? "public";
+    if (visibility === "public") {
+      return true;
+    }
+    if (visibility === "school") {
+      if (profile.chapterId && user.chapterId) {
+        return profile.chapterId === user.chapterId;
+      }
+      return profile.schoolId === user.schoolId;
+    }
+    return user.followerIds.includes(profile.uid);
+  })();
+
+  if (!canViewFullProfile) {
+    return (
+      <ScreenShell title={user.displayName} subtitle="Profile visibility is restricted for this account.">
+        <GlassSurface style={{ marginBottom: 12, padding: 14 }}>
+          <View style={{ alignItems: "center", gap: 10 }}>
+            <AvatarWithStatus uri={user.avatarUrl} size={84} online={false} tier={user.tier} />
+            <Text variant="titleMedium" style={{ fontWeight: "800", color: palette.colors.text }}>
+              {user.displayName}
+            </Text>
+            <Text style={{ color: palette.colors.textSecondary, textAlign: "center" }}>
+              This profile is private. Follow this member to view full details.
+            </Text>
+          </View>
+        </GlassSurface>
+      </ScreenShell>
+    );
+  }
+
   return (
     <ScreenShell title={user.displayName} subtitle={`${user.schoolName} • Class of ${user.graduationYear}`}>
       <GlassSurface style={{ marginBottom: 12, padding: 14 }}>
         <View style={{ alignItems: "center", gap: 8 }}>
-          <AvatarWithStatus uri={user.avatarUrl} size={84} online />
+          <AvatarWithStatus uri={user.avatarUrl} size={84} online tier={user.tier} />
           <Text variant="titleLarge" style={{ fontWeight: "900" }}>
             {user.displayName}
           </Text>
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-            <Badge variant={getTierBadgeVariant(user.tier)} size="sm" capitalize={false}>
-              {user.tier}
-            </Badge>
+            <TierBadge tier={user.tier} />
             <Badge variant="blue-subtle" size="sm" capitalize={false}>
               {formatCompactNumber(user.xp)} XP
             </Badge>
@@ -73,7 +107,7 @@ export function StudentProfileScreen({ route, navigation }: Props) {
               Class of {user.graduationYear}
             </Badge>
             <Badge variant="amber-subtle" size="sm" capitalize={false}>
-              🔥 {user.streakCount} day streak
+              {user.streakCount} day streak
             </Badge>
           </View>
           <Text>{user.bio || "No bio yet."}</Text>
@@ -87,7 +121,7 @@ export function StudentProfileScreen({ route, navigation }: Props) {
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           {user.badges.length > 0 ? (
             user.badges.map((badge, index) => (
-              <Badge key={`${badge}-${index}`} variant={getTierBadgeVariant(user.tier)} size="sm" capitalize={false}>
+              <Badge key={`${badge}-${index}`} variant="gray-subtle" size="sm" capitalize={false}>
                 {badge}
               </Badge>
             ))

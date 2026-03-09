@@ -3,6 +3,7 @@ import React, { useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleProp, View, ViewStyle } from "react-native";
 import { Text } from "react-native-paper";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
 import { hapticTap } from "../../services/haptics";
 import { GlassButton } from "./GlassButton";
@@ -77,6 +78,7 @@ export function GlassDropdown({
   showSelectedCount = true,
 }: GlassDropdownProps) {
   const { palette } = useThemeContext();
+  const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -128,7 +130,15 @@ export function GlassDropdown({
   return (
     <View style={[{ gap: 6 }, style]}>
       {label ? (
-        <Text style={{ color: palette.colors.textSecondary, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
+        <Text
+          style={{
+            color: palette.colors.textSecondary,
+            fontSize: scaleFont(12),
+            fontWeight: getFontWeight("700"),
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
           {label}
         </Text>
       ) : null}
@@ -143,6 +153,9 @@ export function GlassDropdown({
         }}
         disabled={disabled}
         style={{ minHeight: 48 }}
+        accessibilityRole="button"
+        accessibilityLabel={label ?? "Open selection list"}
+        accessibilityHint={getAccessibilityHint("Opens a list of options")}
       >
         {({ pressed }) => (
           <GlassSurface
@@ -168,7 +181,8 @@ export function GlassDropdown({
                 flex: 1,
                 paddingRight: 12,
                 color: selectedOptions.length ? palette.colors.text : palette.colors.placeholder,
-                fontWeight: selectedOptions.length ? "700" : "500",
+                fontWeight: getFontWeight(selectedOptions.length ? "700" : "500"),
+                fontSize: scaleFont(14),
               }}
             >
               {selectedText}
@@ -190,7 +204,14 @@ export function GlassDropdown({
                 maxHeight: maxPanelHeight ?? 420,
               }}
             >
-              <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 16, marginBottom: 8 }}>
+              <Text
+                style={{
+                  color: palette.colors.text,
+                  fontWeight: getFontWeight("700"),
+                  fontSize: scaleFont(16),
+                  marginBottom: 8,
+                }}
+              >
                 {panelTitle ?? label ?? "Select"}
               </Text>
 
@@ -207,13 +228,30 @@ export function GlassDropdown({
               <ScrollView style={{ marginTop: shouldSearch ? 8 : 2 }} contentContainerStyle={{ paddingBottom: 4 }} keyboardShouldPersistTaps="handled">
                 {groupedOptions.length === 0 ? (
                   <View style={{ borderWidth: 1, borderColor: palette.colors.border, borderRadius: 10, borderStyle: "dashed", paddingVertical: 16, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ color: palette.colors.textSecondary }}>No matching options</Text>
+                    <Text
+                      style={{
+                        color: palette.colors.textSecondary,
+                        fontSize: scaleFont(13),
+                        fontWeight: getFontWeight("500"),
+                      }}
+                    >
+                      No matching options
+                    </Text>
                   </View>
                 ) : null}
 
                 {groupedOptions.map(([section, sectionOptions], sectionIndex) => (
                   <View key={section} style={{ marginTop: sectionIndex === 0 ? 0 : 10 }}>
-                    <Text style={{ color: palette.colors.textSecondary, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                    <Text
+                      style={{
+                        color: palette.colors.textSecondary,
+                        fontSize: scaleFont(11),
+                        fontWeight: getFontWeight("700"),
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                        marginBottom: 6,
+                      }}
+                    >
                       {section}
                     </Text>
 
@@ -242,16 +280,45 @@ export function GlassDropdown({
                               borderTopColor: palette.colors.divider,
                               backgroundColor: selected ? palette.colors.inputSurface : palette.colors.surface,
                             }}
+                            accessibilityRole="button"
+                            accessibilityState={{
+                              disabled: Boolean(option.disabled),
+                              selected,
+                            }}
+                            accessibilityLabel={option.label}
+                            accessibilityHint={getAccessibilityHint(
+                              option.description
+                                ? `${option.description}. ${selected ? "Selected" : "Double tap to select"}`
+                                : selected
+                                  ? "Selected"
+                                  : "Double tap to select",
+                            )}
                           >
                             <View style={{ flex: 1, paddingRight: 8, gap: 2 }}>
                               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                                 {option.swatchColor ? <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: option.swatchColor, borderWidth: 1, borderColor: palette.colors.border }} /> : null}
                                 {option.icon ? <View>{option.icon}</View> : null}
-                                <Text style={{ color: palette.colors.text, fontWeight: selected ? "700" : "500" }}>
+                                <Text
+                                  style={{
+                                    color: palette.colors.text,
+                                    fontWeight: getFontWeight(selected ? "700" : "500"),
+                                    fontSize: scaleFont(14),
+                                  }}
+                                >
                                   {option.label}
                                 </Text>
                               </View>
-                              {option.description ? <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>{option.description}</Text> : null}
+                              {option.description ? (
+                                <Text
+                                  style={{
+                                    color: palette.colors.textSecondary,
+                                    fontSize: scaleFont(12),
+                                    fontWeight: getFontWeight("400"),
+                                  }}
+                                >
+                                  {option.description}
+                                </Text>
+                              ) : null}
                             </View>
                             {multiSelect ? selected ? <SquareCheckBig size={18} color={palette.colors.text} /> : <Square size={18} color={palette.colors.textSecondary} /> : selected ? <Check size={18} color={palette.colors.text} /> : null}
                           </Pressable>

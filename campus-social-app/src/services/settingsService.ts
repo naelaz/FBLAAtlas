@@ -21,14 +21,11 @@ export function createDefaultSettings(): AppSettings {
   return {
     notifications: {
       globalPush: true,
-      likes: true,
-      comments: true,
-      follows: true,
-      events: true,
-      xp: true,
-      streaks: true,
-      news: true,
-      sound: true,
+      eventReminders: true,
+      practiceReminders: true,
+      chapterUpdates: true,
+      messageNotifications: true,
+      xpAlerts: true,
     },
     accessibility: {
       textScale: 1,
@@ -54,9 +51,9 @@ export function createDefaultSettings(): AppSettings {
     },
     customize: {
       widgetDensity: "comfortable",
-      showStoriesBar: false,
-      showCampusPulse: false,
-      showSocialFeed: false,
+      showStoriesBar: true,
+      showCampusPulse: true,
+      showSocialFeed: true,
     },
   };
 }
@@ -101,41 +98,37 @@ function parseSettings(data: Record<string, unknown>): AppSettings {
         typeof notifications.globalPush === "boolean"
           ? notifications.globalPush
           : base.notifications.globalPush,
-      likes:
-        typeof notifications.likes === "boolean"
-          ? notifications.likes
-          : base.notifications.likes,
-      comments:
-        typeof notifications.comments === "boolean"
-          ? notifications.comments
-          : base.notifications.comments,
-      follows:
-        typeof notifications.follows === "boolean"
-          ? notifications.follows
-          : base.notifications.follows,
-      events:
-        typeof notifications.events === "boolean"
-          ? notifications.events
-          : base.notifications.events,
-      xp:
-        typeof notifications.xp === "boolean" ? notifications.xp : base.notifications.xp,
-      streaks:
-        typeof notifications.streaks === "boolean"
-          ? notifications.streaks
-          : base.notifications.streaks,
-      news:
-        typeof notifications.news === "boolean"
-          ? notifications.news
-          : base.notifications.news,
-      sound:
-        typeof notifications.sound === "boolean"
-          ? notifications.sound
-          : base.notifications.sound,
+      eventReminders:
+        typeof notifications.eventReminders === "boolean"
+          ? notifications.eventReminders
+          : typeof notifications.events === "boolean"
+            ? notifications.events
+            : base.notifications.eventReminders,
+      practiceReminders:
+        typeof notifications.practiceReminders === "boolean"
+          ? notifications.practiceReminders
+          : base.notifications.practiceReminders,
+      chapterUpdates:
+        typeof notifications.chapterUpdates === "boolean"
+          ? notifications.chapterUpdates
+          : typeof notifications.news === "boolean"
+            ? notifications.news
+            : base.notifications.chapterUpdates,
+      messageNotifications:
+        typeof notifications.messageNotifications === "boolean"
+          ? notifications.messageNotifications
+          : base.notifications.messageNotifications,
+      xpAlerts:
+        typeof notifications.xpAlerts === "boolean"
+          ? notifications.xpAlerts
+          : typeof notifications.xp === "boolean"
+            ? notifications.xp
+            : base.notifications.xpAlerts,
     },
     accessibility: {
       textScale:
         typeof accessibility.textScale === "number"
-          ? Math.max(0.85, Math.min(1.3, accessibility.textScale))
+          ? Math.max(0.8, Math.min(1.4, accessibility.textScale))
           : base.accessibility.textScale,
       highContrastMode:
         typeof accessibility.highContrastMode === "boolean"
@@ -165,10 +158,12 @@ function parseSettings(data: Record<string, unknown>): AppSettings {
     },
     privacy: {
       profileVisibility:
-        privacy.profileVisibility === "friends" ||
+        privacy.profileVisibility === "public" ||
         privacy.profileVisibility === "private" ||
         privacy.profileVisibility === "school"
           ? privacy.profileVisibility
+          : privacy.profileVisibility === "friends"
+            ? "private"
           : base.privacy.profileVisibility,
       showOnlineStatus:
         typeof privacy.showOnlineStatus === "boolean"

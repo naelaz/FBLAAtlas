@@ -224,25 +224,13 @@ export function ChatScreen({ route, navigation }: Props) {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingTop: 4 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 8 }}>
           <BackButton onPress={() => navigation.goBack()} />
-          <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "800" }}>
-            Chat
+          <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "700", fontSize: 22 }}>
+            {otherUser?.displayName ?? "Conversation"}
           </Text>
         </View>
-        <View style={{ flex: 1, paddingHorizontal: 12, paddingTop: 10 }}>
-        {otherUser ? (
-          <GlassSurface style={{ padding: 10, marginBottom: 10, backgroundColor: palette.colors.glassStrong }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <AvatarWithStatus uri={otherUser.avatarUrl} size={34} online={false} />
-              <View>
-                <Text style={{ fontWeight: "800", color: palette.colors.text }}>{otherUser.displayName}</Text>
-                <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>{otherUser.schoolName}</Text>
-              </View>
-            </View>
-          </GlassSurface>
-        ) : null}
-
+        <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 12 }}>
         <FlatList
           data={messages}
           keyExtractor={(item) => item.id}
@@ -260,7 +248,12 @@ export function ChatScreen({ route, navigation }: Props) {
                     gap: 8,
                   }}
                 >
-                  <AvatarWithStatus uri={sender?.avatarUrl ?? ""} size={26} online={false} />
+                  <AvatarWithStatus
+                    uri={sender?.avatarUrl ?? ""}
+                    size={26}
+                    online={false}
+                    tier={sender?.tier}
+                  />
                   {mine ? (
                     <View
                       style={{
@@ -285,7 +278,7 @@ export function ChatScreen({ route, navigation }: Props) {
                     </GlassSurface>
                   )}
                 </View>
-                <Text style={{ color: palette.colors.textSecondary, fontSize: 11, marginTop: 3 }}>
+                <Text style={{ color: palette.colors.textMuted, fontSize: 12, marginTop: 3 }}>
                   {formatDateTime(item.timestamp)}
                 </Text>
                 {mine && lastOwnMessageId === item.id && showSeen ? (
@@ -307,8 +300,9 @@ export function ChatScreen({ route, navigation }: Props) {
           style={{
             paddingHorizontal: 8,
             paddingVertical: 8,
-            marginBottom: 10,
-            backgroundColor: palette.colors.glassStrong,
+            marginBottom: 12,
+            borderRadius: 16,
+            backgroundColor: palette.colors.surface,
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
@@ -320,12 +314,15 @@ export function ChatScreen({ route, navigation }: Props) {
               multiline
               style={{
                 flex: 1,
-                backgroundColor: palette.colors.inputSurface,
-                borderRadius: 14,
+                backgroundColor: palette.colors.surfaceAlt,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: palette.colors.border,
                 paddingHorizontal: 12,
                 paddingVertical: 10,
                 maxHeight: 120,
                 color: palette.colors.text,
+                fontSize: 15,
               }}
               placeholderTextColor={palette.colors.placeholder}
             />
@@ -336,9 +333,12 @@ export function ChatScreen({ route, navigation }: Props) {
               }}
               style={{
                 backgroundColor: input.trim() ? palette.colors.primary : palette.colors.inputMuted,
-                borderRadius: 24,
+                borderRadius: 999,
+                minHeight: 48,
                 paddingHorizontal: 14,
                 paddingVertical: 10,
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
               <Text style={{ color: palette.colors.onPrimary, fontWeight: "700" }}>

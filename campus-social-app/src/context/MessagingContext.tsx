@@ -53,9 +53,10 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
           appState.current !== "active" &&
           unread > previousUnread.current &&
           pushEnabled &&
-          settings.notifications.globalPush
+          settings.notifications.globalPush &&
+          settings.notifications.messageNotifications
         ) {
-          void sendLocalPush("New Message", "📩 You received a new message in FBLA Atlas.");
+          void sendLocalPush("New Message", "📩 You received a new message.");
         }
         previousUnread.current = unread;
       },
@@ -65,7 +66,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     );
 
     return unsubscribe;
-  }, [profile?.uid, profile?.schoolId, pushEnabled, settings.notifications.globalPush]);
+  }, [profile?.uid, profile?.schoolId, pushEnabled, settings.notifications.globalPush, settings.notifications.messageNotifications]);
 
   const refreshConversations = async () => {
     if (!profile) {

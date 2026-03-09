@@ -2,7 +2,15 @@
 import * as WebBrowser from "expo-web-browser";
 import { LinearGradient } from "expo-linear-gradient";
 import { Eye, EyeOff, Mail, Shield, UserRound } from "lucide-react-native";
-import { createUserWithEmailAndPassword, GoogleAuthProvider, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
+  GoogleAuthProvider,
+  sendPasswordResetEmail,
+  signInWithCredential,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
 import { doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import React, { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from "react-native";
@@ -27,6 +35,9 @@ import { hapticTap } from "../services/haptics";
 WebBrowser.maybeCompleteAuthSession();
 
 type FormMode = "signin" | "signup";
+const ADMIN_EMAIL = "admin@fblaatlas.com";
+const ADMIN_LOGIN_PASSWORD = "Admin";
+const ADMIN_AUTH_PASSWORD = "Admin2026";
 
 type ProfileSetupFields = {
   displayName: string;
@@ -103,6 +114,23 @@ async function upsertAuthenticatedProfile(
   return false;
 }
 
+async function ensureAdminProfile(uid: string): Promise<void> {
+  await setDoc(
+    doc(db, "users", uid),
+    {
+      displayName: "FBLA Atlas Administrator",
+      schoolName: "FBLA Atlas",
+      schoolId: "fbla-atlas-admin",
+      role: "admin",
+      banned: false,
+      onboardingCompleted: true,
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 export function LoginScreen() {
   const { palette } = useThemeContext();
   const { setOnboardingCompleted } = useOnboarding();
@@ -116,7 +144,7 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
-  const [adminEmail, setAdminEmail] = useState("");
+  const [adminEmail, setAdminEmail] = useState(ADMIN_EMAIL);
   const [adminPassword, setAdminPassword] = useState("");
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -252,10 +280,21 @@ export function LoginScreen() {
       setError("Enter admin email and password.");
       return;
     }
+    if (adminEmail.trim().toLowerCase() !== ADMIN_EMAIL || adminPassword !== ADMIN_LOGIN_PASSWORD) {
+      setError("Use the configured administrator credentials for this login.");
+      return;
+    }
     try {
       setBusy(true);
       setError(null);
-      const credential = await signInWithEmailAndPassword(auth, adminEmail.trim(), adminPassword);
+      let credential;
+      const methods = await fetchSignInMethodsForEmail(auth, ADMIN_EMAIL);
+      if (methods.length === 0) {
+        credential = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_AUTH_PASSWORD);
+      } else {
+        credential = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_AUTH_PASSWORD);
+      }
+      await ensureAdminProfile(credential.user.uid);
       const existing = await getUserProfileOnce(credential.user.uid);
       const role = existing?.role;
       if (role !== "admin") {
@@ -267,6 +306,7 @@ export function LoginScreen() {
       await setAdminMode(true);
       await setOnboardingCompleted(true);
       setAdminOpen(false);
+      setAdminEmail(ADMIN_EMAIL);
       setAdminPassword("");
     } catch (adminError) {
       setError(adminError instanceof Error ? adminError.message : "Administrator login failed.");
@@ -569,7 +609,7 @@ export function LoginScreen() {
                 autoCapitalize="none"
                 keyboardType="email-address"
                 label="Admin Email"
-                placeholder="admin@school.edu"
+                placeholder={ADMIN_EMAIL}
                 leftSlot={<Mail size={18} color={palette.colors.textSecondary} />}
               />
               <GlassInput

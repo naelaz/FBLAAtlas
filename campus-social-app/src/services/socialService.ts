@@ -29,6 +29,7 @@ import {
   getUserAvatarUrl,
   resolveAvatarUrl,
 } from "../constants/media";
+import { getTierForXp } from "../constants/gamification";
 import { AVATAR_FALLBACK_COLORS } from "../constants/themes";
 import { awardPointsToUser } from "./gamificationService";
 import { createUserNotification } from "./notificationService";
@@ -61,6 +62,9 @@ function parsePost(id: string, data: Record<string, unknown>): PostItem {
         ? data.authorAvatarColor
         : AVATAR_FALLBACK_COLORS[0],
     imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : undefined,
+    tags: Array.isArray(data.tags)
+      ? data.tags.filter((item): item is string => typeof item === "string")
+      : [],
     content: typeof data.content === "string" ? data.content : "",
     createdAt: toIso(data.createdAt),
     likeCount: typeof data.likeCount === "number" ? data.likeCount : 0,
@@ -144,6 +148,15 @@ function parseComment(postId: string, id: string, data: Record<string, unknown>)
     postId,
     authorId: typeof data.authorId === "string" ? data.authorId : "",
     authorName: typeof data.authorName === "string" ? data.authorName : "Student",
+    authorTier:
+      data.authorTier === "Bronze" ||
+      data.authorTier === "Silver" ||
+      data.authorTier === "Gold" ||
+      data.authorTier === "Platinum" ||
+      data.authorTier === "Diamond" ||
+      data.authorTier === "Legend"
+        ? data.authorTier
+        : undefined,
     authorAvatarColor:
       typeof data.authorAvatarColor === "string"
         ? data.authorAvatarColor
@@ -202,6 +215,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       followingIds: [],
       bio: "Robotics captain and coding mentor.",
       pointsByAction: {},
+      lastLoginDate: null,
       lastDailyLoginDate: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -217,6 +231,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       followingIds: [],
       bio: "DECA, FBLA, and tennis.",
       pointsByAction: {},
+      lastLoginDate: null,
       lastDailyLoginDate: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -232,6 +247,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       followingIds: [],
       bio: "FBLA chapter photographer.",
       pointsByAction: {},
+      lastLoginDate: null,
       lastDailyLoginDate: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -247,6 +263,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       followingIds: [],
       bio: "Student body VP and hackathon organizer.",
       pointsByAction: {},
+      lastLoginDate: null,
       lastDailyLoginDate: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -262,6 +279,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       followingIds: [],
       bio: "First-year coding club member.",
       pointsByAction: {},
+      lastLoginDate: null,
       lastDailyLoginDate: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -276,6 +294,8 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
     grade: DEMO_SCHOOL_GRADES[index % DEMO_SCHOOL_GRADES.length],
     graduationYear: new Date().getFullYear() + (4 - index),
     streakCount: Math.max(1, index + 2),
+    currentStreak: Math.max(1, index + 2),
+    longestStreak: Math.max(1, index + 2),
     badges: ["First Login", "Social Starter"],
   }));
 
@@ -667,9 +687,10 @@ export async function createPost(
   actor: UserProfile,
   content: string,
   imageUrl?: string,
+  tags: string[] = [],
 ): Promise<PointAwardResult | null> {
   const trimmed = content.trim();
-  if (!trimmed) {
+  if (!trimmed && !imageUrl) {
     return null;
   }
 
@@ -678,11 +699,8 @@ export async function createPost(
     authorId: actor.uid,
     authorName: actor.displayName,
     authorAvatarColor: actor.avatarColor,
-    imageUrl:
-      imageUrl ||
-      (Math.random() > 0.55
-        ? getSocialImage(`${actor.uid}_${Date.now()}`)
-        : null),
+    imageUrl: imageUrl || null,
+    tags,
     content: trimmed,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -736,6 +754,8 @@ export async function toggleLikeOnPost(post: PostItem, actor: UserProfile): Prom
       post.id,
       `${actor.displayName} liked a post`,
     );
+
+    await awardPointsToUser(actor.uid, "liking_post");
 
     if (post.authorId !== actor.uid) {
       await awardPointsToUser(post.authorId, "likes_received");
@@ -862,6 +882,7 @@ export async function addCommentToPost(
     postId: post.id,
     authorId: actor.uid,
     authorName: actor.displayName,
+    authorTier: actor.tier,
     authorAvatarColor: actor.avatarColor,
     content: trimmed,
     createdAt: serverTimestamp(),
@@ -950,6 +971,7 @@ export async function toggleFollowUser(
 export async function toggleEventAttendance(
   event: EventItem,
   actor: UserProfile,
+  options?: { notifyEventReminder?: boolean },
 ): Promise<{ joined: boolean; award: PointAwardResult | null }> {
   const eventRef = doc(db, "events", event.id);
   const userRef = doc(db, "users", actor.uid);
@@ -1016,12 +1038,14 @@ export async function toggleEventAttendance(
     `${actor.displayName} is going to ${event.title}`,
   );
 
-  await createUserNotification(actor.uid, {
-    type: "event_reminder",
-    title: "Event Reminder",
-    body: `You joined ${event.title}. Starts ${formatDateTime(event.startAt)} at ${event.location}.`,
-    metadata: { eventId: event.id },
-  });
+  if (options?.notifyEventReminder !== false) {
+    await createUserNotification(actor.uid, {
+      type: "event_reminder",
+      title: "Event Reminder",
+      body: `You joined ${event.title}. Starts ${formatDateTime(event.startAt)} at ${event.location}.`,
+      metadata: { eventId: event.id },
+    });
+  }
 
   return { joined: true, award };
 }
@@ -1040,6 +1064,7 @@ export function getSuggestedFriends(
 ): UserProfile[] {
   return users
     .filter((user) => user.uid !== current.uid)
+    .filter((user) => user.allowFriendSuggestions !== false)
     .filter((user) => user.schoolId === current.schoolId)
     .filter((user) => user.grade === current.grade)
     .filter((user) => !current.followingIds.includes(user.uid))
@@ -1073,15 +1098,53 @@ export function subscribeSchoolUsers(
                 : getUserAvatarFallbackUrl(docSnap.id),
             bio: typeof data.bio === "string" ? data.bio : "",
             xp: typeof data.xp === "number" ? data.xp : 0,
-            tier: typeof data.tier === "string" ? (data.tier as UserProfile["tier"]) : "Bronze",
+            tier: getTierForXp(typeof data.xp === "number" ? data.xp : 0).name,
             graduationYear:
               typeof data.graduationYear === "number"
                 ? data.graduationYear
                 : new Date().getFullYear() + 1,
-            streakCount: typeof data.streakCount === "number" ? data.streakCount : 0,
+            streakCount:
+              typeof data.currentStreak === "number"
+                ? data.currentStreak
+                : typeof data.streakCount === "number"
+                  ? data.streakCount
+                  : 0,
+            currentStreak:
+              typeof data.currentStreak === "number"
+                ? data.currentStreak
+                : typeof data.streakCount === "number"
+                  ? data.streakCount
+                  : 0,
+            longestStreak:
+              typeof data.longestStreak === "number"
+                ? data.longestStreak
+                : typeof data.currentStreak === "number"
+                  ? data.currentStreak
+                  : typeof data.streakCount === "number"
+                    ? data.streakCount
+                    : 0,
+            lastLoginDate:
+              typeof data.lastLoginDate === "string"
+                ? data.lastLoginDate
+                : typeof data.lastDailyLoginDate === "string"
+                  ? data.lastDailyLoginDate
+                  : null,
             moodEmoji: typeof data.moodEmoji === "string" ? data.moodEmoji : null,
             moodUpdatedAt:
               typeof data.moodUpdatedAt === "string" ? data.moodUpdatedAt : null,
+            profileVisibility:
+              data.profileVisibility === "public" ||
+              data.profileVisibility === "private" ||
+              data.profileVisibility === "school"
+                ? data.profileVisibility
+                : "school",
+            showOnlineStatus:
+              typeof data.showOnlineStatus === "boolean" ? data.showOnlineStatus : true,
+            showMood: typeof data.showMood === "boolean" ? data.showMood : true,
+            allowFriendSuggestions:
+              typeof data.allowFriendSuggestions === "boolean"
+                ? data.allowFriendSuggestions
+                : true,
             badges: Array.isArray(data.badges)
               ? data.badges.filter((item): item is string => typeof item === "string")
               : [],
@@ -1096,7 +1159,11 @@ export function subscribeSchoolUsers(
                 ? (data.pointsByAction as UserProfile["pointsByAction"])
                 : {},
             lastDailyLoginDate:
-              typeof data.lastDailyLoginDate === "string" ? data.lastDailyLoginDate : null,
+              typeof data.lastDailyLoginDate === "string"
+                ? data.lastDailyLoginDate
+                : typeof data.lastLoginDate === "string"
+                  ? data.lastLoginDate
+                  : null,
             joinedEventIds: Array.isArray(data.joinedEventIds)
               ? data.joinedEventIds.filter((item): item is string => typeof item === "string")
               : [],
@@ -1138,15 +1205,53 @@ export async function fetchSchoolUsersOnce(schoolId: string): Promise<UserProfil
             : getUserAvatarFallbackUrl(docSnap.id),
         bio: typeof data.bio === "string" ? data.bio : "",
         xp: typeof data.xp === "number" ? data.xp : 0,
-        tier: typeof data.tier === "string" ? (data.tier as UserProfile["tier"]) : "Bronze",
+        tier: getTierForXp(typeof data.xp === "number" ? data.xp : 0).name,
         graduationYear:
           typeof data.graduationYear === "number"
             ? data.graduationYear
             : new Date().getFullYear() + 1,
-        streakCount: typeof data.streakCount === "number" ? data.streakCount : 0,
+        streakCount:
+          typeof data.currentStreak === "number"
+            ? data.currentStreak
+            : typeof data.streakCount === "number"
+              ? data.streakCount
+              : 0,
+        currentStreak:
+          typeof data.currentStreak === "number"
+            ? data.currentStreak
+            : typeof data.streakCount === "number"
+              ? data.streakCount
+              : 0,
+        longestStreak:
+          typeof data.longestStreak === "number"
+            ? data.longestStreak
+            : typeof data.currentStreak === "number"
+              ? data.currentStreak
+              : typeof data.streakCount === "number"
+                ? data.streakCount
+                : 0,
+        lastLoginDate:
+          typeof data.lastLoginDate === "string"
+            ? data.lastLoginDate
+            : typeof data.lastDailyLoginDate === "string"
+              ? data.lastDailyLoginDate
+              : null,
         moodEmoji: typeof data.moodEmoji === "string" ? data.moodEmoji : null,
         moodUpdatedAt:
           typeof data.moodUpdatedAt === "string" ? data.moodUpdatedAt : null,
+        profileVisibility:
+          data.profileVisibility === "public" ||
+          data.profileVisibility === "private" ||
+          data.profileVisibility === "school"
+            ? data.profileVisibility
+            : "school",
+        showOnlineStatus:
+          typeof data.showOnlineStatus === "boolean" ? data.showOnlineStatus : true,
+        showMood: typeof data.showMood === "boolean" ? data.showMood : true,
+        allowFriendSuggestions:
+          typeof data.allowFriendSuggestions === "boolean"
+            ? data.allowFriendSuggestions
+            : true,
         badges: Array.isArray(data.badges)
           ? data.badges.filter((item): item is string => typeof item === "string")
           : [],
@@ -1161,7 +1266,11 @@ export async function fetchSchoolUsersOnce(schoolId: string): Promise<UserProfil
             ? (data.pointsByAction as UserProfile["pointsByAction"])
             : {},
         lastDailyLoginDate:
-          typeof data.lastDailyLoginDate === "string" ? data.lastDailyLoginDate : null,
+          typeof data.lastDailyLoginDate === "string"
+            ? data.lastDailyLoginDate
+            : typeof data.lastLoginDate === "string"
+              ? data.lastLoginDate
+              : null,
         joinedEventIds: Array.isArray(data.joinedEventIds)
           ? data.joinedEventIds.filter((item): item is string => typeof item === "string")
           : [],

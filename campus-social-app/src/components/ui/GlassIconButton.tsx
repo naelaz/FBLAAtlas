@@ -1,12 +1,15 @@
 import React from "react";
 import { Pressable, ViewStyle } from "react-native";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
+import { hapticTap } from "../../services/haptics";
 import { GlassTone } from "../../theme/glass";
 import { GlassSurface } from "./GlassSurface";
 
 type GlassIconButtonProps = {
   onPress: () => void;
   accessibilityLabel: string;
+  accessibilityHint?: string;
   children: React.ReactNode;
   tone?: GlassTone;
   size?: number;
@@ -16,18 +19,25 @@ type GlassIconButtonProps = {
 export function GlassIconButton({
   onPress,
   accessibilityLabel,
+  accessibilityHint,
   children,
   tone = "neutral",
   size = 38,
   style,
 }: GlassIconButtonProps) {
+  const { getAccessibilityHint } = useAccessibility();
   const radius = size / 2;
+  const resolvedHint = accessibilityHint ?? "Activates this icon button";
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        hapticTap();
+        onPress();
+      }}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint={getAccessibilityHint(resolvedHint)}
       style={({ pressed }) => [
         {
           minWidth: size,

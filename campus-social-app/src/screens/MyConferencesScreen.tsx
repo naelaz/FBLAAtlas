@@ -5,9 +5,9 @@ import { Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
 import { GlassCard } from "../components/ui/GlassCard";
-import { GlassDropdown } from "../components/ui/GlassDropdown";
 import { GlassInput } from "../components/ui/GlassInput";
 import { GlassPanel } from "../components/ui/GlassPanel";
+import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { JollySelect } from "../components/ui/JollySelect";
 import { CONFERENCE_LEVELS, FBLA_COMPETITIVE_EVENTS } from "../constants/fblaEvents";
@@ -44,16 +44,23 @@ export function MyConferencesScreen() {
 
   return (
     <ScreenShell title="My Conferences" subtitle="Manage DLC, SLC, and NLC agendas and prep entries.">
-      <GlassDropdown
-        label="Conference Level"
-        value={activeLevel}
-        onValueChange={(value) => setActiveLevel(value as ConferenceLevel)}
-        options={CONFERENCE_LEVELS.map((value) => ({
-          value,
-          label: value,
-          description: `${value} schedule and readiness data`,
-        }))}
-      />
+      <View>
+        <Text style={{ color: palette.colors.textSecondary, marginBottom: 6, fontWeight: "700", fontSize: 12 }}>
+          Conference Level
+        </Text>
+        <GlassSegmentedControl
+          value={activeLevel}
+          onValueChange={(value) => {
+            if (value === "DLC" || value === "SLC" || value === "NLC") {
+              setActiveLevel(value);
+            }
+          }}
+          options={CONFERENCE_LEVELS.map((value) => ({
+            value,
+            label: value,
+          }))}
+        />
+      </View>
 
       <View style={{ marginTop: 12, gap: 10 }}>
         {entries.length === 0 ? (
@@ -119,12 +126,20 @@ export function MyConferencesScreen() {
               Add Conference Event
             </Text>
             <ScrollView style={{ marginTop: 10 }}>
-              <JollySelect
-                label="Conference Level"
-                value={activeLevel}
-                onValueChange={(value) => setActiveLevel(value as ConferenceLevel)}
-                options={CONFERENCE_LEVELS.map((value) => ({ label: value, value }))}
-              />
+              <View style={{ marginBottom: 8 }}>
+                <Text style={{ color: palette.colors.textSecondary, marginBottom: 6, fontWeight: "700", fontSize: 12 }}>
+                  Conference Level
+                </Text>
+                <GlassSegmentedControl
+                  value={activeLevel}
+                  onValueChange={(value) => {
+                    if (value === "DLC" || value === "SLC" || value === "NLC") {
+                      setActiveLevel(value);
+                    }
+                  }}
+                  options={CONFERENCE_LEVELS.map((value) => ({ value, label: value }))}
+                />
+              </View>
               <View style={{ marginTop: 8 }}>
                 <JollySelect
                   label="Event Name"
@@ -248,4 +263,3 @@ export function MyConferencesScreen() {
     </ScreenShell>
   );
 }
-

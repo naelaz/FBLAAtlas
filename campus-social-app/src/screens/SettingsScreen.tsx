@@ -7,23 +7,25 @@ import { deleteUser } from "firebase/auth";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { Ban, Check, ChevronDown, CircleX } from "lucide-react-native";
 import React, { useMemo, useState } from "react";
-import { Alert, LayoutAnimation, Platform, Pressable, UIManager, View } from "react-native";
+import { Alert, LayoutAnimation, Platform, Pressable, View } from "react-native";
 import { Text } from "react-native-paper";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { ScreenShell } from "../components/ScreenShell";
 import { Badge } from "../components/ui/badge";
 import { GlassButton } from "../components/ui/GlassButton";
-import { GlassDropdown } from "../components/ui/GlassDropdown";
 import { GlassInput } from "../components/ui/GlassInput";
 import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { GlassToggle } from "../components/ui/GlassToggle";
 import { auth, db } from "../config/firebase";
+import { useAccessibility } from "../context/AccessibilityContext";
 import { useAuthContext } from "../context/AuthContext";
 import { useSettings } from "../context/SettingsContext";
 import { useThemeContext } from "../context/ThemeContext";
+import { useAnimationDuration } from "../hooks/useAnimationDuration";
 import { hapticTap } from "../services/haptics";
+import { createDefaultSettings } from "../services/settingsService";
 import { deleteUserProfile } from "../services/userService";
 import { RootStackParamList } from "../navigation/types";
 import { AppThemeName, ThemePalette } from "../constants/themes";
@@ -53,6 +55,7 @@ function ThemeTile({
   activeBorderColor,
   activeDotColor,
 }: ThemeTileProps) {
+  const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
   return (
     <Pressable
       onPress={onPress}
@@ -63,6 +66,7 @@ function ThemeTile({
       }}
       accessibilityRole="button"
       accessibilityLabel={`Apply ${theme.label} theme`}
+      accessibilityHint={getAccessibilityHint(`Switches app colors to ${theme.label}`)}
     >
       <View
         style={{
@@ -124,10 +128,10 @@ function ThemeTile({
       <Text
         style={{
           color: labelColor,
-          fontSize: 12,
+          fontSize: scaleFont(12),
           marginTop: 6,
           textAlign: "center",
-          fontWeight: active ? "700" : "500",
+          fontWeight: getFontWeight(active ? "700" : "500"),
         }}
         numberOfLines={1}
       >
@@ -139,11 +143,13 @@ function ThemeTile({
 
 function SettingsSection({ id, title, isOpen, onToggle, children }: SectionProps) {
   const { palette } = useThemeContext();
+  const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
+  const animationDuration = useAnimationDuration(250);
   const progress = useSharedValue(isOpen ? 1 : 0);
 
   React.useEffect(() => {
-    progress.value = withTiming(isOpen ? 1 : 0, { duration: 250 });
-  }, [isOpen, progress]);
+    progress.value = withTiming(isOpen ? 1 : 0, { duration: animationDuration });
+  }, [animationDuration, isOpen, progress]);
 
   const chevronStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${progress.value * 180}deg` }],
@@ -169,12 +175,13 @@ function SettingsSection({ id, title, isOpen, onToggle, children }: SectionProps
         }}
         accessibilityRole="button"
         accessibilityLabel={`Toggle ${id} settings`}
+        accessibilityHint={getAccessibilityHint(`Expands or collapses the ${title} section`)}
       >
         <Text
           style={{
             color: palette.colors.text,
-            fontSize: 16,
-            fontWeight: "700",
+            fontSize: scaleFont(16),
+            fontWeight: getFontWeight("700"),
           }}
         >
           {title}
@@ -210,16 +217,28 @@ function ToggleRow({
   onValueChange: (value: boolean) => void;
 }) {
   const { palette } = useThemeContext();
+  const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
 
   return (
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-      <Text style={{ flex: 1, color: palette.colors.text }}>{label}</Text>
+      <Text
+        style={{
+          flex: 1,
+          color: palette.colors.text,
+          fontSize: scaleFont(15),
+          fontWeight: getFontWeight("500"),
+        }}
+      >
+        {label}
+      </Text>
       <GlassToggle
         value={value}
         onValueChange={(next) => {
           hapticTap();
           onValueChange(next);
         }}
+        accessibilityLabel={label}
+        accessibilityHint={getAccessibilityHint(`Turns ${label.toLowerCase()} ${value ? "off" : "on"}`)}
       />
     </View>
   );
@@ -229,18 +248,27 @@ export function SettingsScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route = useRoute();
   const { profile, signOutUser, setAdminMode } = useAuthContext();
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, resetSettings } = useSettings();
+  const {
+    fontScale,
+    highContrastMode,
+    reduceAnimations,
+    boldText,
+    screenReaderHints,
+    setFontScale,
+    setHighContrastMode,
+    setReduceAnimations,
+    setBoldText,
+    setScreenReaderHints,
+    scaleFont,
+    getFontWeight,
+    getAccessibilityHint,
+  } = useAccessibility();
   const { palette, themeName, availableThemes, setThemeName } = useThemeContext();
   const [feedback, setFeedback] = useState("");
   const [feedbackType, setFeedbackType] = useState("bug_report");
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [openSection, setOpenSection] = useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-      UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
-  }, []);
 
   const appVersion = useMemo(() => {
     return Constants.expoConfig?.version ?? "1.0.0";
@@ -279,7 +307,9 @@ export function SettingsScreen() {
   };
 
   const toggleSection = (sectionId: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (!reduceAnimations) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     setOpenSection((prev) => (prev === sectionId ? null : sectionId));
   };
 
@@ -363,9 +393,40 @@ export function SettingsScreen() {
         isOpen={openSection === "account"}
         onToggle={() => toggleSection("account")}
       >
-        <GlassButton variant="ghost" label="Edit Profile" />
-        <GlassButton variant="ghost" label="Change Email" />
-        <GlassButton variant="ghost" label="Change Password" />
+        <GlassButton
+          variant="ghost"
+          label="Edit Profile"
+          onPress={() => {
+            hapticTap();
+            Alert.alert("Edit Profile", "Open the Profile tab and use the Edit Profile button.");
+          }}
+        />
+        <GlassButton
+          variant="ghost"
+          label="Change Email"
+          onPress={() => {
+            hapticTap();
+            Alert.alert("Change Email", "Update your email from your authentication provider settings.");
+          }}
+        />
+        <GlassButton
+          variant="ghost"
+          label="Change Password"
+          onPress={() => {
+            hapticTap();
+            Alert.alert("Change Password", "Use your sign-in provider to reset or change your password.");
+          }}
+        />
+        {(profile?.role === "admin" || profile?.officerPosition === "President") ? (
+          <GlassButton
+            variant="ghost"
+            label="Open Admin Dashboard"
+            onPress={() => {
+              hapticTap();
+              navigation.navigate("AdminDashboard");
+            }}
+          />
+        ) : null}
         <View style={{ flexDirection: "row", gap: 8 }}>
           <Badge
             variant={settings.account.connectedGoogle ? "green-subtle" : "red-subtle"}
@@ -401,82 +462,52 @@ export function SettingsScreen() {
           }
         />
         <ToggleRow
-          label="Likes"
-          value={settings.notifications.likes}
+          label="Event Reminders"
+          value={settings.notifications.eventReminders}
           onValueChange={(value) =>
             void patch((prev) => ({
               ...prev,
-              notifications: { ...prev.notifications, likes: value },
+              notifications: { ...prev.notifications, eventReminders: value },
             }))
           }
         />
         <ToggleRow
-          label="Comments"
-          value={settings.notifications.comments}
+          label="Practice Reminders"
+          value={settings.notifications.practiceReminders}
           onValueChange={(value) =>
             void patch((prev) => ({
               ...prev,
-              notifications: { ...prev.notifications, comments: value },
+              notifications: { ...prev.notifications, practiceReminders: value },
             }))
           }
         />
         <ToggleRow
-          label="Follows"
-          value={settings.notifications.follows}
+          label="Chapter Updates"
+          value={settings.notifications.chapterUpdates}
           onValueChange={(value) =>
             void patch((prev) => ({
               ...prev,
-              notifications: { ...prev.notifications, follows: value },
+              notifications: { ...prev.notifications, chapterUpdates: value },
             }))
           }
         />
         <ToggleRow
-          label="Events"
-          value={settings.notifications.events}
+          label="Message Notifications"
+          value={settings.notifications.messageNotifications}
           onValueChange={(value) =>
             void patch((prev) => ({
               ...prev,
-              notifications: { ...prev.notifications, events: value },
+              notifications: { ...prev.notifications, messageNotifications: value },
             }))
           }
         />
         <ToggleRow
-          label="XP"
-          value={settings.notifications.xp}
+          label="XP Alerts"
+          value={settings.notifications.xpAlerts}
           onValueChange={(value) =>
             void patch((prev) => ({
               ...prev,
-              notifications: { ...prev.notifications, xp: value },
-            }))
-          }
-        />
-        <ToggleRow
-          label="Streaks"
-          value={settings.notifications.streaks}
-          onValueChange={(value) =>
-            void patch((prev) => ({
-              ...prev,
-              notifications: { ...prev.notifications, streaks: value },
-            }))
-          }
-        />
-        <ToggleRow
-          label="News"
-          value={settings.notifications.news}
-          onValueChange={(value) =>
-            void patch((prev) => ({
-              ...prev,
-              notifications: { ...prev.notifications, news: value },
-            }))
-          }
-        />
-        <ToggleRow
-          label="Sound"
-          value={settings.notifications.sound}
-          onValueChange={(value) =>
-            void patch((prev) => ({
-              ...prev,
-              notifications: { ...prev.notifications, sound: value },
+              notifications: { ...prev.notifications, xpAlerts: value },
             }))
           }
         />
@@ -489,7 +520,16 @@ export function SettingsScreen() {
         onToggle={() => toggleSection("accessibility")}
       >
         <View>
-          <Text style={{ marginBottom: 4 }}>Text Size ({settings.accessibility.textScale.toFixed(2)}x)</Text>
+          <Text
+            style={{
+              marginBottom: 4,
+              fontSize: scaleFont(15),
+              color: palette.colors.text,
+              fontWeight: getFontWeight("600"),
+            }}
+          >
+            Text Size ({fontScale.toFixed(2)}x)
+          </Text>
           <GlassSurface
             borderRadius={16}
             style={{
@@ -500,63 +540,82 @@ export function SettingsScreen() {
             }}
           >
             <Slider
-              value={settings.accessibility.textScale}
-              minimumValue={0.85}
-              maximumValue={1.3}
-              step={0.05}
+              value={fontScale}
+              minimumValue={0.8}
+              maximumValue={1.4}
+              step={0.01}
               minimumTrackTintColor={palette.colors.primary}
               maximumTrackTintColor={palette.colors.inputMuted}
               thumbTintColor={palette.colors.primary}
+              onValueChange={(value) => {
+                setFontScale(value);
+              }}
               onSlidingComplete={(value) => {
+                const nextValue = Number(value.toFixed(2));
+                setFontScale(nextValue);
                 void patch((prev) => ({
                   ...prev,
                   accessibility: {
                     ...prev.accessibility,
-                    textScale: Number(value.toFixed(2)),
+                    textScale: nextValue,
                   },
                 }));
               }}
+              accessibilityLabel="Text size slider"
+              accessibilityHint={getAccessibilityHint("Adjusts text size across the entire app")}
             />
           </GlassSurface>
         </View>
         <ToggleRow
           label="High Contrast Mode"
-          value={settings.accessibility.highContrastMode}
+          value={highContrastMode}
           onValueChange={(value) =>
-            void patch((prev) => ({
-              ...prev,
-              accessibility: { ...prev.accessibility, highContrastMode: value },
-            }))
+            {
+              setHighContrastMode(value);
+              void patch((prev) => ({
+                ...prev,
+                accessibility: { ...prev.accessibility, highContrastMode: value },
+              }));
+            }
           }
         />
         <ToggleRow
           label="Reduce Animations"
-          value={settings.accessibility.reduceAnimations}
+          value={reduceAnimations}
           onValueChange={(value) =>
-            void patch((prev) => ({
-              ...prev,
-              accessibility: { ...prev.accessibility, reduceAnimations: value },
-            }))
+            {
+              setReduceAnimations(value);
+              void patch((prev) => ({
+                ...prev,
+                accessibility: { ...prev.accessibility, reduceAnimations: value },
+              }));
+            }
           }
         />
         <ToggleRow
           label="Bold Text"
-          value={settings.accessibility.boldText}
+          value={boldText}
           onValueChange={(value) =>
-            void patch((prev) => ({
-              ...prev,
-              accessibility: { ...prev.accessibility, boldText: value },
-            }))
+            {
+              setBoldText(value);
+              void patch((prev) => ({
+                ...prev,
+                accessibility: { ...prev.accessibility, boldText: value },
+              }));
+            }
           }
         />
         <ToggleRow
           label="Screen Reader Hints"
-          value={settings.accessibility.screenReaderHints}
+          value={screenReaderHints}
           onValueChange={(value) =>
-            void patch((prev) => ({
-              ...prev,
-              accessibility: { ...prev.accessibility, screenReaderHints: value },
-            }))
+            {
+              setScreenReaderHints(value);
+              void patch((prev) => ({
+                ...prev,
+                accessibility: { ...prev.accessibility, screenReaderHints: value },
+              }));
+            }
           }
         />
       </SettingsSection>
@@ -570,8 +629,8 @@ export function SettingsScreen() {
         <Text
           style={{
             color: palette.colors.textSecondary,
-            fontSize: 12,
-            fontWeight: "700",
+            fontSize: scaleFont(12),
+            fontWeight: getFontWeight("700"),
             textTransform: "uppercase",
             letterSpacing: 0.8,
           }}
@@ -597,8 +656,8 @@ export function SettingsScreen() {
         <Text
           style={{
             color: palette.colors.textSecondary,
-            fontSize: 12,
-            fontWeight: "700",
+            fontSize: scaleFont(12),
+            fontWeight: getFontWeight("700"),
             textTransform: "uppercase",
             letterSpacing: 0.8,
             marginTop: 4,
@@ -629,23 +688,36 @@ export function SettingsScreen() {
         isOpen={openSection === "privacy"}
         onToggle={() => toggleSection("privacy")}
       >
-        <GlassDropdown
-          label="Profile Visibility"
-          value={settings.privacy.profileVisibility}
-          options={[
-            { value: "school", label: "School", description: "Visible within your school" },
-            { value: "friends", label: "Friends", description: "Only approved friends" },
-            { value: "private", label: "Private", description: "Only you can view" },
-          ]}
-          onValueChange={(value) => {
-            if (value === "school" || value === "friends" || value === "private") {
-              void patch((prev) => ({
-                ...prev,
-                privacy: { ...prev.privacy, profileVisibility: value },
-              }));
-            }
-          }}
-        />
+        <View>
+          <Text
+            style={{
+              color: palette.colors.textSecondary,
+              fontSize: scaleFont(12),
+              fontWeight: getFontWeight("700"),
+              textTransform: "uppercase",
+              letterSpacing: 0.8,
+              marginBottom: 6,
+            }}
+          >
+            Profile Visibility
+          </Text>
+          <GlassSegmentedControl
+            value={settings.privacy.profileVisibility}
+            options={[
+              { value: "public", label: "Public" },
+              { value: "school", label: "School" },
+              { value: "private", label: "Private" },
+            ]}
+            onValueChange={(value) => {
+              if (value === "school" || value === "public" || value === "private") {
+                void patch((prev) => ({
+                  ...prev,
+                  privacy: { ...prev.privacy, profileVisibility: value },
+                }));
+              }
+            }}
+          />
+        </View>
         <ToggleRow
           label="Show Online Status"
           value={settings.privacy.showOnlineStatus}
@@ -756,8 +828,19 @@ export function SettingsScreen() {
         <GlassButton
           variant="ghost"
           label="Rate the App"
+          onPress={() => {
+            void WebBrowser.openBrowserAsync("https://www.fbla.org/");
+          }}
         />
-        <Text style={{ color: palette.colors.textSecondary, fontWeight: "700", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>
+        <Text
+          style={{
+            color: palette.colors.textSecondary,
+            fontWeight: getFontWeight("700"),
+            fontSize: scaleFont(12),
+            textTransform: "uppercase",
+            letterSpacing: 0.8,
+          }}
+        >
           Feedback Type
         </Text>
         <GlassSegmentedControl
@@ -812,6 +895,37 @@ export function SettingsScreen() {
       <View style={{ gap: 10, marginTop: 4, marginBottom: 8 }}>
         <GlassButton
           variant="ghost"
+          label="Reset to Defaults"
+          onPress={() => {
+            Alert.alert("Reset Settings", "Restore all settings to defaults?", [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Reset",
+                style: "destructive",
+                onPress: () => {
+                  void (async () => {
+                    hapticTap();
+                    await resetSettings();
+                    const defaults = createDefaultSettings();
+                    setFontScale(defaults.accessibility.textScale);
+                    setHighContrastMode(defaults.accessibility.highContrastMode);
+                    setReduceAnimations(defaults.accessibility.reduceAnimations);
+                    setBoldText(defaults.accessibility.boldText);
+                    setScreenReaderHints(defaults.accessibility.screenReaderHints);
+                  })();
+                },
+              },
+            ]);
+          }}
+          style={{
+            minHeight: 52,
+            borderRadius: 999,
+            backgroundColor: palette.colors.surfaceAlt,
+            justifyContent: "center",
+          }}
+        />
+        <GlassButton
+          variant="ghost"
           label="Log Out"
           onPress={handleLogout}
           style={{
@@ -831,7 +945,7 @@ export function SettingsScreen() {
             backgroundColor: palette.colors.surfaceAlt,
             justifyContent: "center",
           }}
-          textStyle={{ color: palette.colors.error, fontWeight: "700" }}
+          textStyle={{ color: palette.colors.error, fontWeight: getFontWeight("700") }}
         />
       </View>
     </ScreenShell>

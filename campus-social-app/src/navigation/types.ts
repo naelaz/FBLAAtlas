@@ -15,6 +15,7 @@ export type RootStackParamList = {
   Chat: { conversationId: string; targetUserId?: string };
   CreatePost: undefined;
   StudentProfile: { userId: string };
+  JoinChapter: undefined;
 };
 
 export type MainTabParamList = {

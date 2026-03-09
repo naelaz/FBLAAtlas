@@ -1,5 +1,6 @@
 ﻿import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import Animated, {
   Easing,
@@ -11,7 +12,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ConfettiLayer } from "../components/social/ConfettiLayer";
+import { useAccessibility } from "../context/AccessibilityContext";
+import { useAnimationDuration } from "../hooks/useAnimationDuration";
+import { todayKey } from "../services/firestoreUtils";
 import { awardDailyLoginIfNeeded } from "../services/gamificationService";
 import { sendLocalPush } from "../services/pushService";
 import { PointAction, PointAwardResult } from "../types/social";
@@ -59,19 +62,39 @@ function formatAwardMessage(
 
   switch (action) {
     case "attending_event":
-      return `🎯 +${pointsAwarded} XP — You're going to ${options?.eventName ?? "that event"}!`;
+      return `+${pointsAwarded} XP - You're going to ${options?.eventName ?? "that event"}!`;
     case "posting":
-      return `🎯 +${pointsAwarded} XP — Nice post!`;
+      return `+${pointsAwarded} XP - Nice post!`;
     case "commenting":
-      return `🎯 +${pointsAwarded} XP — Keep the convo going!`;
+      return `+${pointsAwarded} XP - Keep the convo going!`;
     case "likes_received":
-      return `🎯 +${pointsAwarded} XP — Someone liked your post!`;
+      return `+${pointsAwarded} XP - Someone liked your post!`;
+    case "liking_post":
+      return `+${pointsAwarded} XP - You liked a post.`;
     case "daily_login":
-      return `🔥 +${pointsAwarded} XP — Day ${streakCount ?? 1} streak!`;
+      return `+${pointsAwarded} XP - Day ${streakCount ?? 1} streak!`;
     case "following_user":
-      return `🎯 +${pointsAwarded} XP — Growing your network!`;
+      return `+${pointsAwarded} XP - Growing your network!`;
     case "messaging_new":
-      return `🎯 +${pointsAwarded} XP — New conversation started!`;
+      return `+${pointsAwarded} XP - New conversation started!`;
+    case "complete_practice_test":
+      return `+${pointsAwarded} XP - Practice test complete!`;
+    case "score_90_bonus":
+      return `+${pointsAwarded} XP - 90%+ bonus unlocked!`;
+    case "complete_flashcard_deck":
+      return `+${pointsAwarded} XP - Flashcard deck complete!`;
+    case "complete_presentation":
+      return `+${pointsAwarded} XP - Presentation practice complete!`;
+    case "complete_mock_judge":
+      return `+${pointsAwarded} XP - Mock judge session complete!`;
+    case "seven_day_streak_bonus":
+      return `+${pointsAwarded} XP - 7-day streak bonus!`;
+    case "perfect_test_score":
+      return `+${pointsAwarded} XP - Perfect score bonus!`;
+    case "first_post_bonus":
+      return `+${pointsAwarded} XP - First post bonus!`;
+    case "profile_completed_bonus":
+      return `+${pointsAwarded} XP - Profile completed!`;
     default:
       return `+${pointsAwarded} XP`;
   }
@@ -83,6 +106,11 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   const { enabled: pushEnabled } = usePushNotifications();
   const { settings } = useSettings();
   const { palette } = useThemeContext();
+  const { scaleFont, getFontWeight } = useAccessibility();
+  const toastEnterDuration = useAnimationDuration(400);
+  const toastExitDuration = useAnimationDuration(300);
+  const tierEnterDuration = useAnimationDuration(420);
+  const tierExitDuration = useAnimationDuration(320);
   const insets = useSafeAreaInsets();
 
   const [queue, setQueue] = useState<XpToastState[]>([]);
@@ -91,9 +119,13 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   const processedNotificationIds = useRef<Set<string>>(new Set());
   const recentMessages = useRef<Map<string, number>>(new Map());
   const toastTranslateY = useSharedValue(-150);
+  const tierBannerTranslateY = useSharedValue(-150);
 
   const animatedToastStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: toastTranslateY.value }],
+  }));
+  const animatedTierBannerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: tierBannerTranslateY.value }],
   }));
 
   const enqueueToast = useCallback((points: number, color: string, message: string) => {
@@ -126,7 +158,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
     toastTranslateY.value = -150;
     toastTranslateY.value = withTiming(0, {
-      duration: 400,
+      duration: toastEnterDuration,
       easing: Easing.out(Easing.back(1.5)),
     });
 
@@ -134,7 +166,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       toastTranslateY.value = withTiming(
         -150,
         {
-          duration: 300,
+          duration: toastExitDuration,
           easing: Easing.in(Easing.cubic),
         },
         (finished) => {
@@ -149,23 +181,42 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       clearTimeout(timer);
       cancelAnimation(toastTranslateY);
     };
-  }, [activeToast, toastTranslateY]);
-
-  const toastDayMatch = activeToast?.message.match(/Day\s+\d+/i)?.[0] ?? null;
-  const toastStreakText = toastDayMatch ? `🔥 ${toastDayMatch}` : "🎯 Progress update";
-  const toastXpText = `⚡ +${activeToast?.points ?? 0} XP`;
-  const toastSubtitle =
-    toastDayMatch ? "Welcome back. Keep your streak alive." : "XP earned. Keep building momentum.";
+  }, [activeToast, toastEnterDuration, toastExitDuration, toastTranslateY]);
 
   useEffect(() => {
-    if (!activeToast) {
+    if (!tierUpgrade) {
       return;
     }
-    console.log("[LoginBanner] rawMessage", JSON.stringify(activeToast.message));
-    console.log("[LoginBanner] streakText", JSON.stringify(toastStreakText));
-    console.log("[LoginBanner] xpText", JSON.stringify(toastXpText));
-    console.log("[LoginBanner] subtitle", JSON.stringify(toastSubtitle));
-  }, [activeToast, toastStreakText, toastSubtitle, toastXpText]);
+
+    tierBannerTranslateY.value = -150;
+    tierBannerTranslateY.value = withTiming(0, {
+      duration: tierEnterDuration,
+      easing: Easing.out(Easing.back(1.5)),
+    });
+
+    const timer = setTimeout(() => {
+      tierBannerTranslateY.value = withTiming(
+        -150,
+        { duration: tierExitDuration, easing: Easing.in(Easing.cubic) },
+        (finished) => {
+          if (finished) {
+            runOnJS(setTierUpgrade)(null);
+          }
+        },
+      );
+    }, 2600);
+
+    return () => {
+      clearTimeout(timer);
+      cancelAnimation(tierBannerTranslateY);
+    };
+  }, [tierBannerTranslateY, tierEnterDuration, tierExitDuration, tierUpgrade]);
+
+  const toastDayMatch = activeToast?.message.match(/Day\s+\d+/i)?.[0] ?? null;
+  const toastStreakText = toastDayMatch ? `${toastDayMatch}` : "Progress update";
+  const toastXpText = `+${activeToast?.points ?? 0} XP`;
+  const toastSubtitle =
+    toastDayMatch ? "Welcome back. Keep your streak alive." : "XP earned. Keep building momentum.";
 
   const handleAwardResult = useCallback(
     (result: PointAwardResult | null | undefined, options?: AwardMessageOptions) => {
@@ -173,7 +224,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         return;
       }
 
-      if (result.pointsAwarded > 0) {
+      if (result.pointsAwarded > 0 && settings.notifications.xpAlerts) {
         const message = formatAwardMessage(
           result.action,
           result.pointsAwarded,
@@ -183,7 +234,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
         enqueueToast(result.pointsAwarded, result.newTier.color, message);
 
-        if (settings.notifications.xp && pushEnabled && settings.notifications.globalPush) {
+        if (pushEnabled && settings.notifications.globalPush) {
           void sendLocalPush("XP Earned", message);
         }
       }
@@ -195,10 +246,10 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           toTier: result.newTier.name,
         });
 
-        if (pushEnabled && settings.notifications.globalPush && settings.notifications.xp) {
+        if (pushEnabled && settings.notifications.globalPush && settings.notifications.xpAlerts) {
           void sendLocalPush(
             "Tier Upgrade",
-            `🏆 You reached ${result.newTier.name}! Keep it up!`,
+            `You reached ${result.newTier.name}! Keep it up!`,
           );
         }
       }
@@ -208,12 +259,12 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         result.streakCount > 1 &&
         pushEnabled &&
         settings.notifications.globalPush &&
-        settings.notifications.streaks
+        settings.notifications.xpAlerts
       ) {
-        void sendLocalPush("Daily Streak", `🔥 +15 XP — Day ${result.streakCount} streak!`);
+        void sendLocalPush("Daily Streak", `Day ${result.streakCount} streak!`);
       }
     },
-    [enqueueToast, pushEnabled, settings.notifications.globalPush, settings.notifications.streaks, settings.notifications.xp],
+    [enqueueToast, pushEnabled, settings.notifications.globalPush, settings.notifications.xpAlerts],
   );
 
   useEffect(() => {
@@ -226,8 +277,13 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     const runDailyReward = async () => {
       try {
         const result = await awardDailyLoginIfNeeded(profile.uid);
-        if (!cancelled) {
-          handleAwardResult(result);
+        if (!cancelled && result) {
+          const bannerKey = `fbla_atlas_daily_login_banner_${profile.uid}_${todayKey()}`;
+          const alreadyShown = await AsyncStorage.getItem(bannerKey);
+          if (!alreadyShown) {
+            handleAwardResult(result);
+            await AsyncStorage.setItem(bannerKey, "1");
+          }
         }
       } catch (error) {
         console.warn("Daily login reward failed:", error);
@@ -259,7 +315,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         return;
       }
 
-      if (!settings.notifications.xp) {
+      if (!settings.notifications.xpAlerts) {
         return;
       }
 
@@ -271,11 +327,11 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       const points = pointsMatch ? Number(pointsMatch[1]) : 0;
       enqueueToast(points, palette.colors.primary, item.body);
 
-      if (pushEnabled && settings.notifications.globalPush) {
+      if (pushEnabled && settings.notifications.globalPush && settings.notifications.xpAlerts) {
         void sendLocalPush("XP Earned", item.body);
       }
     });
-  }, [notifications, enqueueToast, pushEnabled, settings.notifications.globalPush, settings.notifications.xp, palette.colors.primary]);
+  }, [notifications, enqueueToast, pushEnabled, settings.notifications.globalPush, settings.notifications.xpAlerts, palette.colors.primary]);
 
   const value = useMemo(() => ({ handleAwardResult }), [handleAwardResult]);
 
@@ -307,57 +363,83 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
             animatedToastStyle,
           ]}
         >
-          <Text style={{ color: palette.colors.text, fontWeight: "700", marginBottom: 2 }}>
+          <Text
+            style={{
+              color: palette.colors.text,
+              fontWeight: getFontWeight("700"),
+              marginBottom: 2,
+              fontSize: scaleFont(15),
+            }}
+          >
             {toastStreakText}
           </Text>
-          <Text style={{ color: palette.colors.warning, fontWeight: "700", marginBottom: 2 }}>
+          <Text
+            style={{
+              color: palette.colors.warning,
+              fontWeight: getFontWeight("700"),
+              marginBottom: 2,
+              fontSize: scaleFont(15),
+            }}
+          >
             {toastXpText}
           </Text>
-          <Text style={{ color: palette.colors.textSecondary, fontSize: 13 }}>{toastSubtitle}</Text>
+          <Text
+            style={{
+              color: palette.colors.textSecondary,
+              fontSize: scaleFont(13),
+              fontWeight: getFontWeight("500"),
+            }}
+          >
+            {toastSubtitle}
+          </Text>
         </Animated.View>
       ) : null}
 
-      <Modal visible={tierUpgrade !== null} transparent animationType="fade">
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: palette.colors.overlay,
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 20,
-          }}
-        >
-          <View
-            style={{
-              width: "100%",
-              maxWidth: 380,
-              borderRadius: 22,
-              padding: 20,
-              gap: 12,
-              overflow: "hidden",
+      {tierUpgrade ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: "absolute",
+              left: 16,
+              right: 16,
+              top: insets.top + 8,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: palette.colors.border,
               backgroundColor: palette.colors.surface,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              shadowColor: palette.colors.background,
+              shadowOpacity: 0.25,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 8 },
+              elevation: 10,
+            },
+            animatedTierBannerStyle,
+          ]}
+        >
+          <Text
+            style={{
+              color: palette.colors.text,
+              fontWeight: getFontWeight("700"),
+              fontSize: scaleFont(16),
             }}
           >
-            <Text style={{ fontSize: 22, fontWeight: "900", color: palette.colors.text }}>🏆 Tier Upgrade!</Text>
-            <Text style={{ color: palette.colors.textSecondary, fontSize: 15 }}>
-              {tierUpgrade ? `You reached ${tierUpgrade.toTier}! Keep it up!` : ""}
-            </Text>
-            <Pressable
-              onPress={() => setTierUpgrade(null)}
-              style={{
-                alignSelf: "flex-start",
-                backgroundColor: palette.colors.primary,
-                borderRadius: 12,
-                paddingHorizontal: 14,
-                paddingVertical: 9,
-              }}
-            >
-              <Text style={{ color: palette.colors.onPrimary, fontWeight: "700" }}>Awesome</Text>
-            </Pressable>
-            <ConfettiLayer active={tierUpgrade !== null} />
-          </View>
-        </View>
-      </Modal>
+            You reached {tierUpgrade.toTier}!
+          </Text>
+          <Text
+            style={{
+              color: palette.colors.textMuted,
+              fontSize: scaleFont(13),
+              marginTop: 2,
+              fontWeight: getFontWeight("500"),
+            }}
+          >
+            Keep stacking points and move to the next tier.
+          </Text>
+        </Animated.View>
+      ) : null}
     </GamificationContext.Provider>
   );
 }

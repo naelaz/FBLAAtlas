@@ -19,11 +19,12 @@ import { subscribePostComments } from "../../services/socialService";
 import { CommentItem, PostItem, UserProfile } from "../../types/social";
 import { formatCompactNumber, formatRelativeTime } from "../../utils/format";
 import { AppImage } from "../media/AppImage";
-import { Badge, getTierBadgeVariant } from "../ui/badge";
+import { Badge } from "../ui/badge";
 import { AvatarWithStatus } from "../ui/AvatarWithStatus";
 import { GlassButton } from "../ui/GlassButton";
 import { GlassInput } from "../ui/GlassInput";
 import { GlassSurface } from "../ui/GlassSurface";
+import { TierBadge } from "../ui/TierBadge";
 
 const REACTIONS = ["🔥", "👏", "💡", "🎯", "😂"];
 
@@ -151,14 +152,13 @@ function PostCardInner({
               uri={resolveAvatarUrl(author?.avatarUrl, post.authorId)}
               size={36}
               online
+              tier={author?.tier}
             />
             <View style={{ flex: 1 }}>
               <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{post.authorName}</Text>
               <View style={{ flexDirection: "row", gap: 6, alignItems: "center", marginTop: 1 }}>
                 {author ? (
-                  <Badge size="sm" variant={getTierBadgeVariant(author.tier)} capitalize={false}>
-                    {author.tier}
-                  </Badge>
+                  <TierBadge tier={author.tier} />
                 ) : null}
                 <Text style={{ color: palette.colors.muted, fontSize: 12 }}>{formatRelativeTime(post.createdAt)}</Text>
               </View>
@@ -309,7 +309,16 @@ function PostCardInner({
                             marginLeft: index % 3 === 0 ? 0 : 10,
                           }}
                         >
-                          <Text style={{ fontWeight: "800", color: palette.colors.text }}>{comment.authorName}</Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={{ fontWeight: "800", color: palette.colors.text }}>
+                              {comment.authorName}
+                            </Text>
+                            {comment.authorTier ? (
+                              <TierBadge tier={comment.authorTier} />
+                            ) : author && comment.authorId === author.uid ? (
+                              <TierBadge tier={author.tier} />
+                            ) : null}
+                          </View>
                           <Text style={{ color: palette.colors.text, marginTop: 2 }}>{comment.content}</Text>
                           <Text style={{ color: palette.colors.muted, fontSize: 11, marginTop: 3 }}>
                             {formatRelativeTime(comment.createdAt)}

@@ -2,6 +2,7 @@ import React from "react";
 import { StyleProp, Text, TextStyle, View, ViewStyle } from "react-native";
 
 import { ThemePalette } from "../../constants/themes";
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
 import { TierName } from "../../types/social";
 
@@ -161,6 +162,7 @@ export const Badge = ({
   textStyle,
 }: BadgeProps) => {
   const { palette } = useThemeContext();
+  const { scaleFont, getFontWeight } = useAccessibility();
   const sizeStyle = sizes[size];
   const { backgroundColor, textColor } = getBadgeColors(variant, palette);
 
@@ -186,10 +188,10 @@ export const Badge = ({
       <Text
         style={[
           {
-            fontWeight: "600",
+            fontWeight: getFontWeight("600"),
             fontVariant: ["tabular-nums"],
             includeFontPadding: false,
-            fontSize: sizeStyle.fontSize,
+            fontSize: scaleFont(sizeStyle.fontSize),
             letterSpacing: sizeStyle.letterSpacing,
             color: textColor,
             textTransform: capitalize ? "capitalize" : "none",

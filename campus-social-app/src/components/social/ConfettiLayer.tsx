@@ -1,22 +1,32 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { Animated, Dimensions, StyleSheet, View } from "react-native";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
 
-export function ConfettiLayer({ active }: { active: boolean }) {
+type ConfettiLayerProps = {
+  active: boolean;
+  colorsOverride?: string[];
+};
+
+export function ConfettiLayer({ active, colorsOverride }: ConfettiLayerProps) {
   const { palette } = useThemeContext();
+  const { reduceAnimations } = useAccessibility();
   const progress = useRef(new Animated.Value(0)).current;
   const width = Dimensions.get("window").width;
   const colors = useMemo(
-    () => [
-      palette.colors.warning,
-      palette.colors.success,
-      palette.colors.primary,
-      palette.colors.danger,
-      palette.colors.secondary,
-      palette.colors.info,
-    ],
-    [palette],
+    () =>
+      colorsOverride && colorsOverride.length > 0
+        ? colorsOverride
+        : [
+            palette.colors.warning,
+            palette.colors.success,
+            palette.colors.primary,
+            palette.colors.danger,
+            palette.colors.secondary,
+            palette.colors.info,
+          ],
+    [colorsOverride, palette],
   );
 
   const pieces = useMemo(
@@ -32,7 +42,7 @@ export function ConfettiLayer({ active }: { active: boolean }) {
   );
 
   useEffect(() => {
-    if (!active) {
+    if (!active || reduceAnimations) {
       return;
     }
 
@@ -42,9 +52,9 @@ export function ConfettiLayer({ active }: { active: boolean }) {
       duration: 1200,
       useNativeDriver: true,
     }).start();
-  }, [active, progress]);
+  }, [active, progress, reduceAnimations]);
 
-  if (!active) {
+  if (!active || reduceAnimations) {
     return null;
   }
 

@@ -50,16 +50,16 @@ export const DESIGN_TOKENS = {
     lg: 0,
   },
   typography: {
-    display: { fontSize: 34, lineHeight: 48, fontWeight: "700" as const },
-    heading: { fontSize: 24, lineHeight: 34, fontWeight: "700" as const },
-    subheading: { fontSize: 18, lineHeight: 27, fontWeight: "600" as const },
-    body: { fontSize: 15, lineHeight: 22, fontWeight: "400" as const },
-    caption: { fontSize: 13, lineHeight: 18, fontWeight: "400" as const },
+    display: { fontSize: 22, lineHeight: 30, fontWeight: "700" as const },
+    heading: { fontSize: 16, lineHeight: 22, fontWeight: "600" as const },
+    subheading: { fontSize: 13, lineHeight: 18, fontWeight: "600" as const },
+    body: { fontSize: 14, lineHeight: 20, fontWeight: "400" as const },
+    caption: { fontSize: 12, lineHeight: 16, fontWeight: "400" as const },
     label: {
-      fontSize: 12,
+      fontSize: 13,
       lineHeight: 16,
       fontWeight: "600" as const,
-      letterSpacing: 0.5,
+      letterSpacing: 0.8,
       textTransform: "uppercase" as const,
     },
   },
@@ -82,12 +82,12 @@ export const ELEVATION_LEVELS = {
 } as const;
 
 export const TIER_COLORS = {
-  Bronze: "#B45309",
-  Silver: "#9CA3AF",
-  Gold: "#EAB308",
-  Platinum: "#14B8A6",
-  Diamond: "#3B82F6",
-  Legend: "#9333EA",
+  Bronze: "#c49a6c",
+  Silver: "#a0a0a0",
+  Gold: "#c9a84c",
+  Platinum: "#88a4b0",
+  Diamond: "#9b8fbf",
+  Legend: "#b07850",
 } as const;
 
 export const BRAND_COLORS = {
@@ -146,13 +146,13 @@ function withAlpha(hex: string, alpha: number): string {
 function contrastTextFor(bg: string): string {
   const { r, g, b } = hexToRgb(bg);
   const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  return luminance > 0.6 ? "#111111" : "#ffffff";
+  return luminance > 0.6 ? "#141414" : "#f4f4f2";
 }
 
 function makeShadow(level: keyof typeof ELEVATION_LEVELS): ShadowLevel {
   const token = ELEVATION_LEVELS[level];
   return {
-    shadowColor: "#000000",
+    shadowColor: "#111111",
     shadowOpacity: token.shadowOpacity,
     shadowRadius: token.shadowRadius,
     shadowOffset: { width: 0, height: 0 },
@@ -274,7 +274,7 @@ function makeTheme(
       tabGlass: core.surface,
       tabBorder: core.border,
       danger: core.error,
-      onDanger: "#ffffff",
+      onDanger: "#f4f4f2",
       info: core.accent,
       online: core.success,
       divider: core.border,
@@ -292,7 +292,7 @@ function makeTheme(
       leftAccent: core.accent,
       imageOverlay: isDark ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.2)",
       imageOverlayStrong: isDark ? "rgba(0,0,0,0.52)" : "rgba(0,0,0,0.32)",
-      onImageText: "#ffffff",
+      onImageText: "#f4f4f2",
       onImageMuted: isDark ? "#e5e5e5" : "#f3f3f3",
     },
     radius: DESIGN_TOKENS.radius,
@@ -316,7 +316,7 @@ const THEMES: Record<AppThemeName, ThemePalette> = {
     surface: "#1a1a1a",
     surfaceAlt: "#222222",
     border: "#2a2a2a",
-    text: "#ffffff",
+    text: "#f4f4f2",
     textMuted: "#888888",
     textFaint: "#444444",
     accent: "#4f7ef7",
@@ -369,7 +369,7 @@ const THEMES: Record<AppThemeName, ThemePalette> = {
   }),
   light: makeTheme("light", "Light", "light", {
     background: "#f5f5f5",
-    surface: "#ffffff",
+    surface: "#fbfbf9",
     surfaceAlt: "#efefef",
     border: "#e0e0e0",
     text: "#1a1a1a",
@@ -457,11 +457,42 @@ export function getThemeByName(name: AppThemeName): ThemePalette {
   return THEMES[name] ?? THEMES[DEFAULT_THEME];
 }
 
-export function createPaperTheme(palette: ThemePalette): MD3Theme {
+type PaperThemeOptions = {
+  fontScale?: number;
+  boldText?: boolean;
+};
+
+export function createPaperTheme(palette: ThemePalette, options?: PaperThemeOptions): MD3Theme {
   const base = palette.isDark ? MD3DarkTheme : MD3LightTheme;
+  const fontScale = options?.fontScale ?? 1;
+  const boldText = options?.boldText ?? false;
+  const scaledFonts = Object.fromEntries(
+    Object.entries(base.fonts).map(([variant, fontConfig]) => {
+      const config = fontConfig as Record<string, unknown>;
+      const fontSize =
+        typeof config.fontSize === "number"
+          ? Number((config.fontSize * fontScale).toFixed(2))
+          : config.fontSize;
+      const lineHeight =
+        typeof config.lineHeight === "number"
+          ? Number((config.lineHeight * fontScale).toFixed(2))
+          : config.lineHeight;
+      return [
+        variant,
+        {
+          ...config,
+          fontSize,
+          lineHeight,
+          fontWeight: boldText ? "700" : config.fontWeight,
+        },
+      ];
+    }),
+  ) as unknown as MD3Theme["fonts"];
+
   return {
     ...base,
     roundness: palette.radius.md,
+    fonts: scaledFonts,
     colors: {
       ...base.colors,
       primary: palette.colors.primary,
@@ -502,4 +533,3 @@ export function createNavigationTheme(palette: ThemePalette): NavTheme {
     },
   };
 }
-

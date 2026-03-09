@@ -9,6 +9,7 @@ import { Badge } from "../components/ui/badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassDropdown } from "../components/ui/GlassDropdown";
 import { GlassInput } from "../components/ui/GlassInput";
+import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { MessageLoading } from "../components/ui/MessageLoading";
 import { MagicCard, MagicCardRubric, MagicCardScore } from "../components/ui/MagicCard";
@@ -126,9 +127,9 @@ export function PracticeScreen() {
   const recommended = useMemo(() => recommendationFromSummary(summary), [summary]);
   const tabOptions = useMemo(
     () => [
-      { value: "events", label: "Events Browser", description: "Find and open any FBLA event hub" },
-      { value: "dashboard", label: "My Dashboard", description: "Practice trends, weak areas, readiness" },
-      { value: "leaderboard", label: "Leaderboard", description: "See chapter practice rankings" },
+      { value: "events", label: "Events Browser" },
+      { value: "dashboard", label: "My Dashboard" },
+      { value: "leaderboard", label: "Leaderboard" },
     ],
     [],
   );
@@ -184,17 +185,20 @@ export function PracticeScreen() {
         </GlassSurface>
       ) : null}
 
-      <GlassDropdown
-        label="Practice Section"
-        value={tab}
-        options={tabOptions}
-        onValueChange={(nextValue) => {
-          if (nextValue === "events" || nextValue === "dashboard" || nextValue === "leaderboard") {
-            setTab(nextValue);
-          }
-        }}
-        style={{ marginBottom: 12 }}
-      />
+      <View style={{ marginBottom: 12 }}>
+        <Text style={{ color: palette.colors.textSecondary, marginBottom: 6, fontWeight: "700", fontSize: 12 }}>
+          Practice Section
+        </Text>
+        <GlassSegmentedControl
+          value={tab}
+          options={tabOptions}
+          onValueChange={(nextValue) => {
+            if (nextValue === "events" || nextValue === "dashboard" || nextValue === "leaderboard") {
+              setTab(nextValue);
+            }
+          }}
+        />
+      </View>
 
       {tab === "events" ? (
         <>

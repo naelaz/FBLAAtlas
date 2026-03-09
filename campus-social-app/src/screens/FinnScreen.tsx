@@ -257,22 +257,23 @@ export function FinnScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 6 : 0}
       >
-        <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 10 }}>
+        <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
           {showBackButton ? (
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
               <BackButton onPress={() => navigation.goBack()} />
-              <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "800" }}>
+              <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "700", fontSize: 22 }}>
                 Finn
               </Text>
             </View>
           ) : null}
           <GlassSurface
             style={{
-              marginBottom: 10,
-              backgroundColor: palette.colors.glass,
-              borderColor: palette.colors.glassBorder,
-              paddingHorizontal: 12,
-              paddingVertical: 12,
+              marginBottom: 12,
+              backgroundColor: palette.colors.surface,
+              borderColor: palette.colors.border,
+              borderRadius: 16,
+              paddingHorizontal: 16,
+              paddingVertical: 16,
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -289,13 +290,13 @@ export function FinnScreen() {
                 <FinnRobotIcon size={26} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "800" }}>
-                  Finn AI Agent
-                </Text>
-                <Text style={{ color: palette.colors.textSecondary }}>
-                  {hasBackend ? "Live AI mode enabled" : "Local fallback mode active"}
-                </Text>
-              </View>
+                  <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "600", fontSize: 16 }}>
+                    Finn AI Agent
+                  </Text>
+                  <Text style={{ color: palette.colors.textMuted, fontSize: 14 }}>
+                    {hasBackend ? "Live AI mode enabled" : "Local fallback mode active"}
+                  </Text>
+                </View>
               <Badge size="sm" variant="blue-subtle" capitalize={false}>
                 FBLA
               </Badge>
@@ -340,7 +341,17 @@ export function FinnScreen() {
           ) : null}
 
           <GlassSurface style={{ marginBottom: 10, padding: 10 }}>
-            <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 8 }}>
+            <Text
+              style={{
+                color: palette.colors.textMuted,
+                fontWeight: "600",
+                marginTop: 20,
+                marginBottom: 10,
+                fontSize: 13,
+                letterSpacing: 0.8,
+                textTransform: "uppercase",
+              }}
+            >
               Resources
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>

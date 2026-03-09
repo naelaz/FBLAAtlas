@@ -5,6 +5,7 @@ import { NativeScrollEvent, NativeSyntheticEvent, Pressable, RefreshControl, Scr
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "react-native-paper";
 
+import { useAccessibility } from "../context/AccessibilityContext";
 import { useNavBarVisibility } from "../context/NavBarVisibilityContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { GlassSurface } from "./ui/GlassSurface";
@@ -34,6 +35,7 @@ export function ScreenShell({
 }: ScreenShellProps) {
   const { reportScrollOffset, showNavBar } = useNavBarVisibility();
   const { palette } = useThemeContext();
+  const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute();
 
@@ -77,7 +79,7 @@ export function ScreenShell({
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }}>
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }}
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -97,14 +99,13 @@ export function ScreenShell({
       >
         <GlassSurface
           style={{
-            paddingHorizontal: 14,
-            paddingVertical: 12,
-            marginBottom: 14,
-            backgroundColor: palette.colors.glass,
-            borderColor: palette.colors.glassBorder,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            marginBottom: 12,
+            backgroundColor: palette.colors.surface,
+            borderColor: palette.colors.border,
           }}
-          strong
-          elevation={3}
+          elevation={2}
           intensity={palette.blur.lg}
         >
           <View className="flex-row items-center justify-between gap-3">
@@ -127,19 +128,39 @@ export function ScreenShell({
                     }}
                     accessibilityRole="button"
                     accessibilityLabel={`Back from ${route.name}`}
+                    accessibilityHint={getAccessibilityHint("Returns to the previous screen")}
                   >
                     <ChevronLeft size={20} color={palette.colors.text} />
                   </Pressable>
                 ) : null}
-                <Text variant="labelMedium" style={{ color: palette.colors.textSecondary, fontWeight: "700" }}>
+                <Text
+                  variant="labelMedium"
+                  style={{
+                    color: palette.colors.textMuted,
+                    fontWeight: getFontWeight("700"),
+                    fontSize: scaleFont(13),
+                    letterSpacing: 0.8,
+                    textTransform: "uppercase",
+                  }}
+                >
                   {computedBreadcrumb.join(" / ")}
                 </Text>
               </View>
-              <Text variant="headlineSmall" style={{ color: palette.colors.text, fontWeight: "700" }}>
+              <Text
+                variant="headlineSmall"
+                style={{
+                  color: palette.colors.text,
+                  fontWeight: getFontWeight("700"),
+                  fontSize: scaleFont(22),
+                }}
+              >
                 {title}
               </Text>
               {subtitle ? (
-                <Text variant="bodyMedium" style={{ color: palette.colors.muted, marginTop: 4 }}>
+                <Text
+                  variant="bodyMedium"
+                  style={{ color: palette.colors.textMuted, marginTop: 4, fontSize: scaleFont(14) }}
+                >
                   {subtitle}
                 </Text>
               ) : null}

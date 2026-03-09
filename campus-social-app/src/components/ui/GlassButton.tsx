@@ -2,11 +2,12 @@ import React from "react";
 import { Pressable, StyleProp, TextStyle, View, ViewStyle } from "react-native";
 import { Text } from "react-native-paper";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
 import { hapticTap } from "../../services/haptics";
 import { GlassSurface } from "./GlassSurface";
 
-export type GlassButtonVariant = "primary" | "solid" | "ghost" | "icon" | "pill-sm";
+export type GlassButtonVariant = "primary" | "solid" | "ghost" | "destructive" | "icon" | "pill-sm";
 export type GlassButtonSize = "sm" | "md" | "lg";
 
 type GlassButtonProps = {
@@ -21,12 +22,14 @@ type GlassButtonProps = {
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
   fullWidth?: boolean;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
 const BUTTON_HEIGHTS: Record<GlassButtonSize, number> = {
-  sm: 38,
+  sm: 48,
   md: 48,
-  lg: 52,
+  lg: 48,
 };
 
 export function GlassButton({
@@ -41,14 +44,36 @@ export function GlassButton({
   style,
   textStyle,
   fullWidth = true,
+  accessibilityLabel,
+  accessibilityHint,
 }: GlassButtonProps) {
   const { palette } = useThemeContext();
-  const height = variant === "pill-sm" ? 32 : variant === "icon" ? 44 : BUTTON_HEIGHTS[size];
-  const width = variant === "icon" ? 44 : undefined;
+  const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
+  const height = variant === "icon" ? 48 : BUTTON_HEIGHTS[size];
+  const width = variant === "icon" ? 48 : undefined;
   const resolvedAccent = accentColor ?? palette.colors.primary;
-  const isSolid = variant === "solid";
+  const isSolid = variant === "solid" || variant === "primary";
   const isGhost = variant === "ghost";
+  const isDestructive = variant === "destructive";
   const isIcon = variant === "icon";
+  const backgroundColor = isGhost
+    ? "transparent"
+    : isDestructive
+      ? "transparent"
+    : isSolid
+      ? resolvedAccent
+      : palette.colors.surface;
+  const borderColor = isGhost
+    ? palette.colors.border
+    : isDestructive
+      ? palette.colors.error
+      : isSolid
+        ? resolvedAccent
+        : palette.colors.border;
+  const textColor = isSolid ? palette.colors.onPrimary : isDestructive ? palette.colors.error : palette.colors.text;
+  const resolvedHint =
+    accessibilityHint ??
+    (label ? `Activates ${label.toLowerCase()}` : "Activates this button");
 
   return (
     <Pressable
@@ -66,14 +91,17 @@ export function GlassButton({
         },
         style,
       ]}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label ?? "Button"}
+      accessibilityHint={getAccessibilityHint(resolvedHint)}
     >
       {({ pressed }) => (
         <GlassSurface
           pressed={pressed}
           disabled={disabled || loading}
           borderRadius={999}
-          backgroundColor={isSolid ? resolvedAccent : isGhost ? "transparent" : palette.colors.inputSurface}
-          borderColor={isGhost ? palette.colors.border : palette.colors.border}
+          backgroundColor={backgroundColor}
+          borderColor={borderColor}
           style={{
             minHeight: height,
             height,
@@ -83,7 +111,7 @@ export function GlassButton({
             justifyContent: "center",
             flexDirection: "row",
             gap: 8,
-            paddingHorizontal: isIcon ? 0 : variant === "pill-sm" ? 10 : 14,
+            paddingHorizontal: isIcon ? 0 : 16,
           }}
         >
           {icon ? <View>{icon}</View> : null}
@@ -91,9 +119,9 @@ export function GlassButton({
             <Text
               style={[
                 {
-                  color: isSolid ? palette.colors.onPrimary : palette.colors.text,
-                  fontWeight: "700",
-                  fontSize: variant === "pill-sm" ? 12 : 15,
+                  color: textColor,
+                  fontWeight: getFontWeight("700"),
+                  fontSize: scaleFont(15),
                 } as TextStyle,
                 textStyle,
               ]}

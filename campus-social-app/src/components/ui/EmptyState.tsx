@@ -18,13 +18,16 @@ export function EmptyState({ title, message }: EmptyStateProps) {
       style={{
         alignItems: "center",
         justifyContent: "center",
-        gap: 8,
-        paddingVertical: 24,
+        gap: 10,
+        paddingVertical: 28,
+        paddingHorizontal: 16,
       }}
       >
-      <FinnRobotIcon size={44} />
-      <Text style={{ fontSize: 17, fontWeight: "700", color: palette.colors.text }}>{title}</Text>
-      <Text style={{ textAlign: "center", color: palette.colors.muted, maxWidth: 280 }}>{message}</Text>
+      <FinnRobotIcon size={48} />
+      <Text style={{ fontSize: 16, fontWeight: "600", color: palette.colors.text }}>{title}</Text>
+      <Text style={{ textAlign: "center", color: palette.colors.textMuted, fontSize: 14, maxWidth: 280 }}>
+        {message}
+      </Text>
     </View>
   );
 }

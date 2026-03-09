@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleProp, View, ViewStyle } from "react-native";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
 
 type GlassSurfaceProps = {
@@ -28,13 +29,14 @@ export function GlassSurface({
   style,
   backgroundColor,
   borderColor,
-  borderRadius = 12,
+  borderRadius = 16,
   tone = "neutral",
   pressed = false,
   disabled = false,
   accentColor,
 }: GlassSurfaceProps) {
   const { palette } = useThemeContext();
+  const { highContrastMode } = useAccessibility();
   const baseColor =
     backgroundColor ??
     (tone === "accent"
@@ -50,9 +52,13 @@ export function GlassSurface({
       style={[
         {
           borderRadius,
-          borderWidth: 1,
+          borderWidth: highContrastMode ? 2 : 1,
           borderColor: borderColor ?? palette.colors.border,
           backgroundColor: disabled ? palette.colors.glassDisabled : pressed ? palette.colors.glassPressed : baseColor,
+          shadowOpacity: palette.isDark ? 0 : 0.08,
+          shadowRadius: palette.isDark ? 0 : 8,
+          shadowOffset: { width: 0, height: palette.isDark ? 0 : 3 },
+          elevation: palette.isDark ? 0 : 2,
         },
         style,
       ]}

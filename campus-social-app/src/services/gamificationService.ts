@@ -22,19 +22,39 @@ type AwardContext = {
 function xpBodyForAction(action: PointAction, points: number, context?: AwardContext): string {
   switch (action) {
     case "attending_event":
-      return `🎯 +${points} XP — You're going to ${context?.eventName ?? "that event"}!`;
+      return `+${points} XP - You're going to ${context?.eventName ?? "that event"}!`;
     case "posting":
-      return `🎯 +${points} XP — Nice post!`;
+      return `+${points} XP - Nice post!`;
     case "commenting":
-      return `🎯 +${points} XP — Keep the convo going!`;
+      return `+${points} XP - Keep the convo going!`;
     case "likes_received":
-      return `🎯 +${points} XP — Someone liked your post!`;
+      return `+${points} XP - Someone liked your post!`;
+    case "liking_post":
+      return `+${points} XP - You liked a post.`;
     case "daily_login":
-      return `🔥 +${points} XP — Day ${context?.streakCount ?? 1} streak!`;
+      return `+${points} XP - Day ${context?.streakCount ?? 1} streak!`;
     case "following_user":
-      return `🎯 +${points} XP — Growing your network!`;
+      return `+${points} XP - Growing your network!`;
     case "messaging_new":
-      return `🎯 +${points} XP — New conversation started!`;
+      return `+${points} XP - New conversation started!`;
+    case "complete_practice_test":
+      return `+${points} XP - Practice test complete!`;
+    case "score_90_bonus":
+      return `+${points} XP - 90%+ bonus unlocked!`;
+    case "complete_flashcard_deck":
+      return `+${points} XP - Flashcard deck complete!`;
+    case "complete_presentation":
+      return `+${points} XP - Presentation practice complete!`;
+    case "complete_mock_judge":
+      return `+${points} XP - Mock judge session complete!`;
+    case "seven_day_streak_bonus":
+      return `+${points} XP - 7-day streak bonus!`;
+    case "perfect_test_score":
+      return `+${points} XP - Perfect score bonus!`;
+    case "first_post_bonus":
+      return `+${points} XP - First post bonus!`;
+    case "profile_completed_bonus":
+      return `+${points} XP - Profile completed!`;
     default:
       return `+${points} XP`;
   }
@@ -59,7 +79,7 @@ async function writeAwardNotifications(uid: string, result: PointAwardResult): P
     await createUserNotification(uid, {
       type: "tier_upgrade",
       title: "Tier Upgrade",
-      body: `🏆 You reached ${result.newTier.name}! Keep it up!`,
+      body: `You reached ${result.newTier.name}! Keep it up!`,
       metadata: {
         fromTier: result.previousTier.name,
         toTier: result.newTier.name,
@@ -68,10 +88,14 @@ async function writeAwardNotifications(uid: string, result: PointAwardResult): P
   }
 
   if (result.action === "daily_login" && (result.streakCount ?? 0) > 1) {
+    const streakBody =
+      (result.streakCount ?? 0) % 7 === 0
+        ? `Day ${result.streakCount} streak! +${POINT_VALUES.seven_day_streak_bonus} XP bonus.`
+        : `Day ${result.streakCount} streak!`;
     await createUserNotification(uid, {
       type: "streak",
       title: "Streak Bonus",
-      body: `🔥 Day ${result.streakCount} streak!`,
+      body: streakBody,
       metadata: {
         streakCount: String(result.streakCount ?? 0),
       },
@@ -94,11 +118,8 @@ export async function awardPointsToUser(
       : (base as unknown as Record<string, unknown>);
 
     const previousXp = typeof data.xp === "number" ? data.xp : 0;
-    const pointsAwarded = POINT_VALUES[action];
-    const newXp = previousXp + pointsAwarded;
 
     const previousTier = getTierForXp(previousXp);
-    const newTier = getTierForXp(newXp);
 
     const currentPointMap =
       typeof data.pointsByAction === "object" && data.pointsByAction !== null
@@ -108,6 +129,22 @@ export async function awardPointsToUser(
       ? data.badges.filter((item): item is string => typeof item === "string")
       : [];
     const nextBadges = [...currentBadges];
+
+    let pointsAwarded = POINT_VALUES[action] ?? 0;
+    let firstPostBonusAwarded = 0;
+
+    const actionAlreadyAwarded = (currentPointMap[action] || 0) > 0;
+    if ((action === "first_post_bonus" || action === "profile_completed_bonus") && actionAlreadyAwarded) {
+      pointsAwarded = 0;
+    }
+
+    if (action === "posting" && (currentPointMap.posting || 0) === 0) {
+      firstPostBonusAwarded = POINT_VALUES.first_post_bonus;
+    }
+
+    const totalAwarded = pointsAwarded + firstPostBonusAwarded;
+    const newXp = previousXp + totalAwarded;
+    const newTier = getTierForXp(newXp);
 
     if (action === "posting" && !nextBadges.includes("First Post")) {
       nextBadges.push("First Post");
@@ -131,6 +168,12 @@ export async function awardPointsToUser(
         pointsByAction: {
           ...currentPointMap,
           [action]: (currentPointMap[action] || 0) + pointsAwarded,
+          ...(firstPostBonusAwarded > 0
+            ? {
+                first_post_bonus:
+                  (currentPointMap.first_post_bonus || 0) + firstPostBonusAwarded,
+              }
+            : {}),
         },
       },
       { merge: true },
@@ -142,7 +185,7 @@ export async function awardPointsToUser(
 
     return {
       action,
-      pointsAwarded,
+      pointsAwarded: totalAwarded,
       previousXp,
       newXp,
       previousTier,
@@ -153,6 +196,12 @@ export async function awardPointsToUser(
   });
 
   await writeAwardNotifications(uid, result);
+  console.log("[XP Award]", {
+    uid,
+    action,
+    awarded: result.pointsAwarded,
+    totalXp: result.newXp,
+  });
   return result;
 }
 
@@ -167,26 +216,40 @@ export async function awardDailyLoginIfNeeded(uid: string): Promise<PointAwardRe
       ? ({ ...base, ...(snap.data() as Record<string, unknown>) } as Record<string, unknown>)
       : (base as unknown as Record<string, unknown>);
 
-    const lastDailyLoginDate =
-      typeof data.lastDailyLoginDate === "string" ? data.lastDailyLoginDate : null;
-    const previousStreak = typeof data.streakCount === "number" ? data.streakCount : 0;
+    const lastLoginDate =
+      typeof data.lastLoginDate === "string"
+        ? data.lastLoginDate
+        : typeof data.lastDailyLoginDate === "string"
+          ? data.lastDailyLoginDate
+          : null;
+    const previousStreak =
+      typeof data.currentStreak === "number"
+        ? data.currentStreak
+        : typeof data.streakCount === "number"
+          ? data.streakCount
+          : 0;
+    const previousLongest =
+      typeof data.longestStreak === "number" ? data.longestStreak : Math.max(previousStreak, 0);
 
-    if (lastDailyLoginDate === today) {
+    if (lastLoginDate === today) {
       return null;
     }
 
     let nextStreak = 1;
-    if (lastDailyLoginDate) {
-      const dayGap = daysBetween(lastDailyLoginDate, today);
+    if (lastLoginDate) {
+      const dayGap = daysBetween(lastLoginDate, today);
       if (dayGap === 1) {
         nextStreak = previousStreak + 1;
       } else if (dayGap === 0) {
         return null;
       }
     }
+    const nextLongest = Math.max(previousLongest, nextStreak);
 
     const previousXp = typeof data.xp === "number" ? data.xp : 0;
-    const pointsAwarded = POINT_VALUES.daily_login;
+    const dailyLoginPoints = POINT_VALUES.daily_login;
+    const streakBonusPoints = nextStreak > 0 && nextStreak % 7 === 0 ? POINT_VALUES.seven_day_streak_bonus : 0;
+    const pointsAwarded = dailyLoginPoints + streakBonusPoints;
     const newXp = previousXp + pointsAwarded;
 
     const previousTier = getTierForXp(previousXp);
@@ -212,13 +275,22 @@ export async function awardDailyLoginIfNeeded(uid: string): Promise<PointAwardRe
       {
         xp: newXp,
         tier: newTier.name,
+        lastLoginDate: today,
         lastDailyLoginDate: today,
+        currentStreak: nextStreak,
+        longestStreak: nextLongest,
         streakCount: nextStreak,
         updatedAt: serverTimestamp(),
         badges: nextBadges,
         pointsByAction: {
           ...currentPointMap,
-          daily_login: (currentPointMap.daily_login || 0) + pointsAwarded,
+          daily_login: (currentPointMap.daily_login || 0) + dailyLoginPoints,
+          ...(streakBonusPoints > 0
+            ? {
+                seven_day_streak_bonus:
+                  (currentPointMap.seven_day_streak_bonus || 0) + streakBonusPoints,
+              }
+            : {}),
         },
       },
       { merge: true },
@@ -241,6 +313,13 @@ export async function awardDailyLoginIfNeeded(uid: string): Promise<PointAwardRe
 
   if (result) {
     await writeAwardNotifications(uid, result);
+    console.log("[XP Award]", {
+      uid,
+      action: result.action,
+      awarded: result.pointsAwarded,
+      totalXp: result.newXp,
+      streak: result.streakCount ?? 1,
+    });
   }
 
   return result;

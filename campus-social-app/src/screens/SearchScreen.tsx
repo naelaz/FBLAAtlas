@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+ï»¿import React, { useState } from "react";
 import { Pressable, View } from "react-native";
 import { Searchbar, Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
 import { GlassSurface } from "../components/ui/GlassSurface";
+import { TierBadge } from "../components/ui/TierBadge";
 import { useAuthContext } from "../context/AuthContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { searchFblaAtlas } from "../services/socialService";
@@ -110,7 +111,10 @@ export function SearchScreen() {
             style={{ backgroundColor: palette.colors.surface, padding: 12 }}
           >
             <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{user.displayName}</Text>
-            <Text style={{ color: palette.colors.textSecondary }}>{user.grade}th grade • {user.tier}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+              <Text style={{ color: palette.colors.textSecondary }}>{user.grade}th grade</Text>
+              <TierBadge tier={user.tier} />
+            </View>
           </GlassSurface>
         ))}
         {users.length === 0 ? (
@@ -141,3 +145,4 @@ export function SearchScreen() {
     </ScreenShell>
   );
 }
+

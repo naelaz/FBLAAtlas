@@ -81,6 +81,8 @@ function pickTopic(event: FblaEventDefinition, index: number): string {
 function buildFallbackObjectiveTest(
   event: FblaEventDefinition,
   difficulty: PracticeDifficulty,
+  questionCount: number,
+  timeLimitMinutes: number,
 ): PracticeTest {
   const generatedAt = new Date().toISOString();
   const stemPatterns = [
@@ -91,7 +93,7 @@ function buildFallbackObjectiveTest(
     "Which action most improves performance in",
   ];
 
-  const questions = Array.from({ length: 25 }, (_, index) => {
+  const questions = Array.from({ length: questionCount }, (_, index) => {
     const topic = pickTopic(event, index);
     const stem = stemPatterns[index % stemPatterns.length];
     return {
@@ -113,7 +115,7 @@ function buildFallbackObjectiveTest(
     eventName: event.name,
     difficulty,
     generatedAt,
-    timeLimitMinutes: event.defaultTimeLimitMinutes || 30,
+    timeLimitMinutes,
     questions,
   };
 }
@@ -464,7 +466,12 @@ export async function generateObjectiveTest(
   event: FblaEventDefinition,
   difficulty: PracticeDifficulty,
 ): Promise<PracticeTest> {
-  const cacheKey = `${difficulty}_v3`;
+  const questionCount = Math.max(1, event.objectiveTest?.questionCount ?? 25);
+  const configuredTimeLimitMinutes = Math.max(
+    1,
+    event.objectiveTest?.timeLimitMinutes ?? event.defaultTimeLimitMinutes,
+  );
+  const cacheKey = `${difficulty}_v4_q${questionCount}_t${configuredTimeLimitMinutes}`;
   const cached = await loadCachedContent<Pick<PracticeTest, "timeLimitMinutes" | "questions">>(
     event.id,
     "generatedTests",
@@ -483,17 +490,17 @@ export async function generateObjectiveTest(
   }
 
   if (!hasPracticeAiEndpoint()) {
-    return buildFallbackObjectiveTest(event, difficulty);
+    return buildFallbackObjectiveTest(event, difficulty, questionCount, configuredTimeLimitMinutes);
   }
 
   const system = buildCoachPrompt();
   const user = [
-    `Create a 25-question FBLA objective test for ${event.name}.`,
+    `Create a ${questionCount}-question FBLA objective test for ${event.name}.`,
     `Difficulty: ${DIFFICULTY_LABELS[difficulty]}.`,
     `Event topic areas: ${event.topicAreas.join(", ")}.`,
     "Return JSON with shape:",
     '{"timeLimitMinutes":number,"questions":[{"question":string,"options":[string,string,string,string],"correctIndex":0-3,"explanation":string}]}.',
-    "Use exactly 25 questions and exactly 4 options per question.",
+    `Use exactly ${questionCount} questions and exactly 4 options per question.`,
   ].join("\n");
 
   try {
@@ -516,7 +523,7 @@ export async function generateObjectiveTest(
     }>(content);
 
     const questions = (parsed.questions ?? [])
-      .slice(0, 25)
+      .slice(0, questionCount)
       .map((question, index) => {
         const options =
           Array.isArray(question.options) && question.options.length === 4
@@ -532,7 +539,7 @@ export async function generateObjectiveTest(
         };
       });
 
-    while (questions.length < 25) {
+    while (questions.length < questionCount) {
       questions.push({
         id: `${event.id}_q_${questions.length + 1}`,
         question: `Practice placeholder question ${questions.length + 1}`,
@@ -546,7 +553,7 @@ export async function generateObjectiveTest(
       timeLimitMinutes:
         typeof parsed.timeLimitMinutes === "number" && parsed.timeLimitMinutes > 0
           ? parsed.timeLimitMinutes
-          : event.defaultTimeLimitMinutes,
+          : configuredTimeLimitMinutes,
       questions,
     };
 

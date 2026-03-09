@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, StyleProp, View, ViewStyle } from "react-native";
 import { Text } from "react-native-paper";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
 import { hapticTap } from "../../services/haptics";
 import { GlassSurface } from "./GlassSurface";
@@ -17,6 +18,8 @@ type GlassPillProps = {
   minHeight?: number;
   accentColor?: string;
   testID?: string;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
 export function GlassPill({
@@ -30,11 +33,15 @@ export function GlassPill({
   minHeight = 44,
   accentColor,
   testID,
+  accessibilityLabel,
+  accessibilityHint,
 }: GlassPillProps) {
   const { palette } = useThemeContext();
+  const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
   const resolvedHeight =
     size === "sm" ? Math.min(minHeight, 32) : size === "lg" ? Math.max(minHeight, 48) : minHeight;
   const textSize = size === "sm" ? 11 : size === "lg" ? 13 : 12;
+  const resolvedHint = accessibilityHint ?? `Activates ${label.toLowerCase()}`;
 
   return (
     <Pressable
@@ -48,6 +55,9 @@ export function GlassPill({
         onPress();
       }}
       style={style}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={getAccessibilityHint(resolvedHint)}
     >
       {({ pressed }) => (
         <GlassSurface
@@ -67,7 +77,15 @@ export function GlassPill({
           }}
         >
           {icon ? <View>{icon}</View> : null}
-          <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: textSize }}>{label}</Text>
+          <Text
+            style={{
+              color: palette.colors.text,
+              fontWeight: getFontWeight("700"),
+              fontSize: scaleFont(textSize),
+            }}
+          >
+            {label}
+          </Text>
         </GlassSurface>
       )}
     </Pressable>

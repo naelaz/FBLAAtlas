@@ -7,25 +7,40 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, Share, View } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { Text } from "react-native-paper";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
-import { Badge, getTierBadgeVariant } from "../components/ui/badge";
+import { Badge } from "../components/ui/badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassButton } from "../components/ui/GlassButton";
 import { GlassDropdown } from "../components/ui/GlassDropdown";
 import { GlassInput } from "../components/ui/GlassInput";
+import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
 import { GlassSurface } from "../components/ui/GlassSurface";
+import { TierBadge } from "../components/ui/TierBadge";
 import { ScreenShell } from "../components/ScreenShell";
 import { useAuthContext } from "../context/AuthContext";
+import { useGamification } from "../context/GamificationContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { FBLA_COMPETITIVE_EVENTS } from "../constants/fblaEvents";
-import { getNextTier, getTierForXp, getXpProgress } from "../constants/gamification";
+import { getTierColor, getXpProgress } from "../constants/gamification";
+import { useAnimationDuration } from "../hooks/useAnimationDuration";
 import { RootStackParamList } from "../navigation/types";
 import { formatRelativeDateTime } from "../services/firestoreUtils";
+import { awardPointsToUser } from "../services/gamificationService";
 import { hapticSuccess, hapticTap } from "../services/haptics";
 import { fetchPostsOnce, fetchRecentActivityForUser, fetchSchoolUsersOnce } from "../services/socialService";
-import { clearProfileAvatar, updateUserProfileFields, uploadProfileAvatar } from "../services/userService";
+import {
+  clearProfileAvatar,
+  subscribeUserProfile,
+  updateUserProfileFields,
+  uploadProfileAvatar,
+} from "../services/userService";
 import { ActivityItem, ChapterRole, OfficerPosition, PlacementLevel, PlacementResult, PostItem, UserPlacement, UserProfile } from "../types/social";
 import { formatCompactNumber } from "../utils/format";
 
@@ -85,10 +100,13 @@ function placementEmoji(place: PlacementResult): string {
 
 export function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { profile, refreshProfile } = useAuthContext();
+  const { profile: authProfile } = useAuthContext();
   const { palette } = useThemeContext();
+  const { handleAwardResult } = useGamification();
+  const xpFillDuration = useAnimationDuration(380);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [liveProfile, setLiveProfile] = useState<UserProfile | null>(authProfile);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [usersById, setUsersById] = useState<Map<string, UserProfile>>(new Map());
@@ -126,8 +144,48 @@ export function ProfileScreen() {
   });
   const [savingEdit, setSavingEdit] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [profileCompletionAwarded, setProfileCompletionAwarded] = useState(false);
 
   const shareCardRef = useRef<ViewShot>(null);
+  const xpFill = useSharedValue(0);
+  const profile = liveProfile ?? authProfile;
+  const safeXp = Math.max(0, profile?.xp ?? 0);
+  const tierColor = getTierColor(profile?.tier ?? "Bronze");
+  const xpProgress = getXpProgress(safeXp);
+  const xpWithinTier = Math.max(0, safeXp - xpProgress.current.minXp);
+  const xpTierSpan =
+    xpProgress.next && xpProgress.current.maxXp !== null
+      ? Math.max(1, xpProgress.current.maxXp - xpProgress.current.minXp - 1)
+      : 1;
+
+  const xpFillStyle = useAnimatedStyle(() => ({
+    width: `${Math.max(0, Math.min(100, xpFill.value * 100))}%`,
+  }));
+
+  useEffect(() => {
+    setLiveProfile(authProfile);
+  }, [authProfile]);
+
+  useEffect(() => {
+    if (!authProfile?.uid) {
+      setLiveProfile(null);
+      return;
+    }
+    const unsubscribe = subscribeUserProfile(
+      authProfile.uid,
+      (next) => {
+        setLiveProfile(next);
+      },
+      (error) => {
+        console.warn("Profile live subscription failed:", error);
+      },
+    );
+    return unsubscribe;
+  }, [authProfile?.uid]);
+
+  useEffect(() => {
+    xpFill.value = withTiming(xpProgress.progress, { duration: xpFillDuration });
+  }, [xpFill, xpFillDuration, xpProgress.progress]);
 
 
   const refresh = async () => {
@@ -137,7 +195,6 @@ export function ProfileScreen() {
 
     setRefreshing(true);
     try {
-      await refreshProfile();
       const [recent, userPosts, users] = await Promise.all([
         fetchRecentActivityForUser(profile.schoolId, profile.uid),
         fetchPostsOnce(profile.schoolId),
@@ -331,8 +388,6 @@ export function ProfileScreen() {
     );
   };
 
-  const progressValue = profile ? getXpProgress(profile.xp).progress : 0;
-
   if (!profile) {
     return (
       <ScreenShell title="Profile" subtitle="Loading profile..." showBackButton={false}>
@@ -341,13 +396,16 @@ export function ProfileScreen() {
     );
   }
 
-  const tier = getTierForXp(profile.xp);
-  const nextTier = getNextTier(profile.xp);
-
   const followers = profile.followerIds.map((id) => usersById.get(id)).filter(Boolean) as UserProfile[];
   const following = profile.followingIds.map((id) => usersById.get(id)).filter(Boolean) as UserProfile[];
 
-  const statList: Array<{ id: string; title: string; subtitle: string; avatarUrl?: string }> =
+  const statList: Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    avatarUrl?: string;
+    tier?: UserProfile["tier"];
+  }> =
     statSheet === "posts"
       ? posts.map((post) => ({ id: post.id, title: post.content, subtitle: `${formatCompactNumber(post.likeCount)} likes` }))
       : (statSheet === "followers" ? followers : following).map((user) => ({
@@ -355,6 +413,7 @@ export function ProfileScreen() {
           title: user.displayName,
           subtitle: `${user.grade}th grade`,
           avatarUrl: user.avatarUrl,
+          tier: user.tier,
         }));
 
   const filteredEvents = useMemo(() => {
@@ -398,7 +457,6 @@ export function ProfileScreen() {
     setUploadingAvatar(true);
     try {
       await uploadProfileAvatar(profile.uid, localUri);
-      await refreshProfile();
       hapticSuccess();
     } catch (error) {
       console.warn("Avatar upload failed:", error);
@@ -453,7 +511,6 @@ export function ProfileScreen() {
     setUploadingAvatar(true);
     try {
       await clearProfileAvatar(profile.uid);
-      await refreshProfile();
       hapticSuccess();
     } catch (error) {
       console.warn("Reset avatar failed:", error);
@@ -472,23 +529,16 @@ export function ProfileScreen() {
     >
       <View style={{ paddingTop: 8 }}>
         <View style={{ alignItems: "center", marginBottom: 16 }}>
-          <AvatarWithStatus uri={profile.avatarUrl} seed={profile.displayName} size={88} online />
+          <AvatarWithStatus
+            uri={profile.avatarUrl}
+            seed={profile.displayName}
+            size={88}
+            online
+            tier={profile.tier}
+          />
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 12, gap: 8 }}>
             <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 22 }}>{profile.displayName}</Text>
-            <View
-              style={{
-                borderRadius: 999,
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                backgroundColor: tier.color,
-                shadowColor: tier.color,
-                shadowOpacity: 0.35,
-                shadowRadius: 10,
-                shadowOffset: { width: 0, height: 2 },
-              }}
-            >
-              <Text style={{ color: palette.colors.onImageText, fontWeight: "800" }}>{profile.tier}</Text>
-            </View>
+            <TierBadge tier={profile.tier} />
           </View>
           {profile.officerPosition && profile.officerPosition !== "Member" ? (
             <View
@@ -512,6 +562,19 @@ export function ProfileScreen() {
               {profile.schoolName}
             </Text>
           ) : null}
+          {!profile.chapterId ? (
+            <GlassButton
+              variant="ghost"
+              label="Join Chapter"
+              fullWidth={false}
+              style={{ marginTop: 10 }}
+              onPress={() => navigation.navigate("JoinChapter")}
+            />
+          ) : (
+            <Text style={{ marginTop: 6, color: palette.colors.textSecondary }}>
+              {profile.chapterName ?? "Chapter Member"}
+            </Text>
+          )}
           {profile.competitiveEvents && profile.competitiveEvents.length > 0 ? (
             <ScrollView
               horizontal
@@ -593,17 +656,21 @@ export function ProfileScreen() {
             XP {formatCompactNumber(profile.xp)}
           </Text>
           <Text style={{ color: palette.colors.textSecondary }}>
-            {nextTier ? `${formatCompactNumber(profile.xp)} / ${formatCompactNumber(nextTier.minXp)}` : "Max Tier"}
+            {xpProgress.next
+              ? `${formatCompactNumber(xpWithinTier)} / ${formatCompactNumber(xpTierSpan)}`
+              : "MAX TIER"}
           </Text>
         </View>
         <View style={{ height: 12, borderRadius: 999, backgroundColor: palette.colors.inputMuted, overflow: "hidden" }}>
-          <View
-            style={{
-              height: 12,
-              width: `${Math.max(0, Math.min(100, progressValue * 100))}%`,
-              backgroundColor: tier.color,
-              borderRadius: 999,
-            }}
+          <Animated.View
+            style={[
+              {
+                height: 12,
+                backgroundColor: tierColor,
+                borderRadius: 999,
+              },
+              xpFillStyle,
+            ]}
           />
         </View>
       </GlassSurface>
@@ -648,7 +715,7 @@ export function ProfileScreen() {
         {profile.badges.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {profile.badges.map((badge, index) => (
-              <Badge key={`${badge}-${index}`} variant={getTierBadgeVariant(profile.tier)} size="sm" capitalize={false}>
+              <Badge key={`${badge}-${index}`} variant="gray-subtle" size="sm" capitalize={false}>
                 {badge}
               </Badge>
             ))}
@@ -723,11 +790,16 @@ export function ProfileScreen() {
                 {statList.length > 0 ? (
                   statList.map((row) => (
                     <View key={row.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 }}>
-                      {row.avatarUrl ? <AvatarWithStatus uri={row.avatarUrl} size={32} online /> : null}
+                      {row.avatarUrl ? (
+                        <AvatarWithStatus uri={row.avatarUrl} size={32} online tier={row.tier} />
+                      ) : null}
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontWeight: "800" }} numberOfLines={2}>
-                          {row.title}
-                        </Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <Text style={{ fontWeight: "800" }} numberOfLines={2}>
+                            {row.title}
+                          </Text>
+                          {row.tier ? <TierBadge tier={row.tier} /> : null}
+                        </View>
                         <Text style={{ color: palette.colors.textSecondary }}>{row.subtitle}</Text>
                       </View>
                     </View>
@@ -1024,17 +1096,21 @@ export function ProfileScreen() {
                           }
                         }}
                       />
-                      <GlassDropdown
-                        style={{ flex: 1 }}
-                        label="Level"
-                        value={newPlacementLevel}
-                        options={LEVEL_OPTIONS.map((level) => ({ label: level, value: level }))}
-                        onValueChange={(value) => {
-                          if (LEVEL_OPTIONS.includes(value as PlacementLevel)) {
-                            setNewPlacementLevel(value as PlacementLevel);
-                          }
-                        }}
-                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: palette.colors.textSecondary, fontWeight: "700", fontSize: 12, marginBottom: 6 }}>
+                          Level
+                        </Text>
+                        <GlassSegmentedControl
+                          value={newPlacementLevel}
+                          options={LEVEL_OPTIONS.map((level) => ({ label: level, value: level }))}
+                          onValueChange={(value) => {
+                            if (LEVEL_OPTIONS.includes(value as PlacementLevel)) {
+                              setNewPlacementLevel(value as PlacementLevel);
+                            }
+                          }}
+                          size="sm"
+                        />
+                      </View>
                     </View>
                     <GlassInput
                       value={newPlacementYear}
@@ -1140,6 +1216,11 @@ export function ProfileScreen() {
                 onPress={async () => {
                   setSavingEdit(true);
                   try {
+                    const hadCompletedProfile =
+                      Boolean(profile.bio?.trim()) &&
+                      Boolean(profile.schoolName?.trim()) &&
+                      Array.isArray(profile.competitiveEvents) &&
+                      profile.competitiveEvents.length > 0;
                     await updateUserProfileFields(profile.uid, {
                       displayName: editName.trim(),
                       bio: editBio.trim(),
@@ -1153,9 +1234,22 @@ export function ProfileScreen() {
                       placements: editPlacements,
                       roleExperiences: editRoleExperiences,
                     });
+                    const completedAfterSave =
+                      Boolean(editBio.trim()) &&
+                      Boolean((editSchoolName.trim() || profile.schoolName || "").trim()) &&
+                      editCompetitiveEvents.length > 0;
+                    if (!hadCompletedProfile && completedAfterSave && !profileCompletionAwarded) {
+                      const completionAward = await awardPointsToUser(
+                        profile.uid,
+                        "profile_completed_bonus",
+                      );
+                      handleAwardResult(completionAward, {
+                        customMessage: `+${completionAward.pointsAwarded} XP - Profile completed!`,
+                      });
+                      setProfileCompletionAwarded(true);
+                    }
                     hapticSuccess();
                     setEditOpen(false);
-                    await refreshProfile();
                   } catch (error) {
                     console.warn("Save profile edit failed:", error);
                   } finally {
@@ -1174,11 +1268,17 @@ export function ProfileScreen() {
             <Text style={{ color: palette.colors.onImageText, fontSize: 24, fontWeight: "900" }}>FBLA Atlas</Text>
             <Text style={{ color: palette.colors.secondary, marginTop: 4 }}>{profile.schoolName}</Text>
             <View style={{ marginTop: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <AvatarWithStatus uri={profile.avatarUrl} seed={profile.displayName} size={62} online={false} />
+              <AvatarWithStatus
+                uri={profile.avatarUrl}
+                seed={profile.displayName}
+                size={62}
+                online={false}
+                tier={profile.tier}
+              />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: palette.colors.onImageText, fontWeight: "900", fontSize: 18 }}>{profile.displayName}</Text>
                 <Text style={{ color: palette.colors.textSecondary }}>
-                  {profile.tier} Tier - {formatCompactNumber(profile.xp)} XP
+                  {formatCompactNumber(profile.xp)} XP
                 </Text>
               </View>
             </View>

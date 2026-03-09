@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+﻿import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import { Text } from "react-native-paper";
@@ -7,7 +7,7 @@ import { ScreenShell } from "../components/ScreenShell";
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassSurface } from "../components/ui/GlassSurface";
-import { TIER_COLORS } from "../constants/themes";
+import { TierBadge } from "../components/ui/TierBadge";
 import { useAuthContext } from "../context/AuthContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { fetchLeaderboardOnce, subscribeLeaderboard } from "../services/socialService";
@@ -16,47 +16,47 @@ import { formatCompactNumber } from "../utils/format";
 
 type PodiumTheme = {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  tierColor: keyof typeof TIER_COLORS;
 };
 
 const PODIUM: PodiumTheme[] = [
-  { icon: "crown", tierColor: "Gold" },
-  { icon: "medal", tierColor: "Silver" },
-  { icon: "star-circle", tierColor: "Bronze" },
+  { icon: "crown" },
+  { icon: "medal" },
+  { icon: "star-circle" },
 ];
 
 function PodiumCard({
   user,
   theme,
-  transparentColor,
   textColor,
   mutedColor,
+  surfaceColor,
 }: {
   user: UserProfile;
   theme: PodiumTheme;
-  transparentColor: string;
   textColor: string;
   mutedColor: string;
+  surfaceColor: string;
 }) {
-  const accent = TIER_COLORS[theme.tierColor];
-
   return (
     <GlassSurface
       style={{
         padding: 12,
-        borderColor: accent,
-        backgroundColor: transparentColor,
+        borderColor: mutedColor,
+        backgroundColor: surfaceColor,
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <AvatarWithStatus uri={user.avatarUrl} size={46} online />
+        <AvatarWithStatus uri={user.avatarUrl} size={46} online tier={user.tier} />
         <View style={{ flex: 1 }}>
-          <Text style={{ fontWeight: "900", color: textColor }}>{user.displayName}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={{ fontWeight: "900", color: textColor }}>{user.displayName}</Text>
+            <TierBadge tier={user.tier} />
+          </View>
           <Text style={{ color: mutedColor }}>
-            {user.tier} • {formatCompactNumber(user.xp)} XP
+            {formatCompactNumber(user.xp)} XP
           </Text>
         </View>
-        <MaterialCommunityIcons name={theme.icon} size={22} color={accent} />
+        <MaterialCommunityIcons name={theme.icon} size={22} color={mutedColor} />
       </View>
     </GlassSurface>
   );
@@ -131,9 +131,9 @@ export function LeaderboardScreen() {
               <PodiumCard
                 user={user}
                 theme={PODIUM[index]}
-                transparentColor={palette.colors.transparent}
                 textColor={palette.colors.text}
                 mutedColor={palette.colors.textSecondary}
+                surfaceColor={palette.colors.surface}
               />
             </View>
           ))}
@@ -151,13 +151,16 @@ export function LeaderboardScreen() {
                   <Text style={{ width: 24, fontWeight: "900", color: palette.colors.textSecondary }}>
                     {index + 4}
                   </Text>
-                  <AvatarWithStatus uri={user.avatarUrl} size={38} online />
+                  <AvatarWithStatus uri={user.avatarUrl} size={38} online tier={user.tier} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{user.displayName}</Text>
+                    <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
+                      {user.displayName}
+                    </Text>
                     <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
-                      {user.grade}th grade • {user.tier}
+                      {user.grade}th grade
                     </Text>
                   </View>
+                  <TierBadge tier={user.tier} />
                   <Text style={{ color: palette.colors.text, fontFamily: "monospace", fontWeight: "700" }}>
                     {formatCompactNumber(user.xp)} XP
                   </Text>
@@ -180,11 +183,16 @@ export function LeaderboardScreen() {
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                 <Text style={{ width: 24, fontWeight: "900", color: palette.colors.text }}>#{myRank.rank}</Text>
-                <AvatarWithStatus uri={myRank.user.avatarUrl} size={40} online />
+                <AvatarWithStatus uri={myRank.user.avatarUrl} size={40} online tier={myRank.user.tier} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{myRank.user.displayName}</Text>
-                  <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>{myRank.user.tier}</Text>
+                  <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
+                    {myRank.user.displayName}
+                  </Text>
+                  <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                    {myRank.user.grade}th grade
+                  </Text>
                 </View>
+                <TierBadge tier={myRank.user.tier} />
                 <Text style={{ color: palette.colors.text, fontFamily: "monospace", fontWeight: "700" }}>
                   {formatCompactNumber(myRank.user.xp)} XP
                 </Text>
@@ -214,3 +222,4 @@ export function LeaderboardScreen() {
     </ScreenShell>
   );
 }
+

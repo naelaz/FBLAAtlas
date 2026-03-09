@@ -3,6 +3,7 @@ import * as NavigationBar from "expo-navigation-bar";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { MD3Theme } from "react-native-paper";
 
+import { useAccessibility } from "./AccessibilityContext";
 import {
   APP_THEMES,
   AppThemeName,
@@ -28,6 +29,7 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const { fontScale, boldText, highContrastMode } = useAccessibility();
   const [themeName, setThemeNameState] = useState<AppThemeName>(DEFAULT_THEME);
   const [ready, setReady] = useState(false);
 
@@ -58,12 +60,28 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const palette = useMemo(() => getThemeByName(themeName), [themeName]);
+  const basePalette = useMemo(() => getThemeByName(themeName), [themeName]);
+  const palette = useMemo(() => {
+    if (!highContrastMode) {
+      return basePalette;
+    }
+    return {
+      ...basePalette,
+      colors: {
+        ...basePalette.colors,
+        textMuted: basePalette.colors.text,
+        textSecondary: basePalette.colors.text,
+        muted: basePalette.colors.text,
+        placeholder: basePalette.colors.text,
+        border: basePalette.colors.textMuted,
+        divider: basePalette.colors.textMuted,
+      },
+    };
+  }, [basePalette, highContrastMode]);
 
   useEffect(() => {
-    void NavigationBar.setBackgroundColorAsync(palette.colors.background).catch(() => undefined);
     void NavigationBar.setButtonStyleAsync(palette.isDark ? "light" : "dark").catch(() => undefined);
-  }, [palette.colors.background, palette.isDark]);
+  }, [palette.isDark]);
 
   const setThemeName = async (name: AppThemeName) => {
     if (name === themeName) {
@@ -81,13 +99,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     () => ({
       themeName,
       palette,
-      paperTheme: createPaperTheme(palette),
+      paperTheme: createPaperTheme(palette, { fontScale, boldText }),
       navigationTheme: createNavigationTheme(palette),
       ready,
       availableThemes: APP_THEMES,
       setThemeName,
     }),
-    [palette, ready, themeName],
+    [boldText, fontScale, palette, ready, themeName],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -104,4 +122,3 @@ export function useThemeContext(): ThemeContextValue {
 export function useTheme(): ThemeContextValue {
   return useThemeContext();
 }
-

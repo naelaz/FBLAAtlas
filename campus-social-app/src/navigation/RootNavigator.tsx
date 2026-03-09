@@ -8,6 +8,7 @@ import { ChatScreen } from "../screens/ChatScreen";
 import { CreatePostScreen } from "../screens/CreatePostScreen";
 import { EventDetailScreen } from "../screens/EventDetailScreen";
 import { FinnScreen } from "../screens/FinnScreen";
+import { JoinChapterScreen } from "../screens/JoinChapterScreen";
 import { LeaderboardScreen } from "../screens/LeaderboardScreen";
 import { MyConferencesScreen } from "../screens/MyConferencesScreen";
 import { NotificationsScreen } from "../screens/NotificationsScreen";
@@ -42,6 +43,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       Leaderboard: "leaderboard",
       Settings: "settings",
       MyConferences: "conferences",
+      JoinChapter: "join-chapter",
     },
   },
 };
@@ -138,6 +140,11 @@ export function RootNavigator({ startInAdmin = false }: RootNavigatorProps) {
         <Stack.Screen
           name="StudentProfile"
           component={StudentProfileScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="JoinChapter"
+          component={JoinChapterScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

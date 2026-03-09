@@ -18,9 +18,19 @@ export type PointAction =
   | "commenting"
   | "attending_event"
   | "likes_received"
+  | "liking_post"
   | "daily_login"
   | "messaging_new"
-  | "following_user";
+  | "following_user"
+  | "complete_practice_test"
+  | "score_90_bonus"
+  | "complete_flashcard_deck"
+  | "complete_presentation"
+  | "complete_mock_judge"
+  | "seven_day_streak_bonus"
+  | "perfect_test_score"
+  | "first_post_bonus"
+  | "profile_completed_bonus";
 
 export type OfficerPosition =
   | "President"
@@ -63,6 +73,7 @@ export type UserProfile = {
   displayName: string;
   schoolId: string;
   schoolName: string;
+  chapterId?: string;
   state?: string;
   chapterName?: string;
   membershipId?: string | null;
@@ -77,8 +88,15 @@ export type UserProfile = {
   tier: TierName;
   graduationYear: number;
   streakCount: number;
+  currentStreak: number;
+  longestStreak: number;
+  lastLoginDate: string | null;
   moodEmoji: string | null;
   moodUpdatedAt: string | null;
+  profileVisibility: "school" | "public" | "private";
+  showOnlineStatus: boolean;
+  showMood: boolean;
+  allowFriendSuggestions: boolean;
   badges: string[];
   followerIds: string[];
   followingIds: string[];
@@ -105,6 +123,7 @@ export type PostItem = {
   authorName: string;
   authorAvatarColor: string;
   imageUrl?: string;
+  tags?: string[];
   content: string;
   createdAt: string;
   likeCount: number;
@@ -119,6 +138,7 @@ export type CommentItem = {
   postId: string;
   authorId: string;
   authorName: string;
+  authorTier?: TierName;
   authorAvatarColor: string;
   content: string;
   createdAt: string;

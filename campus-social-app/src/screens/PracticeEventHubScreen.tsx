@@ -4,6 +4,7 @@
   RecordingPresets,
   useAudioRecorder,
 } from "expo-audio";
+import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "react-native-paper";
@@ -22,7 +23,13 @@ import {
   MagicCardRubric,
   MagicCardScore,
 } from "../components/ui/MagicCard";
-import { FBLA_EVENT_DEFINITIONS, getFblaEventById, PracticeDifficulty } from "../constants/fblaEvents";
+import {
+  FBLA_EVENT_DEFINITIONS,
+  getFblaEventById,
+  PracticeDifficulty,
+  PracticeHubMode,
+  PracticePhaseTiming,
+} from "../constants/fblaEvents";
 import { useAuthContext } from "../context/AuthContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
@@ -34,6 +41,7 @@ import {
   generatePresentationScenario,
   savePracticeAttempt,
 } from "../services/practiceService";
+import { awardPointsToUser } from "../services/gamificationService";
 import {
   MockJudgeResult,
   PracticeAttempt,
@@ -44,7 +52,7 @@ import {
 import { ScreenShell } from "../components/ScreenShell";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PracticeEventHub">;
-type HubMode = "objective_test" | "presentation" | "flashcards" | "mock_judge";
+type HubMode = PracticeHubMode;
 
 const DIFFICULTIES: PracticeDifficulty[] = [
   "beginner",
@@ -53,11 +61,45 @@ const DIFFICULTIES: PracticeDifficulty[] = [
   "competition_ready",
 ];
 
+const MODE_LABELS: Record<HubMode, string> = {
+  objective_test: "Test",
+  presentation: "Timed Coach",
+  flashcards: "Flashcards",
+  mock_judge: "Mock Judge",
+};
+
+const JOB_INTERVIEW_QUESTIONS = [
+  "Tell me about yourself and why you are interested in this role.",
+  "Describe a time you demonstrated leadership in FBLA or another team setting.",
+  "How would you handle a conflict with a teammate during a project deadline?",
+  "What business skill are you currently strongest in, and how did you build it?",
+  "Describe a time you had to communicate a difficult idea clearly.",
+  "How do you prioritize tasks when you have multiple deadlines?",
+  "What is one mistake you made and what did you learn from it?",
+  "How would your advisor or teammates describe your work ethic?",
+  "What value would you bring to this role in your first 30 days?",
+  "Do you have any final questions for the interviewer?",
+];
+
 function formatCountdown(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds);
   const mins = Math.floor(safe / 60);
   const secs = safe % 60;
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function formatPhaseDuration(phase: PracticePhaseTiming): string {
+  if (phase.untimed) {
+    return "No fixed time";
+  }
+
+  const total = Math.max(0, phase.durationSeconds);
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  if (secs === 0) {
+    return `${mins} min`;
+  }
+  return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
 function isStaleCache(generatedAt?: string): boolean {
@@ -78,7 +120,7 @@ export function PracticeEventHubScreen({ route }: Props) {
 
   const event = useMemo(() => getFblaEventById(eventId), [eventId]);
 
-  const [mode, setMode] = useState<HubMode>(modeFromRoute ?? "objective_test");
+  const [mode, setMode] = useState<HubMode>("flashcards");
   const [difficulty, setDifficulty] = useState<PracticeDifficulty>("intermediate");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +129,6 @@ export function PracticeEventHubScreen({ route }: Props) {
   const [testAnswers, setTestAnswers] = useState<Record<string, number>>({});
   const [testResult, setTestResult] = useState<{ score: number; max: number } | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
-  const [timerSetting, setTimerSetting] = useState<"20" | "30" | "no_limit">("30");
 
   const [scenario, setScenario] = useState<PracticeScenario | null>(null);
   const [presentationNotes, setPresentationNotes] = useState("");
@@ -102,17 +143,73 @@ export function PracticeEventHubScreen({ route }: Props) {
   const [history, setHistory] = useState<PracticeAttempt[]>([]);
   const [submittingTest, setSubmittingTest] = useState(false);
 
+  const [phaseIndex, setPhaseIndex] = useState(0);
+  const [phaseSecondsLeft, setPhaseSecondsLeft] = useState(0);
+  const [phaseRunning, setPhaseRunning] = useState(false);
+  const [phaseFlowComplete, setPhaseFlowComplete] = useState(false);
+  const [phaseWarningMessage, setPhaseWarningMessage] = useState<string | null>(null);
+
+  const [jobInterviewStarted, setJobInterviewStarted] = useState(false);
+  const [jobInterviewIndex, setJobInterviewIndex] = useState(0);
+  const [jobInterviewAnswer, setJobInterviewAnswer] = useState("");
+  const [jobInterviewResponses, setJobInterviewResponses] = useState<string[]>([]);
+  const [jobInterviewSubmitting, setJobInterviewSubmitting] = useState(false);
+
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [recordingActive, setRecordingActive] = useState(false);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const hasAutoSubmittedRef = useRef(false);
+  const warnedPhasesRef = useRef<Set<string>>(new Set());
+
+  const phasePlan = useMemo(() => event?.presentationFlow?.phases ?? [], [event]);
+
+  const modeOptions = useMemo(() => {
+    if (!event) {
+      return [] as Array<{ value: HubMode; label: string }>;
+    }
+    return event.allowedPracticeModes.map((value) => ({
+      value,
+      label: MODE_LABELS[value],
+    }));
+  }, [event]);
 
   useEffect(() => {
-    if (!modeFromRoute) {
+    if (!event) {
       return;
     }
-    setMode(modeFromRoute);
-  }, [modeFromRoute]);
+    const requestedMode = modeFromRoute as HubMode | undefined;
+    if (requestedMode && event.allowedPracticeModes.includes(requestedMode)) {
+      setMode(requestedMode);
+      return;
+    }
+    if (event.allowedPracticeModes.length > 0) {
+      setMode(event.allowedPracticeModes[0]);
+    }
+  }, [event, modeFromRoute]);
+
+  useEffect(() => {
+    if (!event) {
+      return;
+    }
+    if (event.allowedPracticeModes.includes(mode)) {
+      return;
+    }
+    setMode(event.allowedPracticeModes[0] ?? "flashcards");
+  }, [event, mode]);
+
+  useEffect(() => {
+    setPhaseIndex(0);
+    setPhaseSecondsLeft(phasePlan[0]?.durationSeconds ?? 0);
+    setPhaseRunning(false);
+    setPhaseFlowComplete(phasePlan.length === 0);
+    setPhaseWarningMessage(null);
+    warnedPhasesRef.current.clear();
+    setJobInterviewStarted(false);
+    setJobInterviewIndex(0);
+    setJobInterviewAnswer("");
+    setJobInterviewResponses([]);
+    setJobInterviewSubmitting(false);
+  }, [event?.id, mode, phasePlan]);
 
   useEffect(() => {
     if (!test) {
@@ -131,14 +228,14 @@ export function PracticeEventHubScreen({ route }: Props) {
   }, [secondsLeft, test]);
 
   useEffect(() => {
-    if (!test || !testResult || timerSetting === "no_limit") {
+    if (!test || !testResult) {
       return;
     }
     hasAutoSubmittedRef.current = true;
-  }, [test, testResult, timerSetting]);
+  }, [test, testResult]);
 
   useEffect(() => {
-    if (!test || timerSetting === "no_limit" || secondsLeft > 0 || testResult) {
+    if (!test || secondsLeft > 0 || testResult) {
       return;
     }
     if (hasAutoSubmittedRef.current) {
@@ -147,7 +244,66 @@ export function PracticeEventHubScreen({ route }: Props) {
     hasAutoSubmittedRef.current = true;
     setError("Time is up. Your test was submitted automatically.");
     void submitObjectiveTest();
-  }, [secondsLeft, test, testResult, timerSetting]);
+  }, [secondsLeft, test, testResult]);
+
+  useEffect(() => {
+    if (!phaseRunning) {
+      return;
+    }
+    const currentPhase = phasePlan[phaseIndex];
+    if (!currentPhase || currentPhase.untimed || currentPhase.durationSeconds <= 0) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setPhaseSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [phaseRunning, phasePlan, phaseIndex]);
+
+  useEffect(() => {
+    if (!phaseRunning) {
+      return;
+    }
+    const currentPhase = phasePlan[phaseIndex];
+    if (!currentPhase || currentPhase.untimed || currentPhase.durationSeconds <= 0) {
+      return;
+    }
+    if (phaseSecondsLeft > 0) {
+      return;
+    }
+    if (phaseIndex >= phasePlan.length - 1) {
+      setPhaseRunning(false);
+      setPhaseFlowComplete(true);
+      setPhaseWarningMessage("All official phases complete. Continue to self-evaluation.");
+      return;
+    }
+    const nextIndex = phaseIndex + 1;
+    setPhaseIndex(nextIndex);
+    setPhaseSecondsLeft(phasePlan[nextIndex].durationSeconds);
+    setPhaseWarningMessage(null);
+  }, [phaseIndex, phasePlan, phaseRunning, phaseSecondsLeft]);
+
+  useEffect(() => {
+    if (!phaseRunning) {
+      return;
+    }
+    const currentPhase = phasePlan[phaseIndex];
+    if (!currentPhase || currentPhase.untimed || !currentPhase.minuteWarning) {
+      return;
+    }
+    if (phaseSecondsLeft !== 60) {
+      return;
+    }
+    const warningKey = `${event?.id ?? "event"}_${phaseIndex}`;
+    if (warnedPhasesRef.current.has(warningKey)) {
+      return;
+    }
+    warnedPhasesRef.current.add(warningKey);
+    setPhaseWarningMessage(`1-minute warning: ${currentPhase.label}`);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  }, [event?.id, phaseIndex, phasePlan, phaseRunning, phaseSecondsLeft]);
 
   useEffect(() => {
     return () => {
@@ -189,6 +345,10 @@ export function PracticeEventHubScreen({ route }: Props) {
     return palette.colors.primary;
   }, [palette.colors, secondsLeft, test]);
 
+  const currentPhase = phasePlan[phaseIndex] ?? null;
+  const hasOfficialPhaseFlow = phasePlan.length > 0;
+  const selfEvaluationUnlocked = !hasOfficialPhaseFlow || phaseFlowComplete;
+
   if (!event) {
     return (
       <ScreenShell title="Practice Hub" subtitle="Event not found.">
@@ -213,14 +373,8 @@ export function PracticeEventHubScreen({ route }: Props) {
     hasAutoSubmittedRef.current = false;
     try {
       const next = await generateObjectiveTest(event, difficulty);
-      if (timerSetting === "no_limit") {
-        setTest({ ...next, timeLimitMinutes: 0 });
-        setSecondsLeft(0);
-      } else {
-        const forcedMinutes = timerSetting === "20" ? 20 : 30;
-        setTest({ ...next, timeLimitMinutes: forcedMinutes });
-        setSecondsLeft(forcedMinutes * 60);
-      }
+      setTest(next);
+      setSecondsLeft(next.timeLimitMinutes > 0 ? next.timeLimitMinutes * 60 : 0);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not generate test.");
     } finally {
@@ -259,6 +413,15 @@ export function PracticeEventHubScreen({ route }: Props) {
           answeredCount: Object.keys(testAnswers).length,
         },
       });
+
+      const percentage = test.questions.length > 0 ? (answered / test.questions.length) * 100 : 0;
+      await awardPointsToUser(profile.uid, "complete_practice_test");
+      if (percentage >= 90) {
+        await awardPointsToUser(profile.uid, "score_90_bonus");
+      }
+      if (percentage === 100) {
+        await awardPointsToUser(profile.uid, "perfect_test_score");
+      }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Could not save test attempt.");
     } finally {
@@ -278,6 +441,43 @@ export function PracticeEventHubScreen({ route }: Props) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const startPhaseFlow = () => {
+    if (phasePlan.length === 0) {
+      return;
+    }
+    setPhaseIndex(0);
+    setPhaseSecondsLeft(phasePlan[0].durationSeconds);
+    setPhaseRunning(true);
+    setPhaseFlowComplete(false);
+    setPhaseWarningMessage(null);
+    warnedPhasesRef.current.clear();
+  };
+
+  const completeCurrentPhase = () => {
+    if (phasePlan.length === 0) {
+      return;
+    }
+    if (phaseIndex >= phasePlan.length - 1) {
+      setPhaseRunning(false);
+      setPhaseFlowComplete(true);
+      setPhaseWarningMessage("All official phases complete. Continue to self-evaluation.");
+      return;
+    }
+    const nextIndex = phaseIndex + 1;
+    setPhaseIndex(nextIndex);
+    setPhaseSecondsLeft(phasePlan[nextIndex].durationSeconds);
+    setPhaseWarningMessage(null);
+  };
+
+  const resetPhaseFlow = () => {
+    setPhaseIndex(0);
+    setPhaseSecondsLeft(phasePlan[0]?.durationSeconds ?? 0);
+    setPhaseRunning(false);
+    setPhaseFlowComplete(false);
+    setPhaseWarningMessage(null);
+    warnedPhasesRef.current.clear();
   };
 
   const startRecording = async () => {
@@ -345,6 +545,7 @@ export function PracticeEventHubScreen({ route }: Props) {
             usedRecording: Boolean(recordingUri),
           },
         });
+        await awardPointsToUser(profile.uid, "complete_presentation");
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not generate feedback.");
@@ -394,6 +595,69 @@ export function PracticeEventHubScreen({ route }: Props) {
         maxScore: updated.length,
         difficulty,
       });
+      await awardPointsToUser(profile.uid, "complete_flashcard_deck");
+    }
+  };
+
+  const startJobInterviewFlow = () => {
+    setJobInterviewStarted(true);
+    setJobInterviewIndex(0);
+    setJobInterviewAnswer("");
+    setJobInterviewResponses([]);
+    setMockResult(null);
+    setError(null);
+  };
+
+  const submitJobInterviewAnswer = async () => {
+    const trimmed = jobInterviewAnswer.trim();
+    if (!trimmed) {
+      setError("Enter a response before moving to the next interview question.");
+      return;
+    }
+
+    setError(null);
+    const nextResponses = [...jobInterviewResponses, trimmed];
+    const nextIndex = jobInterviewIndex + 1;
+    setJobInterviewResponses(nextResponses);
+    setJobInterviewAnswer("");
+
+    if (nextIndex < JOB_INTERVIEW_QUESTIONS.length) {
+      setJobInterviewIndex(nextIndex);
+      return;
+    }
+
+    setJobInterviewSubmitting(true);
+    const transcript = JOB_INTERVIEW_QUESTIONS.map((question, index) => {
+      const answer = nextResponses[index] ?? "";
+      return `Q${index + 1}: ${question}\nA${index + 1}: ${answer}`;
+    }).join("\n\n");
+
+    try {
+      const result = await evaluateMockJudge(
+        event,
+        `Job interview simulation transcript:\n${transcript}\n\nProvide feedback on professionalism, content quality, and FBLA knowledge.`,
+      );
+      setMockResult(result);
+      setJobInterviewStarted(false);
+
+      if (profile && !isGuest) {
+        await savePracticeAttempt(profile.uid, {
+          eventId: event.id,
+          eventName: event.name,
+          mode: "mock_judge",
+          score: result.totalScore,
+          maxScore: result.maxScore,
+          difficulty,
+          metadata: {
+            interviewQuestions: JOB_INTERVIEW_QUESTIONS.length,
+          },
+        });
+        await awardPointsToUser(profile.uid, "complete_mock_judge");
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not score interview responses.");
+    } finally {
+      setJobInterviewSubmitting(false);
     }
   };
 
@@ -419,6 +683,7 @@ export function PracticeEventHubScreen({ route }: Props) {
           maxScore: result.maxScore,
           difficulty,
         });
+        await awardPointsToUser(profile.uid, "complete_mock_judge");
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not run mock judge.");
@@ -430,14 +695,21 @@ export function PracticeEventHubScreen({ route }: Props) {
   return (
     <ScreenShell
       title={event.name}
-      subtitle={`${event.category} • ${event.teamEvent ? "Team" : "Individual"} • ${event.eventType.replaceAll("_", " ")}`}
+      subtitle={`${event.category} • ${event.teamEvent ? "Team" : "Individual"} • ${event.practiceCategory.replaceAll("_", " ")}`}
     >
       <MagicCardRubric style={{ marginBottom: 12 }}>
         <Text style={{ color: palette.colors.text, fontWeight: "800" }}>Official Quick Reference</Text>
         <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>{event.description}</Text>
-        <Text style={{ color: palette.colors.textSecondary, marginTop: 6 }}>
-          Time limit: {event.defaultTimeLimitMinutes} min • Materials: {event.materialsAllowed.join(", ")}
-        </Text>
+        {event.objectiveTest ? (
+          <Text style={{ color: palette.colors.textSecondary, marginTop: 6 }}>
+            Objective test: {event.objectiveTest.questionCount} questions in {event.objectiveTest.timeLimitMinutes} minutes.
+          </Text>
+        ) : null}
+        {event.presentationFlow ? (
+          <Text style={{ color: palette.colors.textSecondary, marginTop: 6 }}>
+            Phase flow: {event.presentationFlow.phases.map((item) => `${item.label} (${formatPhaseDuration(item)})`).join(" -> ")}
+          </Text>
+        ) : null}
         <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
           Guidelines: https://www.fbla-pbl.org/fbla/competitive-events/ • Docs: https://www.fbla-pbl.org/docs/
         </Text>
@@ -449,20 +721,10 @@ export function PracticeEventHubScreen({ route }: Props) {
         </Text>
         <GlassSegmentedControl
           value={mode}
-          options={[
-            { value: "objective_test", label: "Test" },
-            { value: "presentation", label: "Coach" },
-            { value: "flashcards", label: "Flashcards" },
-            { value: "mock_judge", label: "Judge" },
-          ]}
+          options={modeOptions}
           onValueChange={(nextValue) => {
-            if (
-              nextValue === "objective_test" ||
-              nextValue === "presentation" ||
-              nextValue === "flashcards" ||
-              nextValue === "mock_judge"
-            ) {
-              setMode(nextValue);
+            if (event.allowedPracticeModes.includes(nextValue as HubMode)) {
+              setMode(nextValue as HubMode);
             }
           }}
         />
@@ -510,28 +772,9 @@ export function PracticeEventHubScreen({ route }: Props) {
 
       {mode === "objective_test" ? (
         <View style={{ gap: 10 }}>
-          <View>
-            <Text style={{ color: palette.colors.textSecondary, marginBottom: 6, fontWeight: "700", fontSize: 12 }}>
-              Timer
-            </Text>
-            <GlassSegmentedControl
-              value={timerSetting}
-              options={[
-                { value: "20", label: "20 min" },
-                { value: "30", label: "30 min" },
-                { value: "no_limit", label: "No Limit" },
-              ]}
-              onValueChange={(nextValue) => {
-                if (nextValue === "20" || nextValue === "30" || nextValue === "no_limit") {
-                  setTimerSetting(nextValue);
-                }
-              }}
-              size="sm"
-            />
-          </View>
           <GlassButton
             variant="solid"
-            label="Generate New 25-Question Test"
+            label={`Generate ${event.objectiveTest?.questionCount ?? 25}-Question Test`}
             onPress={() => void startObjectiveTest()}
           />
 
@@ -539,12 +782,10 @@ export function PracticeEventHubScreen({ route }: Props) {
             <>
               <MagicCardScore>
                 <Text style={{ color: countdownColor, fontWeight: "900", fontSize: 28, letterSpacing: 1 }}>
-                  {timerSetting === "no_limit" ? "No Limit" : formatCountdown(secondsLeft)}
+                  {test.timeLimitMinutes > 0 ? formatCountdown(secondsLeft) : "No Limit"}
                 </Text>
                 <Text style={{ color: palette.colors.textSecondary }}>
-                  {timerSetting === "no_limit"
-                    ? "Untimed mode enabled"
-                    : `${test.timeLimitMinutes} minute timer • auto turns red at 25% remaining`}
+                  {test.questions.length} questions • {test.timeLimitMinutes} minute official timer
                 </Text>
                 <Text style={{ color: palette.colors.textSecondary, marginTop: 6, fontSize: 12 }}>
                   AI generated {new Date(test.generatedAt).toLocaleString()}
@@ -669,46 +910,122 @@ export function PracticeEventHubScreen({ route }: Props) {
             </MagicCardQuestion>
           ) : null}
 
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            {!recordingActive ? (
-              <Pressable style={{ flex: 1 }} onPress={() => void startRecording()}>
-                {({ pressed }) => (
-                  <GlassSurface pressed={pressed} style={{ padding: 12, alignItems: "center" }}>
-                    <Text style={{ color: palette.colors.text, fontWeight: "700" }}>Start Recording</Text>
-                  </GlassSurface>
-                )}
-              </Pressable>
-            ) : (
-              <Pressable style={{ flex: 1 }} onPress={() => void stopRecording()}>
-                {({ pressed }) => (
-                  <GlassSurface
-                    pressed={pressed}
-                    tone="danger"
-                    elevation={3}
-                    style={{ padding: 12, alignItems: "center", borderColor: palette.colors.danger }}
-                  >
-                    <Text style={{ color: palette.colors.danger, fontWeight: "700" }}>Stop Recording</Text>
-                  </GlassSurface>
-                )}
-              </Pressable>
-            )}
-            <View style={{ flex: 1, justifyContent: "center" }}>
-              <Badge variant={recordingActive ? "red" : "gray-subtle"} size="md" capitalize={false}>
-                {recordingActive ? "Recording..." : recordingUri ? "Recorded" : "Not recorded"}
-              </Badge>
-            </View>
-          </View>
+          {hasOfficialPhaseFlow ? (
+            <MagicCardRubric>
+              <Text style={{ color: palette.colors.text, fontWeight: "800" }}>Official Phase Timer</Text>
+              <View style={{ marginTop: 8, gap: 6 }}>
+                {phasePlan.map((phaseItem, index) => (
+                  <View key={`${phaseItem.key}_${index}`} style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ color: index === phaseIndex ? palette.colors.text : palette.colors.textSecondary }}>
+                      {index + 1}. {phaseItem.label}
+                    </Text>
+                    <Text style={{ color: index === phaseIndex ? palette.colors.primary : palette.colors.textSecondary }}>
+                      {formatPhaseDuration(phaseItem)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
 
-          <GlassInput
-            multiline
-            value={presentationNotes}
-            onChangeText={setPresentationNotes}
-            label="Notes from your response"
-            placeholder="Summarize what you said so Finn can coach you against the rubric."
-            inputWrapperStyle={{ minHeight: 120, borderRadius: 18 }}
-          />
+              <Text style={{ color: palette.colors.primary, fontWeight: "800", marginTop: 10 }}>
+                {currentPhase ? `Current: ${currentPhase.label}` : "No active phase"}
+              </Text>
+              <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
+                {currentPhase?.untimed ? "Judge-managed phase" : formatCountdown(phaseSecondsLeft)}
+              </Text>
 
-          <GlassButton variant="solid" label="Analyze My Response" onPress={() => void runPresentationFeedback()} />
+              <View style={{ marginTop: 10, gap: 8 }}>
+                {!phaseRunning ? (
+                  <GlassButton
+                    variant="solid"
+                    label={phaseFlowComplete ? "Restart Official Timer" : "Start Official Timer"}
+                    onPress={startPhaseFlow}
+                  />
+                ) : (
+                  <GlassButton variant="ghost" label="Pause Timer" onPress={() => setPhaseRunning(false)} />
+                )}
+
+                {phaseRunning && currentPhase?.untimed ? (
+                  <GlassButton
+                    variant="solid"
+                    label="Mark Phase Complete"
+                    onPress={completeCurrentPhase}
+                  />
+                ) : null}
+
+                <GlassButton variant="ghost" label="Reset Phases" onPress={resetPhaseFlow} />
+              </View>
+
+              {phaseWarningMessage ? (
+                <Text style={{ color: palette.colors.warning, marginTop: 8 }}>{phaseWarningMessage}</Text>
+              ) : null}
+            </MagicCardRubric>
+          ) : null}
+
+          {event.presentationFlow ? (
+            <MagicCardRubric>
+              <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
+                {event.presentationFlow.coachingTitle}
+              </Text>
+              <View style={{ marginTop: 8 }}>
+                {event.presentationFlow.coachingBullets.map((line) => (
+                  <Text key={line} style={{ color: palette.colors.textSecondary, marginBottom: 4 }}>
+                    • {line}
+                  </Text>
+                ))}
+              </View>
+            </MagicCardRubric>
+          ) : null}
+
+          {!selfEvaluationUnlocked ? (
+            <GlassSurface style={{ padding: 10, borderColor: palette.colors.primary }}>
+              <Text style={{ color: palette.colors.textSecondary }}>
+                Complete all official phases to unlock self-evaluation.
+              </Text>
+            </GlassSurface>
+          ) : (
+            <>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {!recordingActive ? (
+                  <Pressable style={{ flex: 1 }} onPress={() => void startRecording()}>
+                    {({ pressed }) => (
+                      <GlassSurface pressed={pressed} style={{ padding: 12, alignItems: "center" }}>
+                        <Text style={{ color: palette.colors.text, fontWeight: "700" }}>Start Recording</Text>
+                      </GlassSurface>
+                    )}
+                  </Pressable>
+                ) : (
+                  <Pressable style={{ flex: 1 }} onPress={() => void stopRecording()}>
+                    {({ pressed }) => (
+                      <GlassSurface
+                        pressed={pressed}
+                        tone="danger"
+                        elevation={3}
+                        style={{ padding: 12, alignItems: "center", borderColor: palette.colors.danger }}
+                      >
+                        <Text style={{ color: palette.colors.danger, fontWeight: "700" }}>Stop Recording</Text>
+                      </GlassSurface>
+                    )}
+                  </Pressable>
+                )}
+                <View style={{ flex: 1, justifyContent: "center" }}>
+                  <Badge variant={recordingActive ? "red" : "gray-subtle"} size="md" capitalize={false}>
+                    {recordingActive ? "Recording..." : recordingUri ? "Recorded" : "Not recorded"}
+                  </Badge>
+                </View>
+              </View>
+
+              <GlassInput
+                multiline
+                value={presentationNotes}
+                onChangeText={setPresentationNotes}
+                label="Self-evaluation notes"
+                placeholder="Summarize how you handled the official phases and key speaking points."
+                inputWrapperStyle={{ minHeight: 120, borderRadius: 18 }}
+              />
+
+              <GlassButton variant="solid" label="Analyze My Response" onPress={() => void runPresentationFeedback()} />
+            </>
+          )}
 
           {presentationFeedback ? (
             <MagicCardScore>
@@ -776,16 +1093,65 @@ export function PracticeEventHubScreen({ route }: Props) {
 
       {mode === "mock_judge" ? (
         <View style={{ gap: 10 }}>
-          <GlassInput
-            multiline
-            value={mockSubmission}
-            onChangeText={setMockSubmission}
-            label="Project / presentation summary"
-            placeholder="Paste your summary, outline, or response and Finn will score it by rubric criteria."
-            inputWrapperStyle={{ minHeight: 140, borderRadius: 18 }}
-          />
+          {event.practiceCategory === "job_interview" ? (
+            <GlassSurface style={{ padding: 10, borderColor: palette.colors.primary }}>
+              <Text style={{ color: palette.colors.textSecondary }}>
+                Job Interview format: 10-minute prep, then interviewer-led questions with no fixed timer.
+              </Text>
+            </GlassSurface>
+          ) : null}
 
-          <GlassButton variant="solid" label="Run Mock Judge" onPress={() => void runMockJudge()} />
+          {event.practiceCategory === "job_interview" ? (
+            <>
+              {!jobInterviewStarted ? (
+                <GlassButton
+                  variant="solid"
+                  label="Start Mock Interview (10 Questions)"
+                  onPress={startJobInterviewFlow}
+                />
+              ) : (
+                <>
+                  <MagicCardQuestion>
+                    <Text style={{ color: palette.colors.textSecondary }}>
+                      Question {jobInterviewIndex + 1} / {JOB_INTERVIEW_QUESTIONS.length}
+                    </Text>
+                    <Text style={{ color: palette.colors.text, marginTop: 8, fontWeight: "700" }}>
+                      {JOB_INTERVIEW_QUESTIONS[jobInterviewIndex]}
+                    </Text>
+                  </MagicCardQuestion>
+
+                  <GlassInput
+                    multiline
+                    value={jobInterviewAnswer}
+                    onChangeText={setJobInterviewAnswer}
+                    label="Your response"
+                    placeholder="Type your interview answer."
+                    inputWrapperStyle={{ minHeight: 120, borderRadius: 18 }}
+                  />
+
+                  <GlassButton
+                    variant="solid"
+                    label={jobInterviewSubmitting ? "Submitting..." : jobInterviewIndex === JOB_INTERVIEW_QUESTIONS.length - 1 ? "Finish Interview" : "Next Question"}
+                    disabled={jobInterviewSubmitting}
+                    onPress={() => void submitJobInterviewAnswer()}
+                  />
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <GlassInput
+                multiline
+                value={mockSubmission}
+                onChangeText={setMockSubmission}
+                label="Project / interview response summary"
+                placeholder="Paste your summary, outline, or response and Finn will score it by rubric criteria."
+                inputWrapperStyle={{ minHeight: 140, borderRadius: 18 }}
+              />
+
+              <GlassButton variant="solid" label="Run Mock Judge" onPress={() => void runMockJudge()} />
+            </>
+          )}
 
           {mockResult ? (
             <MagicCardScore>
@@ -869,11 +1235,4 @@ export function PracticeEventHubScreen({ route }: Props) {
     </ScreenShell>
   );
 }
-
-
-
-
-
-
-
 

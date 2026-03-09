@@ -2,6 +2,7 @@ import { ChevronLeft } from "lucide-react-native";
 import React from "react";
 import { Pressable, StyleProp, ViewStyle } from "react-native";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
 
 type BackButtonProps = {
@@ -11,6 +12,7 @@ type BackButtonProps = {
 
 export function BackButton({ onPress, style }: BackButtonProps) {
   const { palette } = useThemeContext();
+  const { getAccessibilityHint } = useAccessibility();
 
   return (
     <Pressable
@@ -26,9 +28,9 @@ export function BackButton({ onPress, style }: BackButtonProps) {
       ]}
       accessibilityRole="button"
       accessibilityLabel="Go back"
+      accessibilityHint={getAccessibilityHint("Returns to the previous screen")}
     >
       <ChevronLeft size={20} color={palette.colors.text} />
     </Pressable>
   );
 }
-

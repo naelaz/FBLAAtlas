@@ -128,7 +128,6 @@ export async function askFinn(input: AskFinnInput): Promise<string> {
       });
 
       const data = (await response.json()) as FinnFunctionResponse;
-      console.log("Finn function response:", data);
       if (response.ok) {
         return parseFunctionText(data);
       }
@@ -160,7 +159,6 @@ export async function askFinn(input: AskFinnInput): Promise<string> {
       });
 
       const data = (await response.json()) as OpenAIResponse;
-      console.log("Finn OpenAI response:", data);
       if (!response.ok) {
         throw new Error(data.error?.message ?? "OpenAI request failed");
       }

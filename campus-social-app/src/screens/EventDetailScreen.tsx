@@ -14,6 +14,7 @@ import { GlassSurface } from "../components/ui/GlassSurface";
 import { getEventImageByCategory } from "../constants/media";
 import { useAuthContext } from "../context/AuthContext";
 import { useGamification } from "../context/GamificationContext";
+import { useSettings } from "../context/SettingsContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
 import { formatDateTime } from "../services/firestoreUtils";
@@ -31,6 +32,7 @@ export function EventDetailScreen({ route, navigation }: Props) {
   const { eventId } = route.params;
   const { profile } = useAuthContext();
   const { handleAwardResult } = useGamification();
+  const { settings } = useSettings();
   const { palette } = useThemeContext();
 
   const [event, setEvent] = useState<EventItem | null>(null);
@@ -77,9 +79,9 @@ export function EventDetailScreen({ route, navigation }: Props) {
   if (!profile || loading || !event) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }} edges={["top", "left", "right"]}>
-        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingTop: 4 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 8 }}>
           <BackButton onPress={() => navigation.goBack()} />
-          <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "800" }}>
+          <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "700", fontSize: 22 }}>
             Event
           </Text>
         </View>
@@ -94,15 +96,15 @@ export function EventDetailScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }} edges={["top", "left", "right"]}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingTop: 4 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 8 }}>
         <BackButton onPress={() => navigation.goBack()} />
-        <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "800" }}>
+        <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "700", fontSize: 22 }}>
           Event
         </Text>
       </View>
 
       <View style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
           <View style={{ width: "100%", aspectRatio: 16 / 9, minHeight: 280 }}>
             <AppImage
               uri={event.coverImageUrl ?? getEventImageByCategory(event.category, event.id)}
@@ -116,7 +118,7 @@ export function EventDetailScreen({ route, navigation }: Props) {
             />
           </View>
           <View style={{ padding: 16 }}>
-            <Text variant="headlineSmall" style={{ fontWeight: "900", color: palette.colors.text }}>
+            <Text variant="headlineSmall" style={{ fontWeight: "700", color: palette.colors.text, fontSize: 22 }}>
               {event.title}
             </Text>
             <View style={{ flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
@@ -130,15 +132,33 @@ export function EventDetailScreen({ route, navigation }: Props) {
                 {event.location}
               </Badge>
             </View>
-            <Text style={{ marginTop: 12, color: palette.colors.text, lineHeight: 22 }}>{event.description}</Text>
+            <Text style={{ marginTop: 12, color: palette.colors.text, lineHeight: 20, fontSize: 14 }}>{event.description}</Text>
 
-            <GlassSurface style={{ marginTop: 14, padding: 12 }}>
-              <Text style={{ fontWeight: "800", marginBottom: 8, color: palette.colors.text }}>Who's Going</Text>
+            <GlassSurface style={{ marginTop: 14, padding: 16, borderRadius: 16 }}>
+              <Text
+                style={{
+                  color: palette.colors.textMuted,
+                  fontWeight: "600",
+                  marginTop: 20,
+                  marginBottom: 10,
+                  fontSize: 13,
+                  letterSpacing: 0.8,
+                  textTransform: "uppercase",
+                }}
+              >
+                Who's Going
+              </Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {attendees.map((user) => (
-                  <AvatarWithStatus key={user.uid} uri={user.avatarUrl} size={36} online={false} />
+                  <AvatarWithStatus
+                    key={user.uid}
+                    uri={user.avatarUrl}
+                    size={36}
+                    online={false}
+                    tier={user.tier}
+                  />
                 ))}
-                {attendees.length === 0 ? <Text style={{ color: palette.colors.muted }}>No attendees yet.</Text> : null}
+                {attendees.length === 0 ? <Text style={{ color: palette.colors.textMuted, fontSize: 14 }}>No attendees yet.</Text> : null}
               </View>
             </GlassSurface>
           </View>
@@ -162,7 +182,11 @@ export function EventDetailScreen({ route, navigation }: Props) {
             onPress={async () => {
               hapticTap();
               try {
-                const result = await toggleEventAttendance(event, profile);
+                const result = await toggleEventAttendance(event, profile, {
+                  notifyEventReminder:
+                    settings.notifications.globalPush &&
+                    settings.notifications.eventReminders,
+                });
                 handleAwardResult(result.award, {
                   eventName: event.title,
                 });

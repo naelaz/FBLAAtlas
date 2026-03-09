@@ -11,7 +11,9 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
+import { useAnimationDelay, useAnimationDuration } from "../../hooks/useAnimationDuration";
 import { GlassButton } from "./GlassButton";
 import { GlassSurface } from "./GlassSurface";
 
@@ -48,10 +50,14 @@ export function GlassInput({
   ...rest
 }: GlassInputProps) {
   const { palette } = useThemeContext();
+  const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
+  const animationDuration = useAnimationDuration(250);
+  const animationDelay = useAnimationDelay(100);
   const isVanish = variant === "vanish";
   const [innerValue, setInnerValue] = useState(typeof value === "string" ? value : "");
   const [activePlaceholderIndex, setActivePlaceholderIndex] = useState(0);
   const [previousPlaceholderIndex, setPreviousPlaceholderIndex] = useState<number | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
   const resolvedValue = typeof value === "string" ? value : innerValue;
   const minHeight = multiline ? 120 : 52;
   const transitionCleanupRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -125,25 +131,25 @@ export function GlassInput({
         incomingOpacity.value = 0;
 
         outgoingTranslateY.value = withTiming(-20, {
-          duration: 250,
+          duration: animationDuration,
           easing: Easing.out(Easing.cubic),
         });
         outgoingOpacity.value = withTiming(0, {
-          duration: 250,
+          duration: animationDuration,
           easing: Easing.out(Easing.cubic),
         });
 
         incomingTranslateY.value = withDelay(
-          100,
+          animationDelay,
           withTiming(0, {
-            duration: 250,
+            duration: animationDuration,
             easing: Easing.out(Easing.cubic),
           }),
         );
         incomingOpacity.value = withDelay(
-          100,
+          animationDelay,
           withTiming(1, {
-            duration: 250,
+            duration: animationDuration,
             easing: Easing.out(Easing.cubic),
           }),
         );
@@ -161,6 +167,8 @@ export function GlassInput({
 
     return () => clearInterval(id);
   }, [
+    animationDelay,
+    animationDuration,
     incomingOpacity,
     incomingTranslateY,
     isVanish,
@@ -217,8 +225,8 @@ export function GlassInput({
         <Text
           style={{
             color: palette.colors.textSecondary,
-            fontSize: 12,
-            fontWeight: "700",
+            fontSize: scaleFont(12),
+            fontWeight: getFontWeight("700"),
             textTransform: "uppercase",
             letterSpacing: 0.5,
           }}
@@ -229,16 +237,17 @@ export function GlassInput({
 
       <GlassSurface
         borderRadius={12}
+        borderColor={isFocused ? (accentColor ?? palette.colors.accent) : palette.colors.border}
         style={[
           {
             minHeight,
-            borderRadius: multiline ? 12 : 999,
+            borderRadius: 12,
             paddingHorizontal: 14,
             paddingVertical: multiline ? 12 : 0,
             flexDirection: "row",
             alignItems: multiline ? "flex-start" : "center",
             gap: 8,
-            backgroundColor: palette.colors.inputSurface,
+            backgroundColor: palette.colors.surface,
             overflow: "hidden",
           },
           inputWrapperStyle,
@@ -267,7 +276,7 @@ export function GlassInput({
                       left: 0,
                       right: 0,
                       color: palette.colors.placeholder,
-                      fontSize: 15,
+                      fontSize: scaleFont(15),
                     },
                     outgoingPlaceholderStyle,
                   ]}
@@ -283,7 +292,7 @@ export function GlassInput({
                     left: 0,
                     right: 0,
                     color: palette.colors.placeholder,
-                    fontSize: 15,
+                    fontSize: scaleFont(15),
                   },
                   incomingPlaceholderStyle,
                 ]}
@@ -305,6 +314,14 @@ export function GlassInput({
               }
               setValueAndNotify(nextValue);
             }}
+            onFocus={(event) => {
+              setIsFocused(true);
+              rest.onFocus?.(event);
+            }}
+            onBlur={(event) => {
+              setIsFocused(false);
+              rest.onBlur?.(event);
+            }}
             editable={!disabled && rest.editable !== false}
             onSubmitEditing={(event) => {
               if (isVanish) {
@@ -318,11 +335,14 @@ export function GlassInput({
                 flex: 1,
                 minHeight: multiline ? 100 : 52,
                 color: palette.colors.text,
-                fontSize: 15,
+                fontSize: scaleFont(15),
+                fontWeight: getFontWeight("500"),
                 paddingVertical: multiline ? 6 : 14,
               },
               style,
             ]}
+            accessibilityLabel={rest.accessibilityLabel ?? label ?? (isVanish ? "Search input" : "Input")}
+            accessibilityHint={getAccessibilityHint(rest.accessibilityHint)}
           />
         </View>
 
@@ -334,6 +354,8 @@ export function GlassInput({
             disabled={disabled || resolvedValue.trim().length === 0}
             fullWidth={false}
             accentColor={accentColor}
+            accessibilityLabel={rest.accessibilityLabel ? `${rest.accessibilityLabel} submit` : "Submit input"}
+            accessibilityHint={getAccessibilityHint("Submits the current text")}
           />
         ) : rightSlot ? (
           <View>{rightSlot}</View>

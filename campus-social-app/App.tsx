@@ -6,10 +6,11 @@ import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { ActivityIndicator, Provider as PaperProvider } from "react-native-paper";
+import { ActivityIndicator, Button, Provider as PaperProvider, Text } from "react-native-paper";
 
 import { AppLogo } from "./src/components/branding/AppLogo";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
+import { AccessibilityProvider, useAccessibility } from "./src/context/AccessibilityContext";
 import { AuthProvider } from "./src/context/AuthContext";
 import { GamificationProvider } from "./src/context/GamificationContext";
 import { MessagingProvider } from "./src/context/MessagingContext";
@@ -32,15 +33,16 @@ void SplashScreen.preventAutoHideAsync().catch(() => {
 function AppGate() {
   const { palette, paperTheme, ready: themeReady } = useThemeContext();
   const { ready: onboardingReady } = useOnboarding();
+  const { ready: accessibilityReady } = useAccessibility();
 
   React.useEffect(() => {
-    if (!themeReady || !onboardingReady) {
+    if (!themeReady || !onboardingReady || !accessibilityReady) {
       return;
     }
     void SplashScreen.hideAsync();
-  }, [onboardingReady, themeReady]);
+  }, [accessibilityReady, onboardingReady, themeReady]);
 
-  if (!themeReady || !onboardingReady) {
+  if (!themeReady || !onboardingReady || !accessibilityReady) {
     return (
       <PaperProvider theme={paperTheme}>
         <View
@@ -84,7 +86,7 @@ function AppGate() {
 }
 
 function AuthGateContent() {
-  const { loading, isAuthenticated, profile, isAdminMode, setAdminMode } = useAuthContext();
+  const { loading, isAuthenticated, profile, isAdminMode, setAdminMode, signOutUser } = useAuthContext();
   const { completed, setOnboardingCompleted } = useOnboarding();
   const { palette } = useThemeContext();
 
@@ -128,6 +130,38 @@ function AuthGateContent() {
     return <LoginScreen />;
   }
 
+  if (profile?.banned) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: palette.colors.background,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: 24,
+          gap: 12,
+        }}
+      >
+        <AppLogo subtitle="Account suspended" />
+        <Text style={{ color: palette.colors.text, fontSize: 20, fontWeight: "700", textAlign: "center" }}>
+          Your account has been suspended
+        </Text>
+        <Text style={{ color: palette.colors.textMuted, textAlign: "center" }}>
+          Contact your chapter administrator for details.
+        </Text>
+        <Button
+          mode="contained-tonal"
+          onPress={() => {
+            void signOutUser();
+          }}
+          style={{ marginTop: 8 }}
+        >
+          Sign Out
+        </Button>
+      </View>
+    );
+  }
+
   if (!completed) {
     return <OnboardingScreen />;
   }
@@ -139,13 +173,15 @@ function AuthGateContent() {
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <OnboardingProvider>
-          <ErrorBoundary>
-            <AppGate />
-          </ErrorBoundary>
-        </OnboardingProvider>
-      </ThemeProvider>
+      <AccessibilityProvider>
+        <ThemeProvider>
+          <OnboardingProvider>
+            <ErrorBoundary>
+              <AppGate />
+            </ErrorBoundary>
+          </OnboardingProvider>
+        </ThemeProvider>
+      </AccessibilityProvider>
     </GestureHandlerRootView>
   );
 }

@@ -21,6 +21,37 @@ export type PracticeEventType =
   | "portfolio"
   | "project";
 
+export type PracticeEventFormatCategory =
+  | "objective_test_only"
+  | "role_play"
+  | "presentation"
+  | "speech"
+  | "mixed"
+  | "job_interview";
+
+export type PracticeHubMode = "objective_test" | "presentation" | "flashcards" | "mock_judge";
+
+export type PracticePhaseKey = "prep" | "setup" | "present" | "qa" | "speak" | "interview";
+
+export type PracticePhaseTiming = {
+  key: PracticePhaseKey;
+  label: string;
+  durationSeconds: number;
+  untimed?: boolean;
+  minuteWarning?: boolean;
+};
+
+export type ObjectiveTestConfig = {
+  questionCount: number;
+  timeLimitMinutes: number;
+};
+
+export type PresentationFlowConfig = {
+  phases: PracticePhaseTiming[];
+  coachingTitle: string;
+  coachingBullets: string[];
+};
+
 export type FblaEventDefinition = {
   id: string;
   name: string;
@@ -33,6 +64,10 @@ export type FblaEventDefinition = {
   judgingCriteria: string[];
   materialsAllowed: string[];
   conferenceLevels: ConferenceLevel[];
+  practiceCategory: PracticeEventFormatCategory;
+  allowedPracticeModes: PracticeHubMode[];
+  objectiveTest?: ObjectiveTestConfig;
+  presentationFlow?: PresentationFlowConfig;
 };
 
 function slugify(name: string): string {
@@ -43,266 +78,379 @@ function slugify(name: string): string {
     .replace(/(^-|-$)/g, "");
 }
 
+function phase(
+  key: PracticePhaseKey,
+  label: string,
+  minutes: number,
+  options?: { untimed?: boolean; minuteWarning?: boolean },
+): PracticePhaseTiming {
+  return {
+    key,
+    label,
+    durationSeconds: Math.max(0, Math.round(minutes * 60)),
+    untimed: Boolean(options?.untimed),
+    minuteWarning: Boolean(options?.minuteWarning),
+  };
+}
+
+function totalTimedMinutes(phases: PracticePhaseTiming[]): number {
+  const seconds = phases.reduce((sum, item) => {
+    if (item.untimed) {
+      return sum;
+    }
+    return sum + item.durationSeconds;
+  }, 0);
+  return Math.max(1, Math.round(seconds / 60));
+}
+
+const ROLE_PLAY_COACHING = [
+  "Read the scenario carefully - identify the core business problem",
+  "You will play the role of a business professional - know your role",
+  "Plan your opening (who you are, what you're there to solve)",
+  "Outline your key points and proposed solution",
+  "Anticipate what the judge (playing a client/manager) will push back on",
+  "You have notecards - use them for key numbers and facts only",
+  "When time is up you will walk in and begin immediately",
+];
+
+const PRESENTATION_SETUP_COACHING = [
+  "Arrange your materials and devices on the table",
+  "Connect to any tech you need - have a backup plan if internet fails",
+  "Do NOT speak to judges during setup",
+  "Get your opening sentence ready in your head",
+  "When setup time ends your presentation begins automatically",
+];
+
+const SPEECH_PHASE_COACHING = [
+  "Stand tall, feet shoulder width apart",
+  "Speak to the back of the room - project your voice",
+  "Eye contact: move your gaze across all judges evenly",
+  "Do not read from notes - glance only",
+  "Pace yourself - 2 minutes goes faster than you think",
+  "Strong opening line, strong closing line - judges remember both",
+];
+
+const FUTURE_BUSINESS_LEADER_COACHING = [
+  "You just finished your test - now prepare your speech",
+  "Review your prepared speech outline in your head",
+  "FBL speech topics are announced in advance - you should know your topic",
+  "10 minutes to organize your thoughts and mentally rehearse",
+  "Strong opening, 2-3 key points, powerful close",
+  "No notes allowed during the speech itself",
+];
+
+function defaultModes(practiceCategory: PracticeEventFormatCategory): PracticeHubMode[] {
+  switch (practiceCategory) {
+    case "objective_test_only":
+      return ["objective_test", "flashcards"];
+    case "role_play":
+      return ["presentation", "flashcards", "mock_judge"];
+    case "presentation":
+      return ["presentation", "flashcards", "mock_judge"];
+    case "speech":
+      return ["presentation", "flashcards", "mock_judge"];
+    case "mixed":
+      return ["objective_test", "presentation", "flashcards", "mock_judge"];
+    case "job_interview":
+      return ["mock_judge", "flashcards"];
+    default:
+      return ["flashcards"];
+  }
+}
+
 function event(
   name: string,
   category: PracticeEventCategory,
   eventType: PracticeEventType,
-  options?: Partial<Omit<FblaEventDefinition, "id" | "name" | "category" | "eventType">>,
+  practiceCategory: PracticeEventFormatCategory,
+  options?: Partial<
+    Omit<
+      FblaEventDefinition,
+      "id" | "name" | "category" | "eventType" | "practiceCategory" | "allowedPracticeModes"
+    >
+  > & {
+    allowedPracticeModes?: PracticeHubMode[];
+  },
 ): FblaEventDefinition {
+  const objectiveTest = options?.objectiveTest;
+  const presentationFlow = options?.presentationFlow;
+
+  const defaultTimeLimitMinutes =
+    options?.defaultTimeLimitMinutes ??
+    (objectiveTest ? objectiveTest.timeLimitMinutes : undefined) ??
+    (presentationFlow ? totalTimedMinutes(presentationFlow.phases) : undefined) ??
+    60;
+
   return {
     id: slugify(name),
     name,
     category,
     eventType,
     teamEvent: Boolean(options?.teamEvent),
-    defaultTimeLimitMinutes: options?.defaultTimeLimitMinutes ?? 60,
+    defaultTimeLimitMinutes,
     description:
       options?.description ??
-      `${name} practice hub based on FBLA event competencies, rubrics, and conference readiness expectations.`,
+      `${name} practice aligned to official FBLA 2025-2026 timing guidance and rubric expectations.`,
     topicAreas: options?.topicAreas ?? ["Core concepts", "Applied scenarios", "FBLA standards"],
     judgingCriteria:
       options?.judgingCriteria ?? ["Content accuracy", "Professionalism", "Execution quality"],
-    materialsAllowed: options?.materialsAllowed ?? ["Scratch paper", "Calculator (if permitted)", "Digital notes"],
+    materialsAllowed:
+      options?.materialsAllowed ?? ["Notecards (if allowed)", "Presentation materials", "Official rubric"],
     conferenceLevels: options?.conferenceLevels ?? ["DLC", "SLC", "NLC"],
+    practiceCategory,
+    allowedPracticeModes: options?.allowedPracticeModes ?? defaultModes(practiceCategory),
+    objectiveTest,
+    presentationFlow,
   };
 }
 
-export const FBLA_EVENT_DEFINITIONS: FblaEventDefinition[] = [
-  event("Business Calculations", "Business Admin", "objective_test", {
-    topicAreas: ["Arithmetic and business formulas", "Interest calculations", "Spreadsheet style calculations"],
+function objectiveEvent(name: string, category: PracticeEventCategory): FblaEventDefinition {
+  return event(name, category, "objective_test", "objective_test_only", {
+    objectiveTest: {
+      questionCount: 100,
+      timeLimitMinutes: 50,
+    },
+    defaultTimeLimitMinutes: 50,
+    description: `${name} is a 100-question objective test with a fixed 50-minute official competition timer.`,
+  });
+}
+
+function rolePlayEvent(
+  name: string,
+  category: PracticeEventCategory,
+  prepMinutes: number,
+  presentMinutes: number,
+  qaMinutes: number,
+  options?: { teamEvent?: boolean; noQa?: boolean },
+): FblaEventDefinition {
+  const phases: PracticePhaseTiming[] = [
+    phase("prep", "Prep", prepMinutes),
+    phase("present", "Present", presentMinutes, { minuteWarning: true }),
+  ];
+
+  if (!options?.noQa && qaMinutes > 0) {
+    phases.push(phase("qa", "Q&A", qaMinutes, { minuteWarning: true }));
+  }
+
+  return event(name, category, options?.teamEvent ? "team" : "role_play", "role_play", {
+    teamEvent: Boolean(options?.teamEvent),
+    presentationFlow: {
+      phases,
+      coachingTitle: "What to do right now",
+      coachingBullets: ROLE_PLAY_COACHING,
+    },
+    description: `${name} uses a role-play format with timed prep and live judge interaction phases.`,
+  });
+}
+
+function presentationEvent(
+  name: string,
+  category: PracticeEventCategory,
+  setupMinutes: number,
+  presentMinutes: number,
+  qaMinutes: number,
+  options?: { noQa?: boolean },
+): FblaEventDefinition {
+  const phases: PracticePhaseTiming[] = [
+    phase("setup", "Setup", setupMinutes),
+    phase("present", "Present", presentMinutes, { minuteWarning: true }),
+  ];
+
+  if (!options?.noQa && qaMinutes > 0) {
+    phases.push(phase("qa", "Q&A", qaMinutes, { minuteWarning: true }));
+  }
+
+  return event(name, category, "presentation", "presentation", {
+    presentationFlow: {
+      phases,
+      coachingTitle: `Setup phase - ${setupMinutes} minute${setupMinutes === 1 ? "" : "s"}`,
+      coachingBullets: PRESENTATION_SETUP_COACHING,
+    },
+    description: `${name} uses a prejudged/presentation format with setup, presentation, and judge questions as listed in official timing guidance.`,
+  });
+}
+
+function speechEvent(
+  name: string,
+  category: PracticeEventCategory,
+  prepMinutes: number,
+  speakMinutes: number,
+  options?: { noQa?: boolean },
+): FblaEventDefinition {
+  const phases: PracticePhaseTiming[] = [
+    phase("prep", "Prep", prepMinutes),
+    phase("speak", "Speak", speakMinutes, { minuteWarning: true }),
+  ];
+
+  return event(name, category, "presentation", "speech", {
+    presentationFlow: {
+      phases,
+      coachingTitle: "Speech phase coaching",
+      coachingBullets: SPEECH_PHASE_COACHING,
+    },
+    description: options?.noQa
+      ? `${name} is a speech format with prep and speaking phases and no Q&A.`
+      : `${name} is a speech format with prep and speaking phases, with Q&A included in the speaking segment.`,
+  });
+}
+
+const FBLA_EVENT_DEFINITIONS_RAW: FblaEventDefinition[] = [
+  // CATEGORY 1 - OBJECTIVE TEST ONLY (100 questions / 50 minutes)
+  objectiveEvent("Accounting", "Finance"),
+  objectiveEvent("Advanced Accounting", "Finance"),
+  objectiveEvent("Advertising", "Marketing"),
+  objectiveEvent("Agribusiness", "Business Admin"),
+  objectiveEvent("Business Communication", "Communication"),
+  objectiveEvent("Business Law", "Business Admin"),
+  objectiveEvent("Computer Problem Solving", "Technology"),
+  objectiveEvent("Cybersecurity", "Technology"),
+  objectiveEvent("Data Science & AI", "Technology"),
+  objectiveEvent("Economics", "Finance"),
+  objectiveEvent("Healthcare Administration", "Business Admin"),
+  objectiveEvent("Human Resource Management", "Business Admin"),
+  objectiveEvent("Insurance & Risk Management", "Finance"),
+  objectiveEvent("Introduction to Business Communication", "Communication"),
+  objectiveEvent("Introduction to Business Concepts", "Business Admin"),
+  objectiveEvent("Introduction to Business Procedures", "Business Admin"),
+  objectiveEvent("Introduction to FBLA", "Career Dev"),
+  objectiveEvent("Introduction to Information Technology", "Technology"),
+  objectiveEvent("Introduction to Marketing Concepts", "Marketing"),
+  objectiveEvent("Introduction to Parliamentary Procedure", "Career Dev"),
+  objectiveEvent("Introduction to Retail & Merchandising", "Marketing"),
+  objectiveEvent("Introduction to Supply Chain Management", "Business Admin"),
+  objectiveEvent("Journalism", "Communication"),
+  objectiveEvent("Networking Infrastructures", "Technology"),
+  objectiveEvent("Organizational Leadership", "Career Dev"),
+  objectiveEvent("Parliamentary Procedure Individual", "Career Dev"),
+  objectiveEvent("Personal Finance", "Finance"),
+  objectiveEvent("Project Management", "Business Admin"),
+  objectiveEvent("Public Administration & Management", "Business Admin"),
+  objectiveEvent("Real Estate", "Finance"),
+  objectiveEvent("Retail Management", "Marketing"),
+  objectiveEvent("Securities & Investments", "Finance"),
+
+  // CATEGORY 2 - ROLE PLAY EVENTS
+  rolePlayEvent("Banking & Financial Systems", "Finance", 20, 7, 1),
+  rolePlayEvent("Business Management", "Business Admin", 20, 7, 1),
+  rolePlayEvent("Customer Service", "Communication", 20, 7, 1),
+  rolePlayEvent("Entrepreneurship", "Entrepreneurship", 20, 7, 1),
+  rolePlayEvent("Hospitality & Event Management", "Hospitality", 20, 7, 1),
+  rolePlayEvent("International Business", "Business Admin", 20, 7, 1),
+  rolePlayEvent("Marketing", "Marketing", 20, 7, 1),
+  rolePlayEvent("Network Design", "Technology", 20, 7, 1),
+  rolePlayEvent("Sports & Entertainment Management", "Marketing", 20, 7, 1),
+  rolePlayEvent("Technology Support & Services", "Technology", 20, 7, 1),
+  rolePlayEvent("Parliamentary Procedure Team", "Career Dev", 20, 11, 1, { teamEvent: true }),
+  rolePlayEvent("Impromptu Speaking", "Communication", 20, 7, 0, { noQa: true }),
+  rolePlayEvent("Introduction to Decision Making", "Business Admin", 10, 5, 3),
+
+  // CATEGORY 3 - PRESENTATION EVENTS
+  presentationEvent("Broadcast Journalism", "Communication", 3, 7, 3),
+  presentationEvent("Business Plan", "Entrepreneurship", 3, 7, 3),
+  presentationEvent("Career Portfolio", "Career Dev", 3, 7, 3),
+  presentationEvent("Coding & Programming", "Technology", 3, 7, 3),
+  presentationEvent("Community Service Project", "Business Admin", 3, 7, 3),
+  presentationEvent("Computer Game & Simulation", "Technology", 3, 7, 3),
+  presentationEvent("Data Analysis", "Technology", 3, 7, 3),
+  presentationEvent("Digital Animation", "Technology", 3, 7, 3),
+  presentationEvent("Digital Video Production", "Communication", 3, 7, 3),
+  presentationEvent("Event Planning", "Hospitality", 3, 7, 3),
+  presentationEvent("Financial Planning", "Finance", 3, 7, 3),
+  presentationEvent("Graphic Design", "Communication", 3, 7, 3),
+  presentationEvent("Intro to Business Presentation", "Communication", 3, 7, 3),
+  presentationEvent("Intro to Emerging Business Issues", "Business Admin", 5, 7, 3),
+  presentationEvent("Intro to Programming", "Technology", 3, 7, 3),
+  presentationEvent("Intro to Social Media Strategy", "Marketing", 3, 7, 3),
+  presentationEvent("Local Chapter Annual Business", "Career Dev", 3, 7, 3),
+  presentationEvent("Mobile Application Development", "Technology", 3, 7, 3),
+  presentationEvent("Public Service Announcement", "Communication", 3, 7, 3),
+  presentationEvent("Sales Presentation", "Marketing", 3, 7, 0, { noQa: true }),
+  presentationEvent("Social Media Strategies", "Marketing", 3, 7, 3),
+  presentationEvent("Supply Chain Management", "Business Admin", 3, 7, 3),
+  presentationEvent("Visual Design", "Communication", 3, 7, 3),
+  presentationEvent("Website Coding & Development", "Technology", 3, 7, 3),
+  presentationEvent("Website Design", "Technology", 3, 7, 3),
+
+  // CATEGORY 4 - SPEECH EVENTS
+  speechEvent("Introduction to Public Speaking", "Communication", 5, 2),
+  speechEvent("Public Speaking", "Communication", 5, 2),
+  speechEvent("Intro to FBLA Creed Speaking", "Career Dev", 0.5, 5, { noQa: true }),
+
+  // CATEGORY 5 - MIXED EVENTS
+  event("Business Ethics", "Business Admin", "objective_test", "mixed", {
+    objectiveTest: {
+      questionCount: 100,
+      timeLimitMinutes: 50,
+    },
+    presentationFlow: {
+      phases: [
+        phase("setup", "Setup", 3),
+        phase("present", "Present", 7, { minuteWarning: true }),
+        phase("qa", "Q&A", 3, { minuteWarning: true }),
+      ],
+      coachingTitle: "Setup phase - 3 minutes",
+      coachingBullets: PRESENTATION_SETUP_COACHING,
+    },
+    description:
+      "Business Ethics uses a mixed format: objective test first, then setup/presentation/Q&A.",
   }),
-  event("Business Communication", "Communication", "presentation", {
-    defaultTimeLimitMinutes: 7,
-    topicAreas: ["Professional communication", "Written correspondence", "Audience adaptation"],
-    judgingCriteria: ["Clarity", "Delivery", "Professional format"],
+  event("Future Business Educator", "Career Dev", "presentation", "mixed", {
+    allowedPracticeModes: ["presentation", "flashcards", "mock_judge"],
+    presentationFlow: {
+      phases: [
+        phase("setup", "Setup", 3),
+        phase("present", "Present", 7, { minuteWarning: true }),
+        phase("qa", "Q&A", 3, { minuteWarning: true }),
+      ],
+      coachingTitle: "Setup phase - 3 minutes",
+      coachingBullets: PRESENTATION_SETUP_COACHING,
+    },
+    description:
+      "Future Business Educator uses setup/presentation/Q&A timing with no separate objective test phase.",
   }),
-  event("Business Ethics", "Business Admin", "objective_test", {
-    topicAreas: ["Ethical frameworks", "Corporate responsibility", "Decision analysis"],
+  event("Future Business Leader", "Career Dev", "presentation", "mixed", {
+    objectiveTest: {
+      questionCount: 100,
+      timeLimitMinutes: 50,
+    },
+    presentationFlow: {
+      phases: [
+        phase("prep", "Prep", 10),
+        phase("speak", "Speech", 0, { untimed: true }),
+      ],
+      coachingTitle: "Future Business Leader prep phase",
+      coachingBullets: FUTURE_BUSINESS_LEADER_COACHING,
+    },
+    description:
+      "Future Business Leader uses objective testing first, then a 10-minute prep phase before a speech with no Q&A.",
   }),
-  event("Business Law", "Business Admin", "objective_test", {
-    topicAreas: ["Contracts", "Liability", "Employment law fundamentals"],
-  }),
-  event("Business Math", "Business Admin", "objective_test", {
-    topicAreas: ["Ratios", "Percentages", "Financial calculations"],
-  }),
-  event("Economics", "Finance", "objective_test", {
-    topicAreas: ["Microeconomics", "Macroeconomics", "Policy impacts"],
-  }),
-  event("Financial Math", "Finance", "objective_test", {
-    topicAreas: ["Interest", "Amortization", "Investment returns"],
-  }),
-  event("Intro to Business", "Business Admin", "objective_test", {
-    topicAreas: ["Business ownership", "Operations", "Management basics"],
-  }),
-  event("Intro to Business Communication", "Communication", "objective_test", {
-    topicAreas: ["Business writing", "Interpersonal communication", "Presentation basics"],
-  }),
-  event("Intro to Financial Math", "Finance", "objective_test", {
-    topicAreas: ["Budgeting", "Simple/compound interest", "Personal finance basics"],
-  }),
-  event("Management Decision Making", "Business Admin", "role_play", {
-    defaultTimeLimitMinutes: 20,
-    topicAreas: ["Managerial problem solving", "Case analysis", "Strategic tradeoffs"],
-    judgingCriteria: ["Decision quality", "Reasoning", "Communication"],
-  }),
-  event("Organizational Behavior", "Business Admin", "objective_test", {
-    topicAreas: ["Motivation", "Team dynamics", "Leadership styles"],
-  }),
-  event("Personal Finance", "Finance", "objective_test", {
-    topicAreas: ["Budgeting", "Credit", "Saving and investing"],
-  }),
-  event("Accounting I", "Finance", "objective_test", {
-    topicAreas: ["Accounting cycle", "Journal entries", "Financial statements"],
-  }),
-  event("Accounting II", "Finance", "objective_test", {
-    topicAreas: ["Advanced accounting procedures", "Adjustments", "Analysis"],
-  }),
-  event("Banking and Financial Systems", "Finance", "objective_test", {
-    topicAreas: ["Banking operations", "Financial institutions", "Regulation"],
-  }),
-  event("Financial Statement Analysis", "Finance", "objective_test", {
-    topicAreas: ["Ratio analysis", "Trend analysis", "Interpretation"],
-  }),
-  event("Insurance and Risk Management", "Finance", "objective_test", {
-    topicAreas: ["Risk identification", "Insurance products", "Mitigation strategies"],
-  }),
-  event("Securities and Investments", "Finance", "objective_test", {
-    topicAreas: ["Investment vehicles", "Portfolio risk", "Market fundamentals"],
-  }),
-  event("Agribusiness Management", "Business Admin", "objective_test"),
-  event("Emerging Business Issues", "Business Admin", "team", {
-    teamEvent: true,
-    defaultTimeLimitMinutes: 15,
-    topicAreas: ["Current business trends", "Innovation impacts", "Team analysis"],
-  }),
-  event("Global Business", "Business Admin", "objective_test"),
-  event("Government and Public Administration", "Business Admin", "objective_test"),
-  event("Healthcare Administration", "Business Admin", "objective_test"),
-  event("Hospitality Management", "Hospitality", "objective_test"),
-  event("Human Resource Management", "Business Admin", "objective_test"),
-  event("Network Design", "Technology", "project", {
-    defaultTimeLimitMinutes: 30,
-    topicAreas: ["Network planning", "Security", "Scalability"],
-    judgingCriteria: ["Design quality", "Technical accuracy", "Documentation"],
-  }),
-  event("Organizational Leadership", "Career Dev", "presentation", {
-    defaultTimeLimitMinutes: 7,
-    topicAreas: ["Leadership strategy", "Team impact", "Communication"],
-  }),
-  event("Public Administration", "Business Admin", "objective_test"),
-  event("Sports and Entertainment Management", "Marketing", "objective_test"),
-  event("Supply Chain Management", "Business Admin", "objective_test"),
-  event("Interview Skills", "Career Dev", "role_play", {
-    defaultTimeLimitMinutes: 15,
-    topicAreas: ["Interview prep", "Professionalism", "Behavioral responses"],
-  }),
-  event("Job Interview", "Career Dev", "role_play", {
-    defaultTimeLimitMinutes: 15,
-  }),
-  event("Parliamentary Procedure", "Career Dev", "team", {
-    teamEvent: true,
-    defaultTimeLimitMinutes: 20,
-    topicAreas: ["Motions", "Procedure flow", "Debate protocol"],
-  }),
-  event("Broadcasting and Digital Media Production", "Communication", "team", {
-    teamEvent: true,
-    defaultTimeLimitMinutes: 15,
-  }),
-  event("Client Service", "Communication", "role_play", {
-    defaultTimeLimitMinutes: 15,
-    topicAreas: ["Customer scenarios", "Service recovery", "Professional communication"],
-  }),
-  event("Digital Animation", "Technology", "project", {
-    defaultTimeLimitMinutes: 10,
-    topicAreas: ["Storyboarding", "Animation principles", "Post production"],
-  }),
-  event("Digital Video Production", "Communication", "project", {
-    defaultTimeLimitMinutes: 10,
-  }),
-  event("Electronic Career Portfolio", "Career Dev", "portfolio", {
-    defaultTimeLimitMinutes: 10,
-    topicAreas: ["Personal branding", "Artifacts", "Professional readiness"],
-  }),
-  event("Graphic Design", "Communication", "project"),
-  event("Introduction to Public Speaking", "Communication", "presentation", {
-    defaultTimeLimitMinutes: 4,
-  }),
-  event("Public Speaking", "Communication", "presentation", {
-    defaultTimeLimitMinutes: 7,
-  }),
-  event("Sales Presentation", "Marketing", "presentation", {
-    defaultTimeLimitMinutes: 7,
-    topicAreas: ["Needs discovery", "Value proposition", "Closing techniques"],
-  }),
-  event("Social Media Strategies", "Marketing", "presentation", {
-    defaultTimeLimitMinutes: 7,
-  }),
-  event("Computer Applications", "Technology", "objective_test"),
-  event("Computer Game and Simulation Programming", "Technology", "project", {
-    defaultTimeLimitMinutes: 10,
-  }),
-  event("Coding and Programming", "Technology", "project", {
-    defaultTimeLimitMinutes: 10,
-  }),
-  event("Cybersecurity", "Technology", "objective_test"),
-  event("Data Analysis", "Technology", "objective_test"),
-  event("Database Design and Applications", "Technology", "project", {
-    defaultTimeLimitMinutes: 10,
-  }),
-  event("Desktop Application Programming", "Technology", "project", {
-    defaultTimeLimitMinutes: 10,
-  }),
-  event("Introduction to Information Technology", "Technology", "objective_test"),
-  event("Mobile Application Development", "Technology", "project", {
-    defaultTimeLimitMinutes: 10,
-  }),
-  event("Web Site Design", "Technology", "project", {
-    defaultTimeLimitMinutes: 10,
-  }),
-  event("Word Processing", "Technology", "objective_test"),
-  event("Business Plan", "Entrepreneurship", "report", {
-    defaultTimeLimitMinutes: 15,
-    topicAreas: ["Business model", "Financial plan", "Execution strategy"],
-  }),
-  event("E-business", "Entrepreneurship", "report", {
-    defaultTimeLimitMinutes: 15,
-  }),
-  event("Entrepreneurship", "Entrepreneurship", "presentation", {
-    defaultTimeLimitMinutes: 7,
-  }),
-  event("Introduction to Entrepreneurship", "Entrepreneurship", "objective_test"),
-  event("Hotel and Lodging Management", "Hospitality", "objective_test"),
-  event("Restaurant and Food Service Management", "Hospitality", "objective_test"),
-  event("Tourism and Travel Management", "Hospitality", "objective_test"),
-  event("Advertising", "Marketing", "objective_test"),
-  event("Fashion Merchandising", "Marketing", "objective_test"),
-  event("Food Marketing", "Marketing", "objective_test"),
-  event("Marketing", "Marketing", "objective_test"),
-  event("Retail Management", "Marketing", "objective_test"),
-  event("Sports and Entertainment Marketing", "Marketing", "objective_test"),
-  event("Introduction to Business Concepts", "Business Admin", "objective_test"),
-  event("Introduction to Business Presentation", "Communication", "presentation", {
-    defaultTimeLimitMinutes: 4,
-  }),
-  event("Introduction to Parliamentary Procedure", "Career Dev", "objective_test"),
-  event("Introduction to Social Media Strategy", "Marketing", "objective_test"),
-  event("Financial Consulting", "Finance", "presentation", {
-    defaultTimeLimitMinutes: 7,
-    topicAreas: ["Client discovery", "Financial planning", "Recommendation delivery"],
-  }),
-  event("Community Service Project", "Business Admin", "project", {
-    defaultTimeLimitMinutes: 10,
-  }),
-  event("Public Service Announcement", "Business Admin", "presentation", {
-    defaultTimeLimitMinutes: 4,
-  }),
-  event("Virtual Business Management", "Business Admin", "project", {
-    defaultTimeLimitMinutes: 10,
-  }),
-  event("Career Exploration Insights", "Career Dev", "project"),
-  event("Future Business Educator", "Career Dev", "presentation", {
-    defaultTimeLimitMinutes: 7,
-  }),
-  event("Future Business Leader", "Career Dev", "presentation", {
-    defaultTimeLimitMinutes: 7,
-  }),
-  event("FBLA Principles and Procedures", "Career Dev", "objective_test"),
-  event("Who's Who in FBLA", "Career Dev", "project"),
-  event("Introduction to Artificial Intelligence", "Technology", "objective_test", {
-    topicAreas: ["AI fundamentals", "Ethics", "Applied business AI use cases"],
-  }),
-  event("Start-Up Business Plan", "Entrepreneurship", "report", {
-    defaultTimeLimitMinutes: 15,
-  }),
-  event("Hospitality and Event Management", "Hospitality", "objective_test"),
-  event("Travel and Tourism", "Hospitality", "objective_test"),
-  event("FBLA Competitive Events", "Career Dev", "objective_test"),
-  event("Help Desk", "Technology", "role_play", {
-    defaultTimeLimitMinutes: 15,
-    topicAreas: ["Technical troubleshooting", "Customer communication", "Issue documentation"],
-  }),
-  event("FBLA Business Achievement Awards - Bronze", "Career Dev", "project", {
-    conferenceLevels: ["DLC", "SLC", "NLC"],
-    defaultTimeLimitMinutes: 20,
-    topicAreas: ["Leadership development", "Career preparation", "FBLA engagement"],
-  }),
-  event("FBLA Business Achievement Awards - Silver", "Career Dev", "project", {
-    conferenceLevels: ["DLC", "SLC", "NLC"],
-    defaultTimeLimitMinutes: 20,
-  }),
-  event("FBLA Business Achievement Awards - Gold", "Career Dev", "project", {
-    conferenceLevels: ["DLC", "SLC", "NLC"],
-    defaultTimeLimitMinutes: 20,
-  }),
-  event("FBLA Business Achievement Awards - Americanism", "Career Dev", "project", {
-    conferenceLevels: ["DLC", "SLC", "NLC"],
-    defaultTimeLimitMinutes: 20,
+
+  // CATEGORY 6 - JOB INTERVIEW
+  event("Job Interview", "Career Dev", "role_play", "job_interview", {
+    allowedPracticeModes: ["mock_judge", "flashcards"],
+    presentationFlow: {
+      phases: [
+        phase("prep", "Prep", 10),
+        phase("interview", "Interview", 0, { untimed: true }),
+      ],
+      coachingTitle: "Job Interview format",
+      coachingBullets: [
+        "Review the posted position and match your examples to the role",
+        "Prepare concise STAR responses for leadership, teamwork, and problem solving",
+        "Keep examples FBLA-relevant and business-focused",
+        "Interview length is judge-managed and does not have a fixed timer",
+      ],
+    },
+    description:
+      "Job Interview has a 10-minute prep phase followed by an interview format with no fixed presentation timer.",
   }),
 ];
 
+export const FBLA_EVENT_DEFINITIONS: FblaEventDefinition[] = FBLA_EVENT_DEFINITIONS_RAW;
+
 export const CONFERENCE_LEVELS: ConferenceLevel[] = ["DLC", "SLC", "NLC"];
 
-export const FBLA_COMPETITIVE_EVENTS = FBLA_EVENT_DEFINITIONS.map((event) => event.name) as string[];
+export const FBLA_COMPETITIVE_EVENTS = FBLA_EVENT_DEFINITIONS.map((entry) => entry.name) as string[];
 
 export const FBLA_EVENT_CATEGORY_FILTERS: Array<"All" | PracticeEventCategory> = [
   "All",
@@ -316,7 +464,7 @@ export const FBLA_EVENT_CATEGORY_FILTERS: Array<"All" | PracticeEventCategory> =
   "Career Dev",
 ];
 
-export const FBLA_EVENT_BY_ID = new Map(FBLA_EVENT_DEFINITIONS.map((event) => [event.id, event]));
+export const FBLA_EVENT_BY_ID = new Map(FBLA_EVENT_DEFINITIONS.map((entry) => [entry.id, entry]));
 
 export function getFblaEventById(eventId: string): FblaEventDefinition | null {
   return FBLA_EVENT_BY_ID.get(eventId) ?? null;
@@ -324,8 +472,6 @@ export function getFblaEventById(eventId: string): FblaEventDefinition | null {
 
 export function getFblaEventByName(name: string): FblaEventDefinition | null {
   const lowered = name.trim().toLowerCase();
-  return (
-    FBLA_EVENT_DEFINITIONS.find((event) => event.name.toLowerCase() === lowered) ?? null
-  );
+  return FBLA_EVENT_DEFINITIONS.find((entry) => entry.name.toLowerCase() === lowered) ?? null;
 }
 

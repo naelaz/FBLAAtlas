@@ -1,4 +1,4 @@
-import { useNavigation } from "@react-navigation/native";
+﻿import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Search } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
@@ -11,6 +11,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { GlassInput } from "../components/ui/GlassInput";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { SkeletonCard } from "../components/ui/SkeletonCard";
+import { TierBadge } from "../components/ui/TierBadge";
 import { useAuthContext } from "../context/AuthContext";
 import { useMessaging } from "../context/MessagingContext";
 import { useThemeContext } from "../context/ThemeContext";
@@ -159,11 +160,14 @@ export function MessagesScreen() {
                       }}
                     >
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                        <AvatarWithStatus uri={user.avatarUrl} size={36} online={false} />
+                        <AvatarWithStatus uri={user.avatarUrl} size={36} online={false} tier={user.tier} />
                         <View>
-                          <Text style={{ fontWeight: "700" }}>{user.displayName}</Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={{ fontWeight: "700" }}>{user.displayName}</Text>
+                            <TierBadge tier={user.tier} />
+                          </View>
                           <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
-                            {user.grade}th grade • {user.schoolName}
+                            {user.grade}th grade
                           </Text>
                         </View>
                       </View>
@@ -213,7 +217,12 @@ export function MessagesScreen() {
                     }}
                   >
                     <View>
-                      <AvatarWithStatus uri={other?.avatarUrl ?? ""} size={42} online={false} />
+                      <AvatarWithStatus
+                        uri={other?.avatarUrl ?? ""}
+                        size={42}
+                        online={false}
+                        tier={other?.tier}
+                      />
                       {unread > 0 ? (
                         <Badge
                           variant="blue"
@@ -227,9 +236,12 @@ export function MessagesScreen() {
 
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                        <Text style={{ fontWeight: "800", color: palette.colors.text }}>
-                          {other?.displayName ?? "Conversation"}
-                        </Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+                          <Text style={{ fontWeight: "800", color: palette.colors.text }} numberOfLines={1}>
+                            {other?.displayName ?? "Conversation"}
+                          </Text>
+                          {other ? <TierBadge tier={other.tier} /> : null}
+                        </View>
                         <Text style={{ color: palette.colors.muted, fontSize: 12 }}>
                           {formatDateTime(conversation.updatedAt)}
                         </Text>

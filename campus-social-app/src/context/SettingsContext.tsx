@@ -1,8 +1,12 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { useAuthContext } from "./AuthContext";
+import { useAccessibility } from "./AccessibilityContext";
 import { useThemeContext } from "./ThemeContext";
+import { db } from "../config/firebase";
 import { AppSettings } from "../types/settings";
+import { configurePracticeReminders, setGlobalPushSuppressed } from "../services/pushService";
 import {
   cacheSettings,
   createDefaultSettings,
@@ -16,6 +20,7 @@ type SettingsContextValue = {
   settings: AppSettings;
   ready: boolean;
   updateSettings: (updater: (previous: AppSettings) => AppSettings) => Promise<void>;
+  resetSettings: () => Promise<void>;
 };
 
 const SettingsContext = createContext<SettingsContextValue | undefined>(undefined);
@@ -23,11 +28,20 @@ const SettingsContext = createContext<SettingsContextValue | undefined>(undefine
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const { uid } = useAuthContext();
   const { setThemeName } = useThemeContext();
+  const {
+    setFontScale,
+    setHighContrastMode,
+    setReduceAnimations,
+    setBoldText,
+    setScreenReaderHints,
+  } = useAccessibility();
   const [settings, setSettings] = useState<AppSettings>(createDefaultSettings());
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!uid) {
+      setSettings(createDefaultSettings());
+      setReady(true);
       return;
     }
 
@@ -86,6 +100,56 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [uid, setThemeName]);
 
+  useEffect(() => {
+    setFontScale(settings.accessibility.textScale);
+    setHighContrastMode(settings.accessibility.highContrastMode);
+    setReduceAnimations(settings.accessibility.reduceAnimations);
+    setBoldText(settings.accessibility.boldText);
+    setScreenReaderHints(settings.accessibility.screenReaderHints);
+  }, [
+    setBoldText,
+    setFontScale,
+    setHighContrastMode,
+    setReduceAnimations,
+    setScreenReaderHints,
+    settings.accessibility.boldText,
+    settings.accessibility.highContrastMode,
+    settings.accessibility.reduceAnimations,
+    settings.accessibility.screenReaderHints,
+    settings.accessibility.textScale,
+  ]);
+
+  useEffect(() => {
+    void setGlobalPushSuppressed(!settings.notifications.globalPush);
+  }, [settings.notifications.globalPush]);
+
+  useEffect(() => {
+    if (!uid) {
+      void configurePracticeReminders(false);
+      return;
+    }
+    const shouldEnableReminders =
+      settings.notifications.globalPush && settings.notifications.practiceReminders;
+    void configurePracticeReminders(shouldEnableReminders);
+  }, [uid, settings.notifications.globalPush, settings.notifications.practiceReminders]);
+
+  const syncUserPrivacyFields = async (next: AppSettings): Promise<void> => {
+    if (!uid) {
+      return;
+    }
+    await setDoc(
+      doc(db, "users", uid),
+      {
+        profileVisibility: next.privacy.profileVisibility,
+        showOnlineStatus: next.privacy.showOnlineStatus,
+        showMood: next.privacy.showMood,
+        allowFriendSuggestions: next.privacy.allowFriendSuggestions,
+        settingsUpdatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  };
+
   const updateSettings = async (
     updater: (previous: AppSettings) => AppSettings,
   ): Promise<void> => {
@@ -98,6 +162,19 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     await cacheSettings(uid, next);
     await setThemeName(next.appearance.themeName);
     await saveSettings(uid, next);
+    await syncUserPrivacyFields(next);
+  };
+
+  const resetSettings = async (): Promise<void> => {
+    if (!uid) {
+      return;
+    }
+    const defaults = createDefaultSettings();
+    setSettings(defaults);
+    await cacheSettings(uid, defaults);
+    await setThemeName(defaults.appearance.themeName);
+    await saveSettings(uid, defaults);
+    await syncUserPrivacyFields(defaults);
   };
 
   const value = useMemo(
@@ -105,8 +182,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       settings,
       ready,
       updateSettings,
+      resetSettings,
     }),
-    [settings, ready],
+    [ready, resetSettings, settings, updateSettings],
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
@@ -119,4 +197,3 @@ export function useSettings(): SettingsContextValue {
   }
   return context;
 }
-

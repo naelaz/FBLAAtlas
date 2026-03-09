@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, StyleProp, View, ViewStyle } from "react-native";
 import { Text } from "react-native-paper";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
 import { hapticTap } from "../../services/haptics";
 import { GlassSurface } from "./GlassSurface";
@@ -36,6 +37,7 @@ export function GlassSegmentedControl({
   accentColor,
 }: GlassSegmentedControlProps) {
   const { palette } = useThemeContext();
+  const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
 
   return (
     <GlassSurface
@@ -75,14 +77,20 @@ export function GlassSegmentedControl({
                 paddingHorizontal: 12,
                 backgroundColor: selected ? (accentColor ?? palette.colors.inputSurface) : "transparent",
               }}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`${option.label} tab`}
+              accessibilityHint={getAccessibilityHint(
+                selected ? "Currently selected" : `Switch to ${option.label}`,
+              )}
             >
               {option.icon ? <View>{option.icon}</View> : null}
               <Text
                 numberOfLines={1}
                 style={{
-                  fontWeight: selected ? "700" : "500",
+                  fontWeight: getFontWeight(selected ? "700" : "500"),
                   color: selected ? palette.colors.text : palette.colors.textSecondary,
-                  fontSize: size === "sm" ? 12 : 13,
+                  fontSize: scaleFont(size === "sm" ? 12 : 13),
                 }}
               >
                 {option.label}

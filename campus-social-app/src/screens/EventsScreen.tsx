@@ -1,7 +1,7 @@
-import { useNavigation } from "@react-navigation/native";
+﻿import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { CalendarDays, ChevronLeft, ChevronRight, List } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -17,6 +17,7 @@ import { SkeletonCard } from "../components/ui/SkeletonCard";
 import { getEventImageByCategory } from "../constants/media";
 import { useAuthContext } from "../context/AuthContext";
 import { useGamification } from "../context/GamificationContext";
+import { useSettings } from "../context/SettingsContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
 import { formatDateTime } from "../services/firestoreUtils";
@@ -62,6 +63,7 @@ export function EventsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile } = useAuthContext();
   const { handleAwardResult } = useGamification();
+  const { settings } = useSettings();
   const { palette } = useThemeContext();
 
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -142,13 +144,6 @@ export function EventsScreen() {
     }
     return events.filter((event) => (event.category ?? "FBLA") === filter);
   }, [events, filter]);
-  const viewOptions = useMemo(
-    () => [
-      { label: "List View", value: "list", description: "Cards with attendees and countdown" },
-      { label: "Calendar View", value: "calendar", description: "Month grid with event density" },
-    ],
-    [],
-  );
   const categoryOptions = useMemo(
     () =>
       EVENT_FILTERS.map((entry) => ({
@@ -237,16 +232,25 @@ export function EventsScreen() {
         keyExtractor={(item) => item.id}
         refreshing={refreshing}
         onRefresh={() => void refresh()}
-        contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 12 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100, gap: 12 }}
         ListHeaderComponent={
           <View style={{ marginBottom: 10 }}>
-            <Text style={{ color: palette.colors.textSecondary, fontSize: 12, fontWeight: "700", marginBottom: 4 }}>
+            <Text
+              style={{
+                color: palette.colors.textMuted,
+                fontSize: 13,
+                fontWeight: "600",
+                marginBottom: 4,
+                letterSpacing: 0.8,
+                textTransform: "uppercase",
+              }}
+            >
               Home / Events
             </Text>
-            <Text variant="headlineSmall" style={{ fontWeight: "900", color: palette.colors.text }}>
+            <Text variant="headlineSmall" style={{ fontWeight: "700", fontSize: 22, color: palette.colors.text }}>
               Events
             </Text>
-            <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
+            <Text style={{ color: palette.colors.textMuted, marginTop: 4, fontSize: 14 }}>
               Track events and never miss a chapter moment.
             </Text>
             <View style={{ marginTop: 8, flexDirection: "row", justifyContent: "flex-start" }}>
@@ -284,16 +288,68 @@ export function EventsScreen() {
             </View>
 
             <View style={{ marginTop: 10, gap: 10 }}>
-              <GlassDropdown
-                label="View"
-                value={viewMode}
-                options={viewOptions}
-                onValueChange={(nextValue) => {
-                  if (nextValue === "list" || nextValue === "calendar") {
-                    setViewMode(nextValue);
-                  }
-                }}
-              />
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    hapticTap();
+                    setViewMode("list");
+                  }}
+                >
+                  {({ pressed }) => (
+                    <GlassSurface
+                      pressed={pressed}
+                      elevation={2}
+                      style={{
+                        minHeight: 44,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: viewMode === "list" ? palette.colors.primary : palette.colors.border,
+                        backgroundColor: viewMode === "list" ? palette.colors.primary : palette.colors.surface,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <List size={16} color={viewMode === "list" ? palette.colors.onPrimary : palette.colors.text} />
+                      <Text style={{ color: viewMode === "list" ? palette.colors.onPrimary : palette.colors.text, fontWeight: "700" }}>
+                        List
+                      </Text>
+                    </GlassSurface>
+                  )}
+                </Pressable>
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    hapticTap();
+                    setViewMode("calendar");
+                  }}
+                >
+                  {({ pressed }) => (
+                    <GlassSurface
+                      pressed={pressed}
+                      elevation={2}
+                      style={{
+                        minHeight: 44,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: viewMode === "calendar" ? palette.colors.primary : palette.colors.border,
+                        backgroundColor: viewMode === "calendar" ? palette.colors.primary : palette.colors.surface,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <CalendarDays size={16} color={viewMode === "calendar" ? palette.colors.onPrimary : palette.colors.text} />
+                      <Text style={{ color: viewMode === "calendar" ? palette.colors.onPrimary : palette.colors.text, fontWeight: "700" }}>
+                        Calendar
+                      </Text>
+                    </GlassSurface>
+                  )}
+                </Pressable>
+              </View>
               <GlassDropdown
                 label="Category"
                 value={filter}
@@ -307,7 +363,7 @@ export function EventsScreen() {
             </View>
 
             {viewMode === "calendar" ? (
-              <GlassSurface style={{ marginTop: 10, padding: 10, backgroundColor: palette.colors.surface }}>
+              <GlassSurface style={{ marginTop: 10, padding: 16, backgroundColor: palette.colors.surface, borderRadius: 16 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                   <Pressable
                     onPress={() =>
@@ -324,7 +380,7 @@ export function EventsScreen() {
                   >
                     <ChevronLeft size={16} color={palette.colors.text} />
                   </Pressable>
-                  <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{monthTitle}</Text>
+                  <Text style={{ color: palette.colors.text, fontWeight: "600", fontSize: 16 }}>{monthTitle}</Text>
                   <Pressable
                     onPress={() =>
                       setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
@@ -345,7 +401,7 @@ export function EventsScreen() {
                 <View style={{ flexDirection: "row", gap: 6, marginBottom: 6 }}>
                   {WEEKDAY_LABELS.map((label) => (
                     <View key={label} style={{ flex: 1, alignItems: "center" }}>
-                      <Text style={{ color: palette.colors.textSecondary, fontSize: 11, fontWeight: "700" }}>{label}</Text>
+                      <Text style={{ color: palette.colors.textMuted, fontSize: 12, fontWeight: "600" }}>{label}</Text>
                     </View>
                   ))}
                 </View>
@@ -392,7 +448,7 @@ export function EventsScreen() {
                   ))}
                 </View>
 
-                <Text style={{ color: palette.colors.textSecondary, marginTop: 8 }}>
+                <Text style={{ color: palette.colors.textMuted, marginTop: 8, fontSize: 12 }}>
                   {selectedDayEvents.length > 0
                     ? `Showing ${selectedDayEvents.length} event(s) on ${selectedDayKey}.`
                     : `No events on ${selectedDayKey}.`}
@@ -410,7 +466,7 @@ export function EventsScreen() {
           return (
             <Pressable
               onPress={() => navigation.navigate("EventDetail", { eventId: item.id })}
-              style={{ borderRadius: 18, overflow: "hidden", marginBottom: 6 }}
+              style={{ borderRadius: 16, overflow: "hidden", marginBottom: 6 }}
             >
               <View style={{ width: "100%", height: 224 }}>
                 <AppImage
@@ -435,26 +491,33 @@ export function EventsScreen() {
                   left: 10,
                   right: 10,
                   bottom: 10,
-                  padding: 10,
-                  backgroundColor: palette.colors.glassStrong,
-                  borderColor: palette.colors.glassBorder,
+                  padding: 16,
+                  borderRadius: 16,
+                  backgroundColor: palette.colors.surface,
+                  borderColor: palette.colors.border,
                 }}
               >
-                <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 17 }}>
+                <Text style={{ color: palette.colors.text, fontWeight: "600", fontSize: 16 }}>
                   {item.title}
                 </Text>
-                <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>
+                <Text style={{ color: palette.colors.textMuted, marginTop: 2, fontSize: 14 }}>
                   {formatDateTime(item.startAt)} • {item.location}
                 </Text>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Text style={{ color: palette.colors.warning, fontWeight: "700" }}>
+                    <Text style={{ color: palette.colors.textMuted, fontWeight: "600", fontSize: 12 }}>
                       Starts in {timeUntil(item.startAt)}
                     </Text>
                   </View>
                   <View style={{ flexDirection: "row", gap: 5 }}>
                     {attendees.slice(0, 4).map((attendee) => (
-                      <AvatarWithStatus key={attendee.uid} uri={attendee.avatarUrl} size={26} online={false} />
+                      <AvatarWithStatus
+                        key={attendee.uid}
+                        uri={attendee.avatarUrl}
+                        size={26}
+                        online={false}
+                        tier={attendee.tier}
+                      />
                     ))}
                   </View>
                 </View>
@@ -464,7 +527,11 @@ export function EventsScreen() {
                     e.stopPropagation();
                     hapticTap();
                     try {
-                      const result = await toggleEventAttendance(item, profile);
+                      const result = await toggleEventAttendance(item, profile, {
+                        notifyEventReminder:
+                          settings.notifications.globalPush &&
+                          settings.notifications.eventReminders,
+                      });
                       handleAwardResult(result.award, { eventName: item.title });
                     } catch (error) {
                       console.warn("Event attendance failed:", error);
@@ -517,3 +584,4 @@ export function EventsScreen() {
     </SafeAreaView>
   );
 }
+

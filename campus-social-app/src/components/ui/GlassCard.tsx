@@ -1,6 +1,7 @@
 import React from "react";
 import { Pressable, StyleProp, ViewStyle } from "react-native";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { hapticTap } from "../../services/haptics";
 import { GlassSurface } from "./GlassSurface";
 
@@ -16,6 +17,8 @@ type GlassCardProps = {
   size?: "sm" | "md" | "lg";
   accentColor?: string;
   onPress?: () => void;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
 export function GlassCard({
@@ -24,13 +27,17 @@ export function GlassCard({
   borderRadius = 16,
   tone = "neutral",
   pressed = false,
-  padding = 12,
+  padding = 16,
   size = "md",
   accentColor,
   onPress,
+  accessibilityLabel,
+  accessibilityHint,
 }: GlassCardProps) {
+  const { getAccessibilityHint } = useAccessibility();
   const radius = borderRadius ?? (size === "sm" ? 14 : size === "lg" ? 22 : 16);
-  const resolvedPadding = size === "sm" ? 10 : size === "lg" ? 16 : padding;
+  const resolvedPadding = size === "sm" ? 12 : size === "lg" ? 20 : padding;
+  const resolvedHint = accessibilityHint ?? "Opens details";
 
   const content = (
     <GlassSurface
@@ -60,6 +67,9 @@ export function GlassCard({
         hapticTap();
         onPress();
       }}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? "Card"}
+      accessibilityHint={getAccessibilityHint(resolvedHint)}
     >
       {content}
     </Pressable>

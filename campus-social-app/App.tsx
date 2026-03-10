@@ -63,7 +63,11 @@ function AppGate() {
 
   return (
     <PaperProvider theme={paperTheme}>
-      <StatusBar style={palette.isDark ? "light" : "dark"} />
+      <StatusBar
+        style={palette.isDark ? "light" : "dark"}
+        backgroundColor={palette.colors.background}
+        translucent={false}
+      />
       <AuthProvider>
         <SettingsProvider>
           <DashboardProvider>
@@ -89,21 +93,68 @@ function AuthGateContent() {
   const { loading, isAuthenticated, profile, isAdminMode, setAdminMode, signOutUser } = useAuthContext();
   const { completed, setOnboardingCompleted } = useOnboarding();
   const { palette } = useThemeContext();
+  const startInAdmin = Boolean(isAdminMode && (profile?.role === "admin" || profile?.role === "superadmin"));
+  const gateState = loading
+    ? "loading"
+    : !isAuthenticated
+      ? "auth"
+      : profile?.banned
+        ? "suspended"
+        : !completed
+          ? "onboarding"
+          : startInAdmin
+            ? "admin"
+            : "main";
+  const gateStateRef = React.useRef<string>("");
 
   React.useEffect(() => {
     if (!isAuthenticated || !profile) {
       return;
     }
-    if (profile.onboardingCompleted && !completed) {
+    const profileOnboardingCompleted = Boolean(profile.onboardingCompleted);
+    // Only sync from Firestore→local when Firestore says completed.
+    // Never reset local completed=true back to false from a stale Firestore read.
+    if (profileOnboardingCompleted && !completed) {
+      console.log("[NavAction] Sync onboarding state from profile", {
+        profileOnboardingCompleted,
+      });
       void setOnboardingCompleted(true);
     }
   }, [completed, isAuthenticated, profile, setOnboardingCompleted]);
 
   React.useEffect(() => {
+    if (gateStateRef.current === gateState) {
+      return;
+    }
+    gateStateRef.current = gateState;
+    if (gateState === "auth") {
+      console.log("[NavAction] AuthGate -> LoginScreen");
+      return;
+    }
+    if (gateState === "onboarding") {
+      console.log("[NavAction] AuthGate -> OnboardingScreen");
+      return;
+    }
+    if (gateState === "admin") {
+      console.log("[NavAction] AuthGate -> RootNavigator(AdminDashboard)");
+      return;
+    }
+    if (gateState === "main") {
+      console.log("[NavAction] AuthGate -> RootNavigator(MainTabs)");
+      return;
+    }
+    if (gateState === "suspended") {
+      console.log("[NavAction] AuthGate -> SuspendedView");
+      return;
+    }
+    console.log("[NavAction] AuthGate -> Loading");
+  }, [gateState]);
+
+  React.useEffect(() => {
     if (!isAdminMode) {
       return;
     }
-    if (profile?.role === "admin") {
+    if (profile?.role === "admin" || profile?.role === "superadmin") {
       return;
     }
     void setAdminMode(false);
@@ -166,7 +217,6 @@ function AuthGateContent() {
     return <OnboardingScreen />;
   }
 
-  const startInAdmin = Boolean(isAdminMode && profile?.role === "admin");
   return <RootNavigator startInAdmin={startInAdmin} />;
 }
 

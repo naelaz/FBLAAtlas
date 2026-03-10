@@ -1,5 +1,7 @@
-﻿import { LinkingOptions, NavigationContainer } from "@react-navigation/native";
+import { LinkingOptions, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useMemo } from "react";
+import { View } from "react-native";
 
 import { useThemeContext } from "../context/ThemeContext";
 import { AnnouncementDetailScreen } from "../screens/AnnouncementDetailScreen";
@@ -7,6 +9,7 @@ import { AdminDashboardScreen } from "../screens/AdminDashboardScreen";
 import { ChatScreen } from "../screens/ChatScreen";
 import { CreatePostScreen } from "../screens/CreatePostScreen";
 import { EventDetailScreen } from "../screens/EventDetailScreen";
+import { EventsScreen } from "../screens/EventsScreen";
 import { FinnScreen } from "../screens/FinnScreen";
 import { JoinChapterScreen } from "../screens/JoinChapterScreen";
 import { LeaderboardScreen } from "../screens/LeaderboardScreen";
@@ -14,8 +17,15 @@ import { MyConferencesScreen } from "../screens/MyConferencesScreen";
 import { NotificationsScreen } from "../screens/NotificationsScreen";
 import { PracticeEventHubScreen } from "../screens/PracticeEventHubScreen";
 import { PracticeScreen } from "../screens/PracticeScreen";
+import { ChallengeMembersScreen } from "../screens/ChallengeMembersScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
+import { SearchScreen } from "../screens/SearchScreen";
+import { StudySessionScreen } from "../screens/StudySessionScreen";
 import { StudentProfileScreen } from "../screens/StudentProfileScreen";
+import { GlossaryScreen } from "../screens/GlossaryScreen";
+import { OfficerTaskBoardScreen } from "../screens/OfficerTaskBoardScreen";
+import { RoommateFinderScreen } from "../screens/RoommateFinderScreen";
+import { ProfileScreen } from "../screens/ProfileScreen";
 import { MainTabs } from "./MainTabs";
 import { RootStackParamList } from "./types";
 
@@ -28,10 +38,9 @@ const linking: LinkingOptions<RootStackParamList> = {
       MainTabs: {
         screens: {
           Home: "home",
-          Events: "events",
+          PracticeTab: "practice-tab",
           Finn: "finn",
           Messages: "messages",
-          Profile: "profile",
           SettingsTab: "settings-tab",
         },
       },
@@ -39,11 +48,19 @@ const linking: LinkingOptions<RootStackParamList> = {
       Practice: "practice",
       PracticeEventHub: "practice/:eventId/:mode?",
       EventDetail: "events/:eventId",
+      Events: "events",
+      Profile: "profile",
       Notifications: "notifications",
       Leaderboard: "leaderboard",
       Settings: "settings",
       MyConferences: "conferences",
       JoinChapter: "join-chapter",
+      ChallengeMembers: "challenges/:eventId",
+      StudySession: "study-session/:sessionId",
+      Glossary: "glossary",
+      OfficerTasks: "officer-tasks",
+      RoommateFinder: "roommate/:level",
+      Search: "search",
     },
   },
 };
@@ -54,13 +71,34 @@ type RootNavigatorProps = {
 
 export function RootNavigator({ startInAdmin = false }: RootNavigatorProps) {
   const { navigationTheme, palette } = useThemeContext();
+  const navTheme = useMemo(
+    () => ({
+      ...navigationTheme,
+      dark: palette.isDark,
+      colors: {
+        ...navigationTheme.colors,
+        primary: palette.colors.accent,
+        background: palette.colors.background,
+        card: palette.colors.background,
+        text: palette.colors.text,
+        border: palette.colors.border,
+        notification: palette.colors.accent,
+      },
+    }),
+    [navigationTheme, palette],
+  );
 
   return (
-    <NavigationContainer theme={navigationTheme} linking={linking}>
+    <NavigationContainer
+      theme={navTheme}
+      linking={linking}
+      fallback={<View style={{ flex: 1, backgroundColor: palette.colors.background }} />}
+    >
       <Stack.Navigator
         initialRouteName={startInAdmin ? "AdminDashboard" : "MainTabs"}
         screenOptions={{
           contentStyle: { backgroundColor: palette.colors.background },
+          animation: "slide_from_right",
           headerStyle: { backgroundColor: palette.colors.surface },
           headerShadowVisible: false,
           headerTintColor: palette.colors.text,
@@ -69,7 +107,6 @@ export function RootNavigator({ startInAdmin = false }: RootNavigatorProps) {
             fontWeight: "800",
             color: palette.colors.text,
           },
-          animation: "fade_from_bottom",
         }}
       >
         <Stack.Screen
@@ -90,6 +127,16 @@ export function RootNavigator({ startInAdmin = false }: RootNavigatorProps) {
         <Stack.Screen
           name="EventDetail"
           component={EventDetailScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Events"
+          component={EventsScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Profile"
+          component={ProfileScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen
@@ -145,6 +192,36 @@ export function RootNavigator({ startInAdmin = false }: RootNavigatorProps) {
         <Stack.Screen
           name="JoinChapter"
           component={JoinChapterScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="ChallengeMembers"
+          component={ChallengeMembersScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="StudySession"
+          component={StudySessionScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Glossary"
+          component={GlossaryScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="OfficerTasks"
+          component={OfficerTaskBoardScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="RoommateFinder"
+          component={RoommateFinderScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Search"
+          component={SearchScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

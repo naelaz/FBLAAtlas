@@ -1,11 +1,12 @@
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
+import { BookOpen } from "lucide-react-native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
-  Linking,
   ListRenderItemInfo,
   Platform,
   Pressable,
@@ -23,7 +24,7 @@ import { MessageLoading } from "../components/ui/MessageLoading";
 import { useAuthContext } from "../context/AuthContext";
 import { useNavBarVisibility } from "../context/NavBarVisibilityContext";
 import { useThemeContext } from "../context/ThemeContext";
-import { hapticTap } from "../services/haptics";
+import { useNavBarScroll } from "../hooks/useNavBarScroll";
 import { askFinn, isFinnConfigured } from "../services/finnService";
 import { FinnChatMessage } from "../types/finn";
 
@@ -35,14 +36,7 @@ const PLACEHOLDERS = [
   "How do I level up my XP faster?",
 ];
 
-const QUICK_REPLIES = ["Events this week", "My XP and Tier", "FBLA Help", "Practice tips", "Study Groups"];
-
-const RESOURCE_LINKS = [
-  { id: "khan", label: "Khan Academy", url: "https://www.khanacademy.org" },
-  { id: "college_board", label: "College Board", url: "https://www.collegeboard.org" },
-  { id: "fbla", label: "FBLA Official", url: "https://www.fbla.org" },
-  { id: "common_app", label: "Common App", url: "https://www.commonapp.org" },
-];
+const FINN_WELCOME_SEEN_KEY = "fbla_finn_welcome_seen_v1";
 
 function createMessage(
   role: FinnChatMessage["role"],
@@ -64,16 +58,12 @@ export function FinnScreen() {
   const { profile } = useAuthContext();
   const { hideNavBar, showNavBar } = useNavBarVisibility();
   const { palette } = useThemeContext();
+  const { onScroll, onScrollBeginDrag, scrollEventThrottle } = useNavBarScroll();
   const insets = useSafeAreaInsets();
 
   const [sending, setSending] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [messages, setMessages] = useState<FinnChatMessage[]>([
-    createMessage(
-      "assistant",
-      "Hey! I am Finn, your AI FBLA coach. Ask me about events, prep strategy, and how to climb the leaderboard.",
-    ),
-  ]);
+  const [messages, setMessages] = useState<FinnChatMessage[]>([]);
 
   const listRef = useRef<FlatList<FinnChatMessage>>(null);
   const hasBackend = useMemo(() => isFinnConfigured(), []);
@@ -83,6 +73,49 @@ export function FinnScreen() {
       listRef.current?.scrollToEnd({ animated: true });
     });
   };
+
+  useEffect(() => {
+    let active = true;
+    const hydrateWelcome = async () => {
+      const firstName = profile?.displayName.split(" ")[0] ?? "there";
+      const perUserKey = `${FINN_WELCOME_SEEN_KEY}:${profile?.uid ?? "guest"}`;
+      try {
+        const seen = await AsyncStorage.getItem(perUserKey);
+        if (!active) {
+          return;
+        }
+        if (!seen) {
+          setMessages([
+            createMessage("assistant", `Hey ${firstName}! I'm Finn, your FBLA coach.`),
+            createMessage(
+              "assistant",
+              "I can help you prep for any event, explain judging rubrics, build a study plan, or answer FBLA questions.",
+            ),
+            createMessage("assistant", "What event are you competing in this year?"),
+          ]);
+          await AsyncStorage.setItem(perUserKey, "1");
+          return;
+        }
+      } catch (error) {
+        console.warn("Finn welcome hydrate failed:", error);
+      }
+
+      if (!active) {
+        return;
+      }
+      setMessages([
+        createMessage(
+          "assistant",
+          "Hey! I am Finn, your AI FBLA coach. Ask me about events, prep strategy, and how to climb the leaderboard.",
+        ),
+      ]);
+    };
+
+    void hydrateWelcome();
+    return () => {
+      active = false;
+    };
+  }, [profile?.displayName, profile?.uid]);
 
   useEffect(() => {
     scrollToLatest();
@@ -104,15 +137,6 @@ export function FinnScreen() {
       showNavBar();
     };
   }, [hideNavBar, showNavBar]);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      hideNavBar();
-      return () => {
-        showNavBar();
-      };
-    }, [hideNavBar, showNavBar]),
-  );
 
   const inputBottomPadding = Math.max(insets.bottom, 10) + 8;
   const showBackButton = navigation.canGoBack();
@@ -258,14 +282,22 @@ export function FinnScreen() {
         keyboardVerticalOffset={Platform.OS === "ios" ? 6 : 0}
       >
         <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
-          {showBackButton ? (
-            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
-              <BackButton onPress={() => navigation.goBack()} />
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {showBackButton ? <BackButton onPress={() => navigation.goBack()} /> : null}
               <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "700", fontSize: 22 }}>
                 Finn
               </Text>
             </View>
-          ) : null}
+            <Pressable
+              onPress={() => navigation.navigate("Glossary" as never)}
+              style={{ minHeight: 40, minWidth: 40, alignItems: "center", justifyContent: "center" }}
+              accessibilityRole="button"
+              accessibilityLabel="Open glossary"
+            >
+              <BookOpen size={18} color={palette.colors.text} />
+            </Pressable>
+          </View>
           <GlassSurface
             style={{
               marginBottom: 12,
@@ -303,91 +335,6 @@ export function FinnScreen() {
             </View>
           </GlassSurface>
 
-          {messages.length <= 1 ? (
-            <View style={{ marginBottom: 10 }}>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {QUICK_REPLIES.map((label) => (
-                  <Pressable
-                    key={label}
-                    onPress={() => {
-                      hapticTap();
-                      void sendMessage(label);
-                    }}
-                    style={{ minHeight: 44 }}
-                  >
-                    {({ pressed }) => (
-                      <GlassSurface
-                        pressed={pressed}
-                        elevation={2}
-                        borderRadius={999}
-                        style={{
-                          minHeight: 44,
-                          borderRadius: 999,
-                          borderWidth: 1,
-                          borderColor: palette.colors.border,
-                          backgroundColor: palette.colors.chipSurface,
-                          paddingHorizontal: 12,
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text style={{ color: palette.colors.text, fontWeight: "600" }}>{label}</Text>
-                      </GlassSurface>
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          ) : null}
-
-          <GlassSurface style={{ marginBottom: 10, padding: 10 }}>
-            <Text
-              style={{
-                color: palette.colors.textMuted,
-                fontWeight: "600",
-                marginTop: 20,
-                marginBottom: 10,
-                fontSize: 13,
-                letterSpacing: 0.8,
-                textTransform: "uppercase",
-              }}
-            >
-              Resources
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {RESOURCE_LINKS.map((link) => (
-                <Pressable
-                  key={link.id}
-                  onPress={() => {
-                    hapticTap();
-                    void Linking.openURL(link.url);
-                  }}
-                  style={{ minHeight: 44 }}
-                >
-                  {({ pressed }) => (
-                    <GlassSurface
-                      pressed={pressed}
-                      elevation={2}
-                      borderRadius={999}
-                      style={{
-                        minHeight: 44,
-                        borderRadius: 999,
-                        borderWidth: 1,
-                        borderColor: palette.colors.border,
-                        backgroundColor: palette.colors.chipSurface,
-                        paddingHorizontal: 12,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{link.label}</Text>
-                    </GlassSurface>
-                  )}
-                </Pressable>
-              ))}
-            </View>
-          </GlassSurface>
-
           <FlatList
             ref={listRef}
             data={messages}
@@ -397,11 +344,14 @@ export function FinnScreen() {
             contentContainerStyle={{ paddingTop: 4, paddingBottom: 12 }}
             onContentSizeChange={() => scrollToLatest()}
             keyboardShouldPersistTaps="handled"
+            scrollEventThrottle={scrollEventThrottle}
+            onScroll={onScroll}
+            onScrollBeginDrag={onScrollBeginDrag}
           />
 
           <View
             style={{
-              paddingBottom: inputBottomPadding,
+              paddingBottom: keyboardVisible ? inputBottomPadding : inputBottomPadding + 90,
               paddingTop: 6,
             }}
           >

@@ -133,6 +133,28 @@ function withIconColor(icon: React.ReactNode, color: string, iconSize: number) {
   });
 }
 
+function getVariantMarker(variant: BadgeVariant): string | null {
+  switch (variant) {
+    case "green":
+    case "green-subtle":
+      return "✓";
+    case "red":
+    case "red-subtle":
+      return "!";
+    case "amber":
+    case "amber-subtle":
+      return "▲";
+    case "blue":
+    case "blue-subtle":
+      return "●";
+    case "purple":
+    case "purple-subtle":
+      return "◆";
+    default:
+      return null;
+  }
+}
+
 export function getTierBadgeVariant(tier: TierName): BadgeVariant {
   switch (tier) {
     case "Bronze":
@@ -162,9 +184,10 @@ export const Badge = ({
   textStyle,
 }: BadgeProps) => {
   const { palette } = useThemeContext();
-  const { scaleFont, getFontWeight } = useAccessibility();
+  const { scaleFont, getFontWeight, colorBlindMode } = useAccessibility();
   const sizeStyle = sizes[size];
   const { backgroundColor, textColor } = getBadgeColors(variant, palette);
+  const marker = colorBlindMode !== "none" ? getVariantMarker(variant) : null;
 
   return (
     <View
@@ -185,6 +208,18 @@ export const Badge = ({
       ]}
       >
       {icon ? <View>{withIconColor(icon, textColor, sizeStyle.icon)}</View> : null}
+      {marker ? (
+        <Text
+          style={{
+            fontWeight: getFontWeight("700"),
+            includeFontPadding: false,
+            fontSize: scaleFont(Math.max(sizeStyle.fontSize - 1, 10)),
+            color: textColor,
+          }}
+        >
+          {marker}
+        </Text>
+      ) : null}
       <Text
         style={[
           {

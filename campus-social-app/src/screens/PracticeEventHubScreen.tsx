@@ -1,10 +1,9 @@
-﻿import {
+import {
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
   RecordingPresets,
   useAudioRecorder,
 } from "expo-audio";
-import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "react-native-paper";
@@ -31,6 +30,7 @@ import {
   PracticePhaseTiming,
 } from "../constants/fblaEvents";
 import { useAuthContext } from "../context/AuthContext";
+import { useGamification } from "../context/GamificationContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
 import {
@@ -42,6 +42,9 @@ import {
   savePracticeAttempt,
 } from "../services/practiceService";
 import { awardPointsToUser } from "../services/gamificationService";
+import { hapticWarning } from "../services/haptics";
+import { fetchChallengeById, submitChallengeResult } from "../services/challengeService";
+import { PracticeChallenge } from "../types/features";
 import {
   MockJudgeResult,
   PracticeAttempt,
@@ -50,6 +53,7 @@ import {
   PracticeTest,
 } from "../types/practice";
 import { ScreenShell } from "../components/ScreenShell";
+import { formatRelativeTime } from "../utils/format";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PracticeEventHub">;
 type HubMode = PracticeHubMode;
@@ -113,10 +117,11 @@ function isStaleCache(generatedAt?: string): boolean {
   return Date.now() - timestamp > 7 * 24 * 60 * 60 * 1000;
 }
 
-export function PracticeEventHubScreen({ route }: Props) {
-  const { eventId, mode: modeFromRoute } = route.params;
+export function PracticeEventHubScreen({ route, navigation }: Props) {
+  const { eventId, mode: modeFromRoute, challengeId } = route.params;
   const { palette } = useThemeContext();
   const { profile, isGuest } = useAuthContext();
+  const { handleAwardResult } = useGamification();
 
   const event = useMemo(() => getFblaEventById(eventId), [eventId]);
 
@@ -129,6 +134,8 @@ export function PracticeEventHubScreen({ route }: Props) {
   const [testAnswers, setTestAnswers] = useState<Record<string, number>>({});
   const [testResult, setTestResult] = useState<{ score: number; max: number } | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [testPaused, setTestPaused] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
   const [scenario, setScenario] = useState<PracticeScenario | null>(null);
   const [presentationNotes, setPresentationNotes] = useState("");
@@ -142,6 +149,8 @@ export function PracticeEventHubScreen({ route }: Props) {
   const [mockResult, setMockResult] = useState<MockJudgeResult | null>(null);
   const [history, setHistory] = useState<PracticeAttempt[]>([]);
   const [submittingTest, setSubmittingTest] = useState(false);
+  const [challenge, setChallenge] = useState<PracticeChallenge | null>(null);
+  const [challengeWinnerUid, setChallengeWinnerUid] = useState<string | null>(null);
 
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [phaseSecondsLeft, setPhaseSecondsLeft] = useState(0);
@@ -162,6 +171,28 @@ export function PracticeEventHubScreen({ route }: Props) {
   const warnedPhasesRef = useRef<Set<string>>(new Set());
 
   const phasePlan = useMemo(() => event?.presentationFlow?.phases ?? [], [event]);
+
+  useEffect(() => {
+    if (!challengeId) {
+      setChallenge(null);
+      setChallengeWinnerUid(null);
+      return;
+    }
+    let active = true;
+    void fetchChallengeById(challengeId)
+      .then((row) => {
+        if (!active) {
+          return;
+        }
+        setChallenge(row);
+      })
+      .catch((loadError) => {
+        console.warn("Failed to load challenge:", loadError);
+      });
+    return () => {
+      active = false;
+    };
+  }, [challengeId]);
 
   const modeOptions = useMemo(() => {
     if (!event) {
@@ -212,11 +243,7 @@ export function PracticeEventHubScreen({ route }: Props) {
   }, [event?.id, mode, phasePlan]);
 
   useEffect(() => {
-    if (!test) {
-      return;
-    }
-
-    if (secondsLeft <= 0) {
+    if (!test || testPaused || secondsLeft <= 0) {
       return;
     }
 
@@ -225,7 +252,7 @@ export function PracticeEventHubScreen({ route }: Props) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [secondsLeft, test]);
+  }, [secondsLeft, test, testPaused]);
 
   useEffect(() => {
     if (!test || !testResult) {
@@ -302,7 +329,7 @@ export function PracticeEventHubScreen({ route }: Props) {
     }
     warnedPhasesRef.current.add(warningKey);
     setPhaseWarningMessage(`1-minute warning: ${currentPhase.label}`);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    hapticWarning();
   }, [event?.id, phaseIndex, phasePlan, phaseRunning, phaseSecondsLeft]);
 
   useEffect(() => {
@@ -370,6 +397,8 @@ export function PracticeEventHubScreen({ route }: Props) {
     setError(null);
     setTestResult(null);
     setTestAnswers({});
+    setTestPaused(false);
+    setCurrentQuestionIndex(0);
     hasAutoSubmittedRef.current = false;
     try {
       const next = await generateObjectiveTest(event, difficulty);
@@ -415,12 +444,46 @@ export function PracticeEventHubScreen({ route }: Props) {
       });
 
       const percentage = test.questions.length > 0 ? (answered / test.questions.length) * 100 : 0;
-      await awardPointsToUser(profile.uid, "complete_practice_test");
+      const testAward = await awardPointsToUser(profile.uid, "complete_practice_test");
+      handleAwardResult(testAward);
       if (percentage >= 90) {
-        await awardPointsToUser(profile.uid, "score_90_bonus");
+        const bonusAward = await awardPointsToUser(profile.uid, "score_90_bonus");
+        handleAwardResult(bonusAward);
       }
       if (percentage === 100) {
-        await awardPointsToUser(profile.uid, "perfect_test_score");
+        const perfectAward = await awardPointsToUser(profile.uid, "perfect_test_score");
+        handleAwardResult(perfectAward);
+      }
+
+      if (challengeId) {
+        const duelSubmission = await submitChallengeResult(
+          challengeId,
+          profile.uid,
+          Math.round(percentage),
+          answered,
+        );
+        setChallenge(duelSubmission.challenge);
+        setChallengeWinnerUid(duelSubmission.winnerUid);
+
+        if (answered > 0) {
+          const perCorrect = await awardPointsToUser(
+            profile.uid,
+            "duel_correct_answer",
+            undefined,
+            answered * 5,
+          );
+          handleAwardResult(perCorrect);
+        }
+
+        if (duelSubmission.challenge?.status === "completed") {
+          if (duelSubmission.winnerUid && duelSubmission.winnerUid === profile.uid) {
+            const duelWin = await awardPointsToUser(profile.uid, "duel_win");
+            handleAwardResult(duelWin);
+          } else {
+            const duelLoss = await awardPointsToUser(profile.uid, "duel_loss");
+            handleAwardResult(duelLoss);
+          }
+        }
       }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Could not save test attempt.");
@@ -545,7 +608,8 @@ export function PracticeEventHubScreen({ route }: Props) {
             usedRecording: Boolean(recordingUri),
           },
         });
-        await awardPointsToUser(profile.uid, "complete_presentation");
+        const presentationAward = await awardPointsToUser(profile.uid, "complete_presentation");
+        handleAwardResult(presentationAward);
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not generate feedback.");
@@ -595,7 +659,8 @@ export function PracticeEventHubScreen({ route }: Props) {
         maxScore: updated.length,
         difficulty,
       });
-      await awardPointsToUser(profile.uid, "complete_flashcard_deck");
+      const flashcardAward = await awardPointsToUser(profile.uid, "complete_flashcard_deck");
+      handleAwardResult(flashcardAward);
     }
   };
 
@@ -652,7 +717,8 @@ export function PracticeEventHubScreen({ route }: Props) {
             interviewQuestions: JOB_INTERVIEW_QUESTIONS.length,
           },
         });
-        await awardPointsToUser(profile.uid, "complete_mock_judge");
+        const mockJudgeAward = await awardPointsToUser(profile.uid, "complete_mock_judge");
+        handleAwardResult(mockJudgeAward);
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not score interview responses.");
@@ -683,7 +749,8 @@ export function PracticeEventHubScreen({ route }: Props) {
           maxScore: result.maxScore,
           difficulty,
         });
-        await awardPointsToUser(profile.uid, "complete_mock_judge");
+        const mockJudgeAward = await awardPointsToUser(profile.uid, "complete_mock_judge");
+        handleAwardResult(mockJudgeAward);
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not run mock judge.");
@@ -695,8 +762,31 @@ export function PracticeEventHubScreen({ route }: Props) {
   return (
     <ScreenShell
       title={event.name}
-      subtitle={`${event.category} • ${event.teamEvent ? "Team" : "Individual"} • ${event.practiceCategory.replaceAll("_", " ")}`}
+      subtitle={`${event.category} - ${event.teamEvent ? "Team" : "Individual"} - ${event.practiceCategory.replaceAll("_", " ")}`}
     >
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+        {!isGuest ? (
+          <View style={{ flex: 1 }}>
+            <GlassButton
+              variant="ghost"
+              label="Challenge a Member"
+              onPress={() =>
+                navigation.navigate("ChallengeMembers", {
+                  eventId: event.id,
+                  eventName: event.name,
+                })
+              }
+            />
+          </View>
+        ) : null}
+        <View style={{ flex: 1 }}>
+          <GlassButton
+            variant="ghost"
+            label="Glossary"
+            onPress={() => navigation.navigate("Glossary")}
+          />
+        </View>
+      </View>
       <MagicCardRubric style={{ marginBottom: 12 }}>
         <Text style={{ color: palette.colors.text, fontWeight: "800" }}>Official Quick Reference</Text>
         <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>{event.description}</Text>
@@ -711,7 +801,7 @@ export function PracticeEventHubScreen({ route }: Props) {
           </Text>
         ) : null}
         <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
-          Guidelines: https://www.fbla-pbl.org/fbla/competitive-events/ • Docs: https://www.fbla-pbl.org/docs/
+          Guidelines: https://www.fbla-pbl.org/fbla/competitive-events/  Docs: https://www.fbla-pbl.org/docs/
         </Text>
       </MagicCardRubric>
 
@@ -772,33 +862,68 @@ export function PracticeEventHubScreen({ route }: Props) {
 
       {mode === "objective_test" ? (
         <View style={{ gap: 10 }}>
+          {challenge ? (
+            <GlassSurface style={{ padding: 10, borderColor: palette.colors.primary }}>
+              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
+                Head-to-Head Challenge Active
+              </Text>
+              <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
+                {challenge.challengerName} vs {challenge.targetName}
+              </Text>
+              <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>
+                Status: {challenge.status}
+              </Text>
+            </GlassSurface>
+          ) : null}
+
           <GlassButton
             variant="solid"
             label={`Generate ${event.objectiveTest?.questionCount ?? 25}-Question Test`}
             onPress={() => void startObjectiveTest()}
           />
 
-          {test ? (
+          {test ? (() => {
+            const question = test.questions[currentQuestionIndex];
+            const answeredCount = Object.keys(testAnswers).length;
+            return (
             <>
               <MagicCardScore>
-                <Text style={{ color: countdownColor, fontWeight: "900", fontSize: 28, letterSpacing: 1 }}>
-                  {test.timeLimitMinutes > 0 ? formatCountdown(secondsLeft) : "No Limit"}
-                </Text>
-                <Text style={{ color: palette.colors.textSecondary }}>
-                  {test.questions.length} questions • {test.timeLimitMinutes} minute official timer
-                </Text>
-                <Text style={{ color: palette.colors.textSecondary, marginTop: 6, fontSize: 12 }}>
-                  AI generated {new Date(test.generatedAt).toLocaleString()}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View>
+                    <Text style={{ color: countdownColor, fontWeight: "900", fontSize: 28, letterSpacing: 1 }}>
+                      {test.timeLimitMinutes > 0 ? formatCountdown(secondsLeft) : "No Limit"}
+                    </Text>
+                    <Text style={{ color: palette.colors.textSecondary, marginTop: 2, fontSize: 12 }}>
+                      {answeredCount}/{test.questions.length} answered
+                    </Text>
+                  </View>
+                  {test.timeLimitMinutes > 0 && !testResult ? (
+                    <GlassButton
+                      variant="ghost"
+                      label={testPaused ? "Resume" : "Pause"}
+                      onPress={() => setTestPaused((prev) => !prev)}
+                    />
+                  ) : null}
+                </View>
               </MagicCardScore>
 
-              <ScrollView contentContainerStyle={{ gap: 10 }}>
-                {test.questions.map((question, index) => (
-                  <MagicCardQuestion key={question.id}>
-                    <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
-                      {index + 1}. {question.question}
+              {testPaused ? (
+                <GlassSurface style={{ padding: 20, alignItems: "center", borderColor: palette.colors.warning }}>
+                  <Text style={{ color: palette.colors.warning, fontWeight: "700", fontSize: 16 }}>Timer Paused</Text>
+                  <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
+                    Tap Resume to continue your test.
+                  </Text>
+                </GlassSurface>
+              ) : question ? (
+                <>
+                  <MagicCardQuestion>
+                    <Text style={{ color: palette.colors.textMuted, fontSize: 12, fontWeight: "600", marginBottom: 6 }}>
+                      Question {currentQuestionIndex + 1} of {test.questions.length}
                     </Text>
-                    <View style={{ marginTop: 8, gap: 6 }}>
+                    <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 16 }}>
+                      {question.question}
+                    </Text>
+                    <View style={{ marginTop: 12, gap: 8 }}>
                       {question.options.map((option, optionIndex) => {
                         const selected = testAnswers[question.id] === optionIndex;
                         const isCorrect = optionIndex === question.correctIndex;
@@ -823,24 +948,30 @@ export function PracticeEventHubScreen({ route }: Props) {
                         const statusSuffix = !testResult
                           ? ""
                           : showCorrectState
-                            ? "  • Correct"
+                            ? "   Correct"
                             : isIncorrectSelection
-                              ? "  • Incorrect"
+                              ? "   Incorrect"
                               : "";
                         return (
                           <Pressable
                             key={`${question.id}_${optionIndex}`}
                             disabled={Boolean(testResult)}
-                            onPress={() => setTestAnswers((prev) => ({ ...prev, [question.id]: optionIndex }))}
+                            onPress={() => {
+                              setTestAnswers((prev) => ({ ...prev, [question.id]: optionIndex }));
+                              if (!testResult && currentQuestionIndex < test.questions.length - 1) {
+                                setTimeout(() => setCurrentQuestionIndex((prev) => prev + 1), 300);
+                              }
+                            }}
                           >
                             <GlassSurface
                               style={{
-                                padding: 10,
+                                padding: 12,
+                                borderRadius: 14,
                                 borderColor,
                                 backgroundColor,
                               }}
                             >
-                              <Text style={{ color: palette.colors.text }}>
+                              <Text style={{ color: palette.colors.text, fontSize: 15 }}>
                                 {answerPrefix}. {option}
                                 {statusSuffix}
                               </Text>
@@ -850,21 +981,45 @@ export function PracticeEventHubScreen({ route }: Props) {
                       })}
                     </View>
                     {testResult ? (
-                      <Text style={{ color: palette.colors.textSecondary, marginTop: 8 }}>
+                      <Text style={{ color: palette.colors.textSecondary, marginTop: 10, lineHeight: 20 }}>
                         {testAnswers[question.id] === question.correctIndex ? "You got this right." : `Correct answer: ${String.fromCharCode(65 + question.correctIndex)}.`}{" "}
                         {question.explanation}
                       </Text>
                     ) : null}
                   </MagicCardQuestion>
-                ))}
-              </ScrollView>
 
-              <GlassButton
-                variant="solid"
-                label={submittingTest ? "Submitting..." : "Submit Test"}
-                disabled={submittingTest}
-                onPress={() => void submitObjectiveTest()}
-              />
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <GlassButton
+                        variant="ghost"
+                        label="Previous"
+                        disabled={currentQuestionIndex === 0}
+                        onPress={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
+                      />
+                    </View>
+                    <Text style={{ color: palette.colors.textMuted, fontWeight: "600", fontSize: 13 }}>
+                      {currentQuestionIndex + 1} / {test.questions.length}
+                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <GlassButton
+                        variant="ghost"
+                        label="Next"
+                        disabled={currentQuestionIndex >= test.questions.length - 1}
+                        onPress={() => setCurrentQuestionIndex((prev) => Math.min(test.questions.length - 1, prev + 1))}
+                      />
+                    </View>
+                  </View>
+                </>
+              ) : null}
+
+              {!testResult && !testPaused ? (
+                <GlassButton
+                  variant="solid"
+                  label={submittingTest ? "Submitting..." : `Submit Test (${answeredCount}/${test.questions.length})`}
+                  disabled={submittingTest}
+                  onPress={() => void submitObjectiveTest()}
+                />
+              ) : null}
 
               {testResult ? (
                 <MagicCardScore>
@@ -872,15 +1027,34 @@ export function PracticeEventHubScreen({ route }: Props) {
                     Score: {testResult.score}/{testResult.max}
                   </Text>
                   <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
-                    Percentage: {Math.round((testResult.score / testResult.max) * 100)}%
+                    {Math.round((testResult.score / testResult.max) * 100)}%
                   </Text>
-                  <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
-                    Answered: {Object.keys(testAnswers).length}/{test.questions.length}
-                  </Text>
+                  {challenge?.status === "completed" ? (
+                    <>
+                      <Text style={{ color: palette.colors.textSecondary, marginTop: 8 }}>
+                        Duel: {challenge.challengerName} {challenge.challengerScore ?? 0}% vs {challenge.targetName} {challenge.targetScore ?? 0}%
+                      </Text>
+                      <Text style={{ color: palette.colors.text, marginTop: 4, fontWeight: "700" }}>
+                        {challengeWinnerUid
+                          ? challengeWinnerUid === profile?.uid
+                            ? "You won this challenge."
+                            : "Challenge complete. Keep training for the rematch."
+                          : "This challenge ended in a tie."}
+                      </Text>
+                    </>
+                  ) : null}
                 </MagicCardScore>
               ) : null}
+              {testResult ? (
+                <GlassButton
+                  variant="ghost"
+                  label="Practice Again"
+                  onPress={() => void startObjectiveTest()}
+                />
+              ) : null}
             </>
-          ) : null}
+            );
+          })() : null}
         </View>
       ) : null}
 
@@ -897,13 +1071,13 @@ export function PracticeEventHubScreen({ route }: Props) {
               </Text>
               {scenario.generatedAt ? (
                 <Text style={{ color: palette.colors.textSecondary, marginTop: 6, fontSize: 12 }}>
-                  AI generated {new Date(scenario.generatedAt).toLocaleString()}
+                  AI generated {formatRelativeTime(scenario.generatedAt)}
                 </Text>
               ) : null}
               <View style={{ marginTop: 8 }}>
                 {scenario.keyExpectations.map((item) => (
                   <Text key={item} style={{ color: palette.colors.textSecondary, marginBottom: 4 }}>
-                    • {item}
+                     {item}
                   </Text>
                 ))}
               </View>
@@ -969,7 +1143,7 @@ export function PracticeEventHubScreen({ route }: Props) {
               <View style={{ marginTop: 8 }}>
                 {event.presentationFlow.coachingBullets.map((line) => (
                   <Text key={line} style={{ color: palette.colors.textSecondary, marginBottom: 4 }}>
-                    • {line}
+                     {line}
                   </Text>
                 ))}
               </View>
@@ -1038,7 +1212,7 @@ export function PracticeEventHubScreen({ route }: Props) {
               <View style={{ marginTop: 8 }}>
                 {presentationFeedback.rubric.map((row) => (
                   <Text key={row.criterion} style={{ color: palette.colors.textSecondary, marginBottom: 4 }}>
-                    • {row.criterion}: {row.score}/{row.maxScore} — {row.feedback}
+                     {row.criterion}: {row.score}/{row.maxScore}  {row.feedback}
                   </Text>
                 ))}
               </View>
@@ -1067,7 +1241,7 @@ export function PracticeEventHubScreen({ route }: Props) {
                 ) : null}
                 {cards[cardIndex].generatedAt ? (
                   <Text style={{ color: palette.colors.textSecondary, marginTop: 8, fontSize: 12 }}>
-                    AI generated {new Date(cards[cardIndex].generatedAt as string).toLocaleString()}
+                    AI generated {formatRelativeTime(cards[cardIndex].generatedAt as string)}
                   </Text>
                 ) : null}
               </MagicCardFlashcard>
@@ -1165,7 +1339,7 @@ export function PracticeEventHubScreen({ route }: Props) {
               <View style={{ marginTop: 8 }}>
                 {mockResult.rubric.map((row) => (
                   <Text key={row.criterion} style={{ color: palette.colors.textSecondary, marginBottom: 4 }}>
-                    • {row.criterion}: {row.score}/{row.maxScore}
+                     {row.criterion}: {row.score}/{row.maxScore}
                   </Text>
                 ))}
               </View>
@@ -1173,7 +1347,7 @@ export function PracticeEventHubScreen({ route }: Props) {
               <View style={{ marginTop: 8 }}>
                 {mockResult.judgeTips.map((tip) => (
                   <Text key={tip} style={{ color: palette.colors.textSecondary, marginBottom: 4 }}>
-                    • {tip}
+                     {tip}
                   </Text>
                 ))}
               </View>
@@ -1188,7 +1362,7 @@ export function PracticeEventHubScreen({ route }: Props) {
         </Text>
         {event.judgingCriteria.map((criterion) => (
           <Text key={criterion} style={{ color: palette.colors.textSecondary, marginBottom: 4 }}>
-            • {criterion}
+             {criterion}
           </Text>
         ))}
       </MagicCardRubric>
@@ -1199,7 +1373,7 @@ export function PracticeEventHubScreen({ route }: Props) {
         </Text>
         {event.topicAreas.map((topic) => (
           <Text key={topic} style={{ color: palette.colors.textSecondary, marginBottom: 4 }}>
-            • {topic}
+             {topic}
           </Text>
         ))}
       </MagicCardRubric>
@@ -1218,10 +1392,10 @@ export function PracticeEventHubScreen({ route }: Props) {
             return (
               <View key={item.id} style={{ marginBottom: 8 }}>
                 <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
-                  {item.mode.replaceAll("_", " ")} • {pct}%
+                  {item.mode.replaceAll("_", " ")}  {pct}%
                 </Text>
                 <Text style={{ color: palette.colors.textSecondary }}>
-                  {new Date(item.createdAt).toLocaleString()}
+                  {formatRelativeTime(item.createdAt)}
                 </Text>
               </View>
             );
@@ -1235,4 +1409,8 @@ export function PracticeEventHubScreen({ route }: Props) {
     </ScreenShell>
   );
 }
+
+
+
+
 

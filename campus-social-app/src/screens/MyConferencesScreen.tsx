@@ -2,8 +2,11 @@ import { Plus } from "lucide-react-native";
 import React, { useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, View } from "react-native";
 import { Text } from "react-native-paper";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { ScreenShell } from "../components/ScreenShell";
+import { GlassButton } from "../components/ui/GlassButton";
 import { GlassCard } from "../components/ui/GlassCard";
 import { GlassInput } from "../components/ui/GlassInput";
 import { GlassPanel } from "../components/ui/GlassPanel";
@@ -11,13 +14,17 @@ import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { JollySelect } from "../components/ui/JollySelect";
 import { CONFERENCE_LEVELS, FBLA_COMPETITIVE_EVENTS } from "../constants/fblaEvents";
+import { useAccessibility } from "../context/AccessibilityContext";
 import { createConferenceEntryId, useDashboard } from "../context/DashboardContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { hapticTap } from "../services/haptics";
 import { ConferenceLevel } from "../types/fblaDashboard";
+import { RootStackParamList } from "../navigation/types";
 
 export function MyConferencesScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { palette } = useThemeContext();
+  const { oneHandedMode } = useAccessibility();
   const { layout, upsertConferenceEntry, deleteConferenceEntry } = useDashboard();
   const [activeLevel, setActiveLevel] = useState<ConferenceLevel>("DLC");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -32,6 +39,19 @@ export function MyConferencesScreen() {
     () => layout.conferenceSchedule.filter((entry) => entry.level === activeLevel),
     [activeLevel, layout.conferenceSchedule],
   );
+  const showRoommateFinder = useMemo(() => {
+    const raw = layout.conferenceDates[activeLevel];
+    if (typeof raw !== "string" || raw.length === 0) {
+      return false;
+    }
+    const target = Date.parse(raw);
+    if (!Number.isFinite(target)) {
+      return false;
+    }
+    const now = Date.now();
+    const diffDays = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays <= 60;
+  }, [activeLevel, layout.conferenceDates]);
 
   const resetForm = () => {
     setEventName("");
@@ -60,6 +80,15 @@ export function MyConferencesScreen() {
             label: value,
           }))}
         />
+        {showRoommateFinder ? (
+          <GlassButton
+            variant="ghost"
+            size="sm"
+            label="Find a Roommate"
+            style={{ marginTop: 8, alignSelf: "flex-start" }}
+            onPress={() => navigation.navigate("RoommateFinder", { level: activeLevel })}
+          />
+        ) : null}
       </View>
 
       <View style={{ marginTop: 12, gap: 10 }}>
@@ -102,7 +131,8 @@ export function MyConferencesScreen() {
         onPress={() => setSheetOpen(true)}
         style={{
           position: "absolute",
-          right: 18,
+          right: oneHandedMode ? undefined : 18,
+          left: oneHandedMode ? 18 : undefined,
           bottom: 28,
           minWidth: 54,
           minHeight: 54,

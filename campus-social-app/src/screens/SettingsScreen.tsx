@@ -1,19 +1,20 @@
 import Slider from "@react-native-community/slider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
-import * as WebBrowser from "expo-web-browser";
+import { Linking } from "react-native";
 import { CommonActions, NavigationProp, useNavigation, useRoute } from "@react-navigation/native";
-import { deleteUser } from "firebase/auth";
+import { deleteUser, sendPasswordResetEmail } from "firebase/auth";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { Ban, Check, ChevronDown, CircleX } from "lucide-react-native";
 import React, { useMemo, useState } from "react";
-import { Alert, LayoutAnimation, Platform, Pressable, View } from "react-native";
+import { Alert, LayoutAnimation, Modal, Platform, Pressable, View } from "react-native";
 import { Text } from "react-native-paper";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { ScreenShell } from "../components/ScreenShell";
 import { Badge } from "../components/ui/badge";
 import { GlassButton } from "../components/ui/GlassButton";
+import { GlassDropdown } from "../components/ui/GlassDropdown";
 import { GlassInput } from "../components/ui/GlassInput";
 import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
 import { GlassSurface } from "../components/ui/GlassSurface";
@@ -25,6 +26,7 @@ import { useSettings } from "../context/SettingsContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { useAnimationDuration } from "../hooks/useAnimationDuration";
 import { hapticTap } from "../services/haptics";
+import { cancelAllScheduledNotifications, requestPushPermissions } from "../services/pushService";
 import { createDefaultSettings } from "../services/settingsService";
 import { deleteUserProfile } from "../services/userService";
 import { RootStackParamList } from "../navigation/types";
@@ -211,10 +213,12 @@ function ToggleRow({
   label,
   value,
   onValueChange,
+  disabled = false,
 }: {
   label: string;
   value: boolean;
   onValueChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   const { palette } = useThemeContext();
   const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
@@ -224,7 +228,7 @@ function ToggleRow({
       <Text
         style={{
           flex: 1,
-          color: palette.colors.text,
+          color: disabled ? palette.colors.textFaint : palette.colors.text,
           fontSize: scaleFont(15),
           fontWeight: getFontWeight("500"),
         }}
@@ -237,6 +241,7 @@ function ToggleRow({
           hapticTap();
           onValueChange(next);
         }}
+        disabled={disabled}
         accessibilityLabel={label}
         accessibilityHint={getAccessibilityHint(`Turns ${label.toLowerCase()} ${value ? "off" : "on"}`)}
       />
@@ -255,11 +260,21 @@ export function SettingsScreen() {
     reduceAnimations,
     boldText,
     screenReaderHints,
+    oneHandedMode,
+    leftHandedMode,
+    hapticIntensity,
+    colorBlindMode,
+    focusMode,
     setFontScale,
     setHighContrastMode,
     setReduceAnimations,
     setBoldText,
     setScreenReaderHints,
+    setOneHandedMode,
+    setLeftHandedMode,
+    setHapticIntensityMode,
+    setColorBlindMode,
+    setFocusMode,
     scaleFont,
     getFontWeight,
     getAccessibilityHint,
@@ -269,6 +284,8 @@ export function SettingsScreen() {
   const [feedbackType, setFeedbackType] = useState("bug_report");
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
 
   const appVersion = useMemo(() => {
     return Constants.expoConfig?.version ?? "1.0.0";
@@ -313,6 +330,34 @@ export function SettingsScreen() {
     setOpenSection((prev) => (prev === sectionId ? null : sectionId));
   };
 
+  const notificationsMasterOn = settings.notifications.globalPush;
+
+  const handleGlobalPushToggle = (enabled: boolean) => {
+    void (async () => {
+      if (enabled) {
+        const granted = await requestPushPermissions();
+        if (!granted) {
+          Alert.alert(
+            "Notifications Disabled",
+            "Permission was denied, so push notifications cannot be enabled.",
+          );
+          await patch((prev) => ({
+            ...prev,
+            notifications: { ...prev.notifications, globalPush: false },
+          }));
+          return;
+        }
+      } else {
+        await cancelAllScheduledNotifications();
+      }
+
+      await patch((prev) => ({
+        ...prev,
+        notifications: { ...prev.notifications, globalPush: enabled },
+      }));
+    })();
+  };
+
   const resetToLogin = () => {
     navigation.dispatch(
       CommonActions.reset({
@@ -345,6 +390,29 @@ export function SettingsScreen() {
     ]);
   };
 
+  const performDeleteAccount = () => {
+    void (async () => {
+      try {
+        if (!profile || !auth.currentUser) {
+          return;
+        }
+        hapticTap();
+        await deleteUserProfile(profile.uid);
+        await deleteUser(auth.currentUser);
+        await setAdminMode(false);
+        await signOutUser();
+        await AsyncStorage.clear();
+        resetToLogin();
+      } catch (error) {
+        console.warn("Delete account failed:", error);
+        Alert.alert(
+          "Delete Account",
+          "Unable to delete account right now. Re-authentication may be required.",
+        );
+      }
+    })();
+  };
+
   const handleDeleteAccount = () => {
     Alert.alert(
       "Delete Account",
@@ -352,29 +420,11 @@ export function SettingsScreen() {
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete Forever",
+          text: "Continue",
           style: "destructive",
           onPress: () => {
-            void (async () => {
-              try {
-                if (!profile || !auth.currentUser) {
-                  return;
-                }
-                hapticTap();
-                await deleteUserProfile(profile.uid);
-                await deleteUser(auth.currentUser);
-                await setAdminMode(false);
-                await signOutUser();
-                await AsyncStorage.clear();
-                resetToLogin();
-              } catch (error) {
-                console.warn("Delete account failed:", error);
-                Alert.alert(
-                  "Delete Account",
-                  "Unable to delete account right now. Re-authentication may be required.",
-                );
-              }
-            })();
+            setDeleteConfirmInput("");
+            setDeleteConfirmVisible(true);
           },
         },
       ],
@@ -398,7 +448,7 @@ export function SettingsScreen() {
           label="Edit Profile"
           onPress={() => {
             hapticTap();
-            Alert.alert("Edit Profile", "Open the Profile tab and use the Edit Profile button.");
+            navigation.navigate("Profile", { openEdit: true });
           }}
         />
         <GlassButton
@@ -414,7 +464,32 @@ export function SettingsScreen() {
           label="Change Password"
           onPress={() => {
             hapticTap();
-            Alert.alert("Change Password", "Use your sign-in provider to reset or change your password.");
+            const email = auth.currentUser?.email?.trim();
+            if (!email) {
+              Alert.alert("Change Password", "No email is linked to this account.");
+              return;
+            }
+            Alert.alert(
+              "Reset Password",
+              `We will send a password reset email to ${email}. Continue?`,
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Send Email",
+                  onPress: () => {
+                    void (async () => {
+                      try {
+                        await sendPasswordResetEmail(auth, email);
+                        Alert.alert("Password Reset", "Password reset email sent. Check your inbox.");
+                      } catch (error) {
+                        console.warn("Password reset failed:", error);
+                        Alert.alert("Password Reset", "Unable to send reset email right now.");
+                      }
+                    })();
+                  },
+                },
+              ],
+            );
           }}
         />
         {(profile?.role === "admin" || profile?.officerPosition === "President") ? (
@@ -454,16 +529,12 @@ export function SettingsScreen() {
         <ToggleRow
           label="Global Push"
           value={settings.notifications.globalPush}
-          onValueChange={(value) =>
-            void patch((prev) => ({
-              ...prev,
-              notifications: { ...prev.notifications, globalPush: value },
-            }))
-          }
+          onValueChange={handleGlobalPushToggle}
         />
         <ToggleRow
           label="Event Reminders"
           value={settings.notifications.eventReminders}
+          disabled={!notificationsMasterOn}
           onValueChange={(value) =>
             void patch((prev) => ({
               ...prev,
@@ -474,6 +545,7 @@ export function SettingsScreen() {
         <ToggleRow
           label="Practice Reminders"
           value={settings.notifications.practiceReminders}
+          disabled={!notificationsMasterOn}
           onValueChange={(value) =>
             void patch((prev) => ({
               ...prev,
@@ -484,6 +556,7 @@ export function SettingsScreen() {
         <ToggleRow
           label="Chapter Updates"
           value={settings.notifications.chapterUpdates}
+          disabled={!notificationsMasterOn}
           onValueChange={(value) =>
             void patch((prev) => ({
               ...prev,
@@ -494,6 +567,7 @@ export function SettingsScreen() {
         <ToggleRow
           label="Message Notifications"
           value={settings.notifications.messageNotifications}
+          disabled={!notificationsMasterOn}
           onValueChange={(value) =>
             void patch((prev) => ({
               ...prev,
@@ -504,6 +578,7 @@ export function SettingsScreen() {
         <ToggleRow
           label="XP Alerts"
           value={settings.notifications.xpAlerts}
+          disabled={!notificationsMasterOn}
           onValueChange={(value) =>
             void patch((prev) => ({
               ...prev,
@@ -617,6 +692,106 @@ export function SettingsScreen() {
               }));
             }
           }
+        />
+        <ToggleRow
+          label="One-Handed Mode"
+          value={oneHandedMode}
+          onValueChange={(value) => {
+            setOneHandedMode(value);
+            void patch((prev) => ({
+              ...prev,
+              accessibility: { ...prev.accessibility, oneHandedMode: value },
+            }));
+          }}
+        />
+        <ToggleRow
+          label="Left-Handed Mode"
+          value={leftHandedMode}
+          onValueChange={(value) => {
+            setLeftHandedMode(value);
+            void patch((prev) => ({
+              ...prev,
+              accessibility: { ...prev.accessibility, leftHandedMode: value },
+            }));
+          }}
+        />
+        <ToggleRow
+          label="Focus Mode (Practice-only)"
+          value={focusMode}
+          onValueChange={(value) => {
+            setFocusMode(value);
+            void patch((prev) => ({
+              ...prev,
+              accessibility: { ...prev.accessibility, focusMode: value },
+            }));
+          }}
+        />
+        <View>
+          <Text
+            style={{
+              color: palette.colors.textSecondary,
+              fontSize: scaleFont(12),
+              fontWeight: getFontWeight("700"),
+              textTransform: "uppercase",
+              letterSpacing: 0.8,
+              marginBottom: 6,
+            }}
+          >
+            Haptic Intensity
+          </Text>
+          <GlassSegmentedControl
+            value={hapticIntensity}
+            options={[
+              { value: "off", label: "Off" },
+              { value: "subtle", label: "Subtle" },
+              { value: "full", label: "Full" },
+            ]}
+            onValueChange={(value) => {
+              if (value === "off" || value === "subtle" || value === "full") {
+                setHapticIntensityMode(value);
+                void patch((prev) => ({
+                  ...prev,
+                  accessibility: { ...prev.accessibility, hapticIntensity: value },
+                }));
+              }
+            }}
+          />
+        </View>
+        <GlassDropdown
+          label="Color Blind Mode"
+          value={colorBlindMode}
+          options={[
+            { value: "none", label: "None", description: "Default color system" },
+            {
+              value: "deuteranopia",
+              label: "Deuteranopia",
+              description: "Red/green support",
+            },
+            {
+              value: "protanopia",
+              label: "Protanopia",
+              description: "Alternative red/green support",
+            },
+            {
+              value: "tritanopia",
+              label: "Tritanopia",
+              description: "Blue/yellow support",
+            },
+          ]}
+          onValueChange={(value) => {
+            if (
+              value === "none" ||
+              value === "deuteranopia" ||
+              value === "protanopia" ||
+              value === "tritanopia"
+            ) {
+              setColorBlindMode(value);
+              void patch((prev) => ({
+                ...prev,
+                accessibility: { ...prev.accessibility, colorBlindMode: value },
+              }));
+            }
+          }}
         />
       </SettingsSection>
 
@@ -815,21 +990,22 @@ export function SettingsScreen() {
           variant="ghost"
           label="Terms"
           onPress={() => {
-            void WebBrowser.openBrowserAsync("https://www.fbla.org/legal/");
+            void Linking.openURL("https://fblaatlas.com/terms");
           }}
         />
         <GlassButton
           variant="ghost"
           label="Privacy Policy"
           onPress={() => {
-            void WebBrowser.openBrowserAsync("https://www.fbla.org/privacy-policy/");
+            void Linking.openURL("https://fblaatlas.com/privacy");
           }}
         />
         <GlassButton
           variant="ghost"
           label="Rate the App"
           onPress={() => {
-            void WebBrowser.openBrowserAsync("https://www.fbla.org/");
+            void Linking.openURL("https://apps.apple.com");
+            Alert.alert("Thanks", "Thank you for your support!");
           }}
         />
         <Text
@@ -912,6 +1088,11 @@ export function SettingsScreen() {
                     setReduceAnimations(defaults.accessibility.reduceAnimations);
                     setBoldText(defaults.accessibility.boldText);
                     setScreenReaderHints(defaults.accessibility.screenReaderHints);
+                    setOneHandedMode(defaults.accessibility.oneHandedMode);
+                    setLeftHandedMode(defaults.accessibility.leftHandedMode);
+                    setHapticIntensityMode(defaults.accessibility.hapticIntensity);
+                    setColorBlindMode(defaults.accessibility.colorBlindMode);
+                    setFocusMode(defaults.accessibility.focusMode);
                   })();
                 },
               },
@@ -948,6 +1129,73 @@ export function SettingsScreen() {
           textStyle={{ color: palette.colors.error, fontWeight: getFontWeight("700") }}
         />
       </View>
+
+      <Modal
+        visible={deleteConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteConfirmVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: palette.colors.overlay,
+            justifyContent: "center",
+            paddingHorizontal: 16,
+          }}
+        >
+          <GlassSurface style={{ padding: 14, borderRadius: 16, gap: 12 }}>
+            <Text
+              style={{
+                color: palette.colors.text,
+                fontWeight: getFontWeight("700"),
+                fontSize: scaleFont(18),
+              }}
+            >
+              Confirm Permanent Delete
+            </Text>
+            <Text style={{ color: palette.colors.textSecondary, fontSize: scaleFont(13) }}>
+              Type DELETE to permanently remove your account and all data.
+            </Text>
+            <GlassInput
+              label="Type DELETE"
+              value={deleteConfirmInput}
+              onChangeText={setDeleteConfirmInput}
+              autoCapitalize="characters"
+              placeholder="DELETE"
+            />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <GlassButton
+                variant="ghost"
+                label="Cancel"
+                onPress={() => {
+                  setDeleteConfirmVisible(false);
+                  setDeleteConfirmInput("");
+                }}
+                style={{ flex: 1 }}
+              />
+              <GlassButton
+                variant="ghost"
+                label="Delete Forever"
+                onPress={() => {
+                  if (deleteConfirmInput.trim().toUpperCase() !== "DELETE") {
+                    Alert.alert("Delete Account", "Type DELETE exactly to continue.");
+                    return;
+                  }
+                  setDeleteConfirmVisible(false);
+                  setDeleteConfirmInput("");
+                  performDeleteAccount();
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: palette.colors.surfaceAlt,
+                }}
+                textStyle={{ color: palette.colors.error, fontWeight: getFontWeight("700") }}
+              />
+            </View>
+          </GlassSurface>
+        </View>
+      </Modal>
     </ScreenShell>
   );
 }

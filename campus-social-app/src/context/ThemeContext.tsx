@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as NavigationBar from "expo-navigation-bar";
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { MD3Theme } from "react-native-paper";
 
 import { useAccessibility } from "./AccessibilityContext";
@@ -83,17 +83,26 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     void NavigationBar.setButtonStyleAsync(palette.isDark ? "light" : "dark").catch(() => undefined);
   }, [palette.isDark]);
 
-  const setThemeName = async (name: AppThemeName) => {
-    if (name === themeName) {
+  const setThemeName = useCallback(async (name: AppThemeName) => {
+    let shouldPersist = false;
+    setThemeNameState((previous) => {
+      if (previous === name) {
+        return previous;
+      }
+      shouldPersist = true;
+      return name;
+    });
+
+    if (!shouldPersist) {
       return;
     }
-    setThemeNameState(name);
+
     try {
       await AsyncStorage.setItem(THEME_STORAGE_KEY, name);
     } catch (error) {
       console.warn("Persist theme failed:", error);
     }
-  };
+  }, []);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
@@ -105,7 +114,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       availableThemes: APP_THEMES,
       setThemeName,
     }),
-    [boldText, fontScale, palette, ready, themeName],
+    [boldText, fontScale, palette, ready, setThemeName, themeName],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

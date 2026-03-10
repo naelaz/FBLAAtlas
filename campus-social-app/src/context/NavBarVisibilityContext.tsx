@@ -1,7 +1,13 @@
-import React, { createContext, useContext, useMemo, useRef, useState } from "react";
+import React, { createContext, useContext, useMemo, useRef } from "react";
+import {
+  Easing,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
 
 type NavBarVisibilityContextValue = {
-  hidden: boolean;
+  navTranslateY: SharedValue<number>;
   reportScrollOffset: (offsetY: number) => void;
   showNavBar: () => void;
   hideNavBar: () => void;
@@ -12,37 +18,60 @@ const NavBarVisibilityContext = createContext<NavBarVisibilityContextValue | und
 );
 
 export function NavBarVisibilityProvider({ children }: { children: React.ReactNode }) {
-  const [hidden, setHidden] = useState(false);
   const lastOffsetRef = useRef(0);
+  const navTranslateY = useSharedValue(0);
 
   const reportScrollOffset = (offsetY: number) => {
     const nextOffset = Math.max(0, offsetY);
     const delta = nextOffset - lastOffsetRef.current;
     lastOffsetRef.current = nextOffset;
 
-    if (nextOffset < 36) {
-      setHidden(false);
+    if (nextOffset <= 50) {
+      navTranslateY.value = withTiming(0, {
+        duration: 250,
+        easing: Easing.out(Easing.back(1.2)),
+      });
       return;
     }
 
-    if (delta > 6) {
-      setHidden(true);
-    } else if (delta < -4) {
-      setHidden(false);
+    if (delta > 10) {
+      navTranslateY.value = withTiming(100, {
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+      });
+      return;
+    }
+
+    if (delta < 0) {
+      navTranslateY.value = withTiming(0, {
+        duration: 250,
+        easing: Easing.out(Easing.back(1.2)),
+      });
     }
   };
 
-  const showNavBar = () => setHidden(false);
-  const hideNavBar = () => setHidden(true);
+  const showNavBar = () => {
+    navTranslateY.value = withTiming(0, {
+      duration: 250,
+      easing: Easing.out(Easing.back(1.2)),
+    });
+  };
+
+  const hideNavBar = () => {
+    navTranslateY.value = withTiming(100, {
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+    });
+  };
 
   const value = useMemo(
     () => ({
-      hidden,
+      navTranslateY,
       reportScrollOffset,
       showNavBar,
       hideNavBar,
     }),
-    [hidden],
+    [navTranslateY],
   );
 
   return (

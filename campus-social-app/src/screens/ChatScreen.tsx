@@ -235,6 +235,7 @@ export function ChatScreen({ route, navigation }: Props) {
           data={messages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: 12 }}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => {
             const mine = item.senderId === profile.uid;
             const sender = usersById.get(item.senderId);

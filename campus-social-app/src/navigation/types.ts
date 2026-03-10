@@ -1,11 +1,27 @@
-﻿import { FeedItem } from "../types/feed";
+import { NavigatorScreenParams } from "@react-navigation/native";
+
+import { FeedItem } from "../types/feed";
+
+export type MainTabParamList = {
+  Home: undefined;
+  PracticeTab: undefined;
+  Finn: undefined;
+  Messages: undefined;
+  SettingsTab: undefined;
+};
 
 export type RootStackParamList = {
-  MainTabs: undefined;
+  MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   AnnouncementDetail: { item: FeedItem };
   EventDetail: { eventId: string };
+  Events: undefined;
+  Profile: { openEdit?: boolean } | undefined;
   Practice: undefined;
-  PracticeEventHub: { eventId: string; mode?: "objective_test" | "presentation" | "flashcards" | "mock_judge" };
+  PracticeEventHub: {
+    eventId: string;
+    mode?: "objective_test" | "presentation" | "flashcards" | "mock_judge";
+    challengeId?: string;
+  };
   Notifications: undefined;
   Leaderboard: undefined;
   Finn: undefined;
@@ -16,14 +32,10 @@ export type RootStackParamList = {
   CreatePost: undefined;
   StudentProfile: { userId: string };
   JoinChapter: undefined;
+  ChallengeMembers: { eventId: string; eventName: string };
+  StudySession: { sessionId: string };
+  Glossary: undefined;
+  OfficerTasks: undefined;
+  RoommateFinder: { level: "DLC" | "SLC" | "NLC" };
+  Search: undefined;
 };
-
-export type MainTabParamList = {
-  Home: undefined;
-  Events: undefined;
-  Finn: undefined;
-  Messages: undefined;
-  Profile: undefined;
-  SettingsTab: undefined;
-};
-

@@ -102,7 +102,7 @@ export function NotificationsScreen() {
       onRefresh={() => void refreshNotifications()}
     >
       {rows.length === 0 ? (
-        <EmptyState title="You're all caught up! 🎉" message="New likes, comments, and reminders will appear here." />
+        <EmptyState title="You're all caught up" message="New likes, comments, and reminders will appear here." />
       ) : (
         <View style={{ gap: 8 }}>
           {rows.map((row, index) => {
@@ -110,8 +110,14 @@ export function NotificationsScreen() {
               return (
                 <Text
                   key={row.key}
-                  variant="titleMedium"
-                  style={{ color: palette.colors.text, fontWeight: "900", marginTop: index === 0 ? 0 : 6 }}
+                  style={{
+                    color: palette.colors.textMuted,
+                    fontWeight: "700",
+                    marginTop: index === 0 ? 0 : 8,
+                    fontSize: 11,
+                    letterSpacing: 1,
+                    textTransform: "uppercase",
+                  }}
                 >
                   {row.title}
                 </Text>

@@ -36,8 +36,8 @@ WebBrowser.maybeCompleteAuthSession();
 
 type FormMode = "signin" | "signup";
 const ADMIN_EMAIL = "admin@fblaatlas.com";
-const ADMIN_LOGIN_PASSWORD = "Admin";
-const ADMIN_AUTH_PASSWORD = "Admin2026";
+const ADMIN_PASSWORD = "Admin";
+const ADMIN_LEGACY_PASSWORD = "Admin2026";
 
 type ProfileSetupFields = {
   displayName: string;
@@ -121,7 +121,7 @@ async function ensureAdminProfile(uid: string): Promise<void> {
       displayName: "FBLA Atlas Administrator",
       schoolName: "FBLA Atlas",
       schoolId: "fbla-atlas-admin",
-      role: "admin",
+      role: "superadmin",
       banned: false,
       onboardingCompleted: true,
       updatedAt: serverTimestamp(),
@@ -144,9 +144,6 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
-  const [adminEmail, setAdminEmail] = useState(ADMIN_EMAIL);
-  const [adminPassword, setAdminPassword] = useState("");
-  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [schoolName, setSchoolName] = useState("FBLA Atlas High School");
   const [state, setState] = useState("CA");
@@ -157,19 +154,8 @@ export function LoginScreen() {
   const [fblaCapture, setFblaCapture] = useState<ReturnType<typeof parseFbConnectUrl> | null>(null);
 
   const redirectUri = useMemo(() => AuthSession.makeRedirectUri({ scheme: "fblaatlas", path: "fbla-connect" }), []);
-  const googleExpoClientId = process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID?.trim() ?? "";
-  const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID?.trim() ?? "";
-  const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim() ?? "";
   const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim() ?? "";
-  const googleConfigured = useMemo(() => {
-    if (Platform.OS === "android") {
-      return Boolean(googleAndroidClientId);
-    }
-    if (Platform.OS === "ios") {
-      return Boolean(googleIosClientId);
-    }
-    return Boolean(googleWebClientId);
-  }, [googleAndroidClientId, googleIosClientId, googleWebClientId]);
+  const googleConfigured = useMemo(() => Boolean(googleWebClientId), [googleWebClientId]);
 
   const runEmailAuth = async () => {
     setBusy(true);
@@ -276,28 +262,26 @@ export function LoginScreen() {
   };
 
   const runAdminAuth = async () => {
-    if (!adminEmail.trim() || !adminPassword) {
-      setError("Enter admin email and password.");
-      return;
-    }
-    if (adminEmail.trim().toLowerCase() !== ADMIN_EMAIL || adminPassword !== ADMIN_LOGIN_PASSWORD) {
-      setError("Use the configured administrator credentials for this login.");
-      return;
-    }
     try {
       setBusy(true);
       setError(null);
       let credential;
       const methods = await fetchSignInMethodsForEmail(auth, ADMIN_EMAIL);
       if (methods.length === 0) {
-        credential = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_AUTH_PASSWORD);
+        credential = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
       } else {
-        credential = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_AUTH_PASSWORD);
+        try {
+          credential = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
+        } catch (primaryAuthError) {
+          // Backward-compatible fallback for older seeded admin passwords.
+          console.warn("[AdminLogin] primary password sign-in failed; trying legacy password", primaryAuthError);
+          credential = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_LEGACY_PASSWORD);
+        }
       }
       await ensureAdminProfile(credential.user.uid);
       const existing = await getUserProfileOnce(credential.user.uid);
       const role = existing?.role;
-      if (role !== "admin") {
+      if (role !== "admin" && role !== "superadmin") {
         await signOut(auth);
         await setAdminMode(false);
         setError("This account does not have administrator access");
@@ -306,8 +290,6 @@ export function LoginScreen() {
       await setAdminMode(true);
       await setOnboardingCompleted(true);
       setAdminOpen(false);
-      setAdminEmail(ADMIN_EMAIL);
-      setAdminPassword("");
     } catch (adminError) {
       setError(adminError instanceof Error ? adminError.message : "Administrator login failed.");
       await setAdminMode(false);
@@ -345,9 +327,6 @@ export function LoginScreen() {
                 graduationYear={graduationYear}
                 setOnboardingCompleted={setOnboardingCompleted}
                 setAdminMode={setAdminMode}
-                googleExpoClientId={googleExpoClientId}
-                googleAndroidClientId={googleAndroidClientId}
-                googleIosClientId={googleIosClientId}
                 googleWebClientId={googleWebClientId}
               />
             ) : (
@@ -357,7 +336,7 @@ export function LoginScreen() {
                 icon={<Text style={{ color: palette.colors.text, fontSize: 16, fontWeight: "900" }}>G</Text>}
                 onPress={() => {
                   setError(
-                    "Google sign-in is not configured for this build yet. Add the Google OAuth client IDs to .env first.",
+                    "Google sign-in is not configured for this build yet. Add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID from Firebase Google Sign-In.",
                   );
                 }}
                 disabled={busy}
@@ -365,7 +344,7 @@ export function LoginScreen() {
             )}
             {!googleConfigured ? (
               <Text style={{ color: palette.colors.textSecondary, marginTop: 8 }}>
-                Google sign-in is currently unavailable in this build.
+                Google sign-in is currently unavailable in this build (missing Firebase Web client ID).
               </Text>
             ) : null}
 
@@ -537,7 +516,7 @@ export function LoginScreen() {
               </Pressable>
             </View>
             <Text style={{ color: palette.colors.muted, fontSize: 12, textAlign: "center" }}>
-              Built for FBLA — FBLA-PBL is not affiliated with this app.
+              Built for FBLA - FBLA-PBL is not affiliated with this app.
             </Text>
           </View>
         </ScrollView>
@@ -593,7 +572,7 @@ export function LoginScreen() {
               onPress={() => setAdminOpen(false)}
               style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center" }}
             >
-              <Text style={{ color: palette.colors.text, fontSize: 22 }}>‹</Text>
+              <Text style={{ color: palette.colors.text, fontSize: 22 }}>&lt;</Text>
             </Pressable>
             <Shield size={18} color={palette.colors.text} />
             <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 20 }}>
@@ -603,34 +582,6 @@ export function LoginScreen() {
 
           <ScrollView contentContainerStyle={{ padding: 16 }}>
             <GlassSurface style={{ padding: 14 }}>
-              <GlassInput
-                value={adminEmail}
-                onChangeText={setAdminEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                label="Admin Email"
-                placeholder={ADMIN_EMAIL}
-                leftSlot={<Mail size={18} color={palette.colors.textSecondary} />}
-              />
-              <GlassInput
-                value={adminPassword}
-                onChangeText={setAdminPassword}
-                secureTextEntry={!showAdminPassword}
-                label="Admin Password"
-                placeholder="Enter password"
-                rightSlot={
-                  <Pressable
-                    onPress={() => setShowAdminPassword((prev) => !prev)}
-                    style={{ minHeight: 30, minWidth: 30, alignItems: "center", justifyContent: "center" }}
-                  >
-                    {showAdminPassword ? (
-                      <EyeOff size={18} color={palette.colors.textSecondary} />
-                    ) : (
-                      <Eye size={18} color={palette.colors.textSecondary} />
-                    )}
-                  </Pressable>
-                }
-              />
               <GlassButton
                 variant="solid"
                 label="Login as Administrator"
@@ -657,9 +608,6 @@ type GoogleAuthButtonProps = {
   graduationYear: string;
   setOnboardingCompleted: (value: boolean) => Promise<void>;
   setAdminMode: (enabled: boolean) => Promise<void>;
-  googleExpoClientId: string;
-  googleAndroidClientId: string;
-  googleIosClientId: string;
   googleWebClientId: string;
 };
 
@@ -672,35 +620,62 @@ function GoogleAuthButton({
   graduationYear,
   setOnboardingCompleted,
   setAdminMode,
-  googleExpoClientId,
-  googleAndroidClientId,
-  googleIosClientId,
   googleWebClientId,
 }: GoogleAuthButtonProps) {
   const { palette } = useThemeContext();
+  const googleRedirectUri = useMemo(
+    () =>
+      AuthSession.makeRedirectUri({
+        scheme: "fblaatlas",
+        path: "google-auth",
+      }),
+    [],
+  );
 
+  // Ensure Google is enabled in Firebase Console -> Authentication -> Sign-in method.
   const [googleRequest, googleResponse, promptGoogle] = Google.useAuthRequest({
-    clientId: googleExpoClientId,
-    androidClientId: googleAndroidClientId,
-    iosClientId: googleIosClientId,
+    clientId: googleWebClientId,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID?.trim() || googleWebClientId,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim() || googleWebClientId,
     webClientId: googleWebClientId,
+    redirectUri: googleRedirectUri,
+    responseType: AuthSession.ResponseType.IdToken,
   });
 
   React.useEffect(() => {
     const runGoogleResponse = async () => {
-      if (googleResponse?.type !== "success") {
+      if (!googleResponse) {
         return;
       }
+
+      if (googleResponse.type === "error") {
+        console.error("[GoogleSignIn] OAuth response error:", googleResponse);
+        console.log("Google Sign-In error:", JSON.stringify(googleResponse));
+        onError(
+          (googleResponse as { error?: { message?: string } }).error?.message ??
+            "Google OAuth failed. Check Firebase Web client ID and SHA settings.",
+        );
+        return;
+      }
+
+      if (googleResponse.type !== "success") {
+        return;
+      }
+
       try {
         onBusyChange(true);
         onError(null);
-        const idToken = googleResponse.authentication?.idToken;
+        const idToken =
+          googleResponse.authentication?.idToken ??
+          (googleResponse as { params?: { id_token?: string } }).params?.id_token;
         if (!idToken) {
+          console.error("[GoogleSignIn] success response missing idToken:", googleResponse);
           throw new Error("Google sign-in returned no token. Check your Google OAuth client IDs.");
         }
 
         const credential = GoogleAuthProvider.credential(idToken);
         const userCredential = await signInWithCredential(auth, credential);
+        console.log("[GoogleSignIn] Firebase credential sign-in success:", userCredential.user.uid);
 
         const newUser = await upsertAuthenticatedProfile(userCredential.user.uid, "google", {
           displayName: userCredential.user.displayName ?? "FBLA Member",
@@ -712,6 +687,16 @@ function GoogleAuthButton({
         await setAdminMode(false);
         await setOnboardingCompleted(!newUser);
       } catch (authError) {
+        console.error("[GoogleSignIn] full error:", authError, {
+          responseType: googleResponse.type,
+          responseKeys: Object.keys(googleResponse),
+        });
+        try {
+          const serialized = JSON.stringify(authError, Object.getOwnPropertyNames(authError as object));
+          console.log("Google Sign-In error:", serialized);
+        } catch {
+          console.log("Google Sign-In error:", String(authError));
+        }
         onError(authError instanceof Error ? authError.message : "Google sign-in failed.");
       } finally {
         onBusyChange(false);
@@ -726,12 +711,30 @@ function GoogleAuthButton({
       variant="primary"
       label="Continue with Google"
       icon={<Text style={{ color: palette.colors.text, fontSize: 16, fontWeight: "900" }}>G</Text>}
-      onPress={() => {
+      onPress={async () => {
         onError(null);
-        void promptGoogle();
+        try {
+          const result = await promptGoogle();
+          if (result.type === "error") {
+            console.error("[GoogleSignIn] prompt error result:", result);
+            console.log("Google Sign-In error:", JSON.stringify(result));
+            onError("Google sign-in prompt failed.");
+          }
+        } catch (promptError) {
+          console.error("[GoogleSignIn] prompt exception:", promptError);
+          try {
+            const serialized = JSON.stringify(promptError, Object.getOwnPropertyNames(promptError as object));
+            console.log("Google Sign-In error:", serialized);
+          } catch {
+            console.log("Google Sign-In error:", String(promptError));
+          }
+          onError(promptError instanceof Error ? promptError.message : "Unable to start Google sign-in.");
+        }
       }}
       disabled={busy || !googleRequest}
     />
   );
 }
+
+
 

@@ -5,40 +5,318 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(uid) {
-      return isSignedIn() && request.auth.uid == uid;
+    function authRole() {
+      return isSignedIn() && request.auth.token.role is string
+        ? request.auth.token.role
+        : "member";
+    }
+
+    function isSuperAdmin() {
+      return authRole() == "superadmin";
     }
 
     function isAdmin() {
-      return isSignedIn() && request.auth.token.role == "admin";
+      return isSuperAdmin() || authRole() == "admin";
     }
 
-    // User profile docs.
+    function isOfficer() {
+      return isAdmin() || authRole() == "officer";
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function hasUserDoc(uid) {
+      return isSignedIn() && exists(userPath(uid));
+    }
+
+    function userSchoolId(uid) {
+      return hasUserDoc(uid) ? get(userPath(uid)).data.schoolId : null;
+    }
+
+    function userChapterId(uid) {
+      return hasUserDoc(uid) ? get(userPath(uid)).data.chapterId : null;
+    }
+
+    function sameSchool(schoolId) {
+      return isSignedIn() && userSchoolId(request.auth.uid) == schoolId;
+    }
+
+    function sameChapter(chapterId) {
+      return isSignedIn() && userChapterId(request.auth.uid) == chapterId;
+    }
+
+    function canManageChapter(chapterId) {
+      return isSuperAdmin() || (isOfficer() && sameChapter(chapterId));
+    }
+
+    function canManageSchool(schoolId) {
+      return isSuperAdmin() || (isOfficer() && sameSchool(schoolId));
+    }
+
     match /users/{uid} {
       allow read: if isSignedIn();
-      allow create: if isOwner(uid);
-      allow update, delete: if isOwner(uid) || isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow delete: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+
+      match /notifications/{notificationId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+
+      match /practiceAttempts/{attemptId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
     }
 
-    // Admin-only collections.
+    match /settings/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
     match /adminLogs/{docId} {
       allow read, write: if isAdmin();
     }
 
-    match /announcements/{docId} {
+    match /feedback/{docId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /app_meta/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
-    // Existing app collections.
+    match /chapters/{chapterId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin() || (isOfficer() && sameChapter(chapterId));
+    }
+
+    match /chapterRequests/{chapterId}/requests/{userId} {
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId ||
+        canManageChapter(chapterId)
+      );
+      allow update, delete: if canManageChapter(chapterId);
+    }
+
+    match /announcements/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isOfficer();
+    }
+
+    match /socialFeed/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /fblaFacts/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /fblaGlossary/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /homeFeed/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isOfficer();
+    }
+
+    match /stories/{storyId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && sameSchool(request.resource.data.schoolId);
+      allow update, delete: if isSignedIn() && (
+        request.auth.uid == resource.data.userId ||
+        canManageSchool(resource.data.schoolId)
+      );
+    }
+
+    match /activities/{activityId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && sameSchool(request.resource.data.schoolId);
+      allow update, delete: if isAdmin();
+    }
+
+    match /clubs/{clubId} {
+      allow read: if isSignedIn() && sameSchool(resource.data.schoolId);
+      allow create: if isOfficer() && sameSchool(request.resource.data.schoolId);
+      allow update, delete: if isOfficer() && sameSchool(resource.data.schoolId);
+    }
+
+    match /studyGroups/{groupId} {
+      allow read: if isSignedIn() && sameSchool(resource.data.schoolId);
+      allow create: if isSignedIn() && sameSchool(request.resource.data.schoolId);
+      allow update, delete: if isSignedIn() && (
+        isOfficer() && sameSchool(resource.data.schoolId)
+      );
+    }
+
+    match /schoolNews/{newsId} {
+      allow read: if isSignedIn() && sameSchool(resource.data.schoolId);
+      allow write: if isOfficer() && sameSchool(resource.data.schoolId);
+    }
+
     match /posts/{postId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create: if isSignedIn() && sameSchool(request.resource.data.schoolId);
+      allow update, delete: if isSignedIn() && (
+        request.auth.uid == resource.data.authorId ||
+        canManageSchool(resource.data.schoolId)
+      );
+
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
+        allow update, delete: if isSignedIn() && (
+          request.auth.uid == resource.data.authorId ||
+          canManageSchool(get(/databases/$(database)/documents/posts/$(postId)).data.schoolId)
+        );
+      }
     }
 
     match /events/{eventId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isOfficer() && sameSchool(request.resource.data.schoolId);
+    }
+
+    match /chapterEvents/{eventId} {
+      allow read: if isSignedIn() && sameChapter(resource.data.chapterId);
+      allow create: if canManageChapter(request.resource.data.chapterId);
+      allow update, delete: if canManageChapter(resource.data.chapterId);
+    }
+
+    match /chapterMeetingNotes/{noteId} {
+      allow read: if isSignedIn() && sameChapter(resource.data.chapterId);
+      allow create: if canManageChapter(request.resource.data.chapterId);
+      allow update, delete: if canManageChapter(resource.data.chapterId);
+    }
+
+    match /chapterTasks/{taskId} {
+      allow read: if isSignedIn() && sameChapter(resource.data.chapterId);
+      allow create: if canManageChapter(request.resource.data.chapterId);
+      allow update, delete: if canManageChapter(resource.data.chapterId);
+    }
+
+    match /chapterGoals/{goalId} {
+      allow read: if isSignedIn() && sameChapter(resource.data.chapterId);
+      allow create: if canManageChapter(request.resource.data.chapterId);
+      allow update, delete: if canManageChapter(resource.data.chapterId);
+    }
+
+    match /goalContributions/{contributionId} {
+      allow read: if isSignedIn() && sameChapter(resource.data.chapterId);
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        sameChapter(request.resource.data.chapterId);
+      allow update, delete: if canManageChapter(resource.data.chapterId);
+    }
+
+    match /recognitionPlacements/{placementId} {
+      allow read: if isSignedIn() && sameSchool(resource.data.schoolId);
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid &&
+        sameSchool(request.resource.data.schoolId);
+      allow update, delete: if canManageSchool(resource.data.schoolId);
+    }
+
+    match /chapterDuesSettings/{chapterId} {
+      allow read: if isSignedIn() && sameChapter(chapterId);
+      allow write: if (isAdmin() && sameChapter(chapterId)) || isSuperAdmin();
+    }
+
+    match /chapterDues/{chapterId}/members/{uid} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == uid ||
+        (isAdmin() && sameChapter(chapterId)) ||
+        isSuperAdmin()
+      );
+      allow write: if (isAdmin() && sameChapter(chapterId)) || isSuperAdmin();
+    }
+
+    match /mentorRequests/{requestId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.requesterUid ||
+        request.auth.uid == resource.data.mentorUid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && request.resource.data.requesterUid == request.auth.uid;
+      allow update, delete: if isSignedIn() && (
+        request.auth.uid == resource.data.mentorUid ||
+        request.auth.uid == resource.data.requesterUid ||
+        isAdmin()
+      );
+    }
+
+    match /roommatePreferences/{uid} {
+      allow read: if isSignedIn() && sameChapter(resource.data.chapterId);
+      allow create, update, delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /roommateMatches/{matchId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.uidA ||
+        request.auth.uid == resource.data.uidB ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        request.auth.uid == request.resource.data.uidA ||
+        request.auth.uid == request.resource.data.uidB
+      );
+      allow update, delete: if isSignedIn() && (
+        request.auth.uid == resource.data.uidA ||
+        request.auth.uid == resource.data.uidB ||
+        isAdmin()
+      );
+    }
+
+    match /studySessions/{sessionId} {
+      allow read: if isSignedIn() && sameSchool(resource.data.schoolId);
+      allow create: if isSignedIn() && sameSchool(request.resource.data.schoolId);
+      allow update: if isSignedIn() && sameSchool(resource.data.schoolId);
+      allow delete: if isSignedIn() && (
+        request.auth.uid == resource.data.createdByUid ||
+        canManageSchool(resource.data.schoolId)
+      );
+
+      match /participants/{uid} {
+        allow read: if isSignedIn() && sameSchool(get(/databases/$(database)/documents/studySessions/$(sessionId)).data.schoolId);
+        allow write: if isSignedIn() && sameSchool(get(/databases/$(database)/documents/studySessions/$(sessionId)).data.schoolId);
+      }
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && sameSchool(get(/databases/$(database)/documents/studySessions/$(sessionId)).data.schoolId);
+        allow create: if isSignedIn() &&
+          request.resource.data.uid == request.auth.uid &&
+          sameSchool(get(/databases/$(database)/documents/studySessions/$(sessionId)).data.schoolId);
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    match /challenges/{challengeId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.challengerUid ||
+        request.auth.uid == resource.data.targetUid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.challengerUid == request.auth.uid &&
+        sameChapter(request.resource.data.chapterId) &&
+        sameSchool(request.resource.data.schoolId);
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.challengerUid ||
+        request.auth.uid == resource.data.targetUid ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{uid}/items/{itemId} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
     match /messages/{conversationId} {
@@ -48,14 +326,54 @@ service cloud.firestore {
       }
     }
 
-    match /homeFeed/{docId} {
+    match /conversations/{conversationId} {
+      allow read, write: if isSignedIn();
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    match /presence/{uid} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /dashboardLayouts/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /practiceScores/{uid}/events/{eventId} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /practiceAttempts/{uid}/items/{attemptId} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /practiceHistory/{uid}/sessions/{sessionId} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /practiceProfiles/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /eventStats/{eventId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /practiceSessions/{sessionId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /chapterPracticeLeaderboard/{schoolId}/rows/{uid} {
+      allow read: if isSignedIn() && sameSchool(schoolId);
+      allow write: if isSignedIn() && request.auth.uid == uid;
     }
 
     match /{document=**} {
-      allow read, write: if isSignedIn();
+      allow read, write: if false;
     }
   }
 }
-

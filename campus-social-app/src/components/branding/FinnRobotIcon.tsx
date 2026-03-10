@@ -13,9 +13,11 @@ import { useThemeContext } from "../../context/ThemeContext";
 
 type FinnRobotIconProps = {
   size?: number;
+  primaryColor?: string;
+  secondaryColor?: string;
 };
 
-export function FinnRobotIcon({ size = 36 }: FinnRobotIconProps) {
+export function FinnRobotIcon({ size = 36, primaryColor, secondaryColor }: FinnRobotIconProps) {
   const { palette } = useThemeContext();
   const gradientId = `finnGradient_${palette.name}`;
 
@@ -23,8 +25,8 @@ export function FinnRobotIcon({ size = 36 }: FinnRobotIconProps) {
     <Svg width={size} height={size} viewBox="0 0 64 64">
       <Defs>
         <LinearGradient id={gradientId} x1="4" y1="4" x2="60" y2="60">
-          <Stop offset="0%" stopColor={palette.colors.primary} />
-          <Stop offset="100%" stopColor={palette.colors.secondary} />
+          <Stop offset="0%" stopColor={primaryColor ?? palette.colors.primary} />
+          <Stop offset="100%" stopColor={secondaryColor ?? palette.colors.secondary} />
         </LinearGradient>
       </Defs>
 

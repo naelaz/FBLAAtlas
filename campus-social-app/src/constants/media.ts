@@ -6,6 +6,8 @@ export const CAMPUS_IMAGES = [
   "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=1600&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=1600&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1607237138185-eedd9c632b0b?w=1600&auto=format&fit=crop",
 ] as const;
 
 export const EVENT_IMAGES = [
@@ -14,6 +16,8 @@ export const EVENT_IMAGES = [
   "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=1600&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1600&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1587825140708-dfaf18c4f4d4?w=1600&auto=format&fit=crop",
 ] as const;
 
 export const SPORTS_IMAGES = [
@@ -28,6 +32,8 @@ export const SOCIAL_IMAGES = [
   "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1600&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1600&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1543269865-cbf427effbad?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1528605248644-14dd04022da1?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=1600&auto=format&fit=crop",
 ] as const;
 
 export const FBLA_IMAGES = [
@@ -35,6 +41,24 @@ export const FBLA_IMAGES = [
   "https://images.unsplash.com/photo-1507537297725-24a1c029d3ca?w=1600&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=1600&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1552664730-d307ca884978?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1573164713714-d95e436ab8d6?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1531545514256-b1400bc00f31?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=1600&auto=format&fit=crop",
+] as const;
+
+export const PRESENTATION_IMAGES = [
+  "https://images.unsplash.com/photo-1558403194-611308249627?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1560439514-4e9645039924?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1591115765373-5f9cf1da241c?w=1600&auto=format&fit=crop",
+] as const;
+
+export const NETWORKING_IMAGES = [
+  "https://images.unsplash.com/photo-1515187029135-18ee286d815b?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1559223607-a43c990c692c?w=1600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1600&auto=format&fit=crop",
 ] as const;
 
 export const SOCIAL_WIDGET_IMAGES = {
@@ -71,6 +95,14 @@ export function getSocialImage(seed: string): string {
 
 export function getBusinessImage(seed: string): string {
   return pickFromPool(FBLA_IMAGES, seed);
+}
+
+export function getPresentationImage(seed: string): string {
+  return pickFromPool(PRESENTATION_IMAGES, seed);
+}
+
+export function getNetworkingImage(seed: string): string {
+  return pickFromPool(NETWORKING_IMAGES, seed);
 }
 
 export function getEventImageByCategory(category: string | null | undefined, seed: string): string {

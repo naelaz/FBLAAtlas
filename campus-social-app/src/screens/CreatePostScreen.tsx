@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
-import { Camera, Check, ChevronDown, X } from "lucide-react-native";
+import { Camera, Check, ChevronDown, ChevronLeft, X } from "lucide-react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import React, { useMemo, useState } from "react";
@@ -190,7 +190,7 @@ export function CreatePostScreen({ navigation }: Props) {
             onPress={() => navigation.goBack()}
             style={{ minWidth: 44, minHeight: 44, alignItems: "flex-start", justifyContent: "center" }}
           >
-            <X size={20} color={palette.colors.text} />
+            <ChevronLeft size={20} color={palette.colors.text} />
           </Pressable>
           <Text style={{ color: palette.colors.text, fontSize: 22, fontWeight: "700" }}>New Post</Text>
           <Pressable
@@ -416,4 +416,3 @@ export function CreatePostScreen({ navigation }: Props) {
     </SafeAreaView>
   );
 }
-

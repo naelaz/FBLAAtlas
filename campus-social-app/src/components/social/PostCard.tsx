@@ -13,7 +13,6 @@ import { Text } from "react-native-paper";
 
 import { useThemeContext } from "../../context/ThemeContext";
 import { resolveAvatarUrl } from "../../constants/media";
-import { formatDateTime } from "../../services/firestoreUtils";
 import { hapticLike, hapticTap } from "../../services/haptics";
 import { subscribePostComments } from "../../services/socialService";
 import { CommentItem, PostItem, UserProfile } from "../../types/social";
@@ -26,7 +25,7 @@ import { GlassInput } from "../ui/GlassInput";
 import { GlassSurface } from "../ui/GlassSurface";
 import { TierBadge } from "../ui/TierBadge";
 
-const REACTIONS = ["🔥", "👏", "💡", "🎯", "😂"];
+const REACTIONS = ["Fire", "Clap", "Idea", "Focus", "Laugh"];
 
 type PostCardProps = {
   post: PostItem;
@@ -243,7 +242,7 @@ function PostCardInner({
               }}
               style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
             >
-              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>↗</Text>
+              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{"->"}</Text>
               <Text style={{ color: palette.colors.text }}>Share</Text>
             </Pressable>
           </View>
@@ -264,7 +263,7 @@ function PostCardInner({
           </View>
 
           <Text style={{ color: palette.colors.muted, fontSize: 12 }}>
-            {formatCompactNumber(post.likeCount)} likes • {formatDateTime(post.createdAt)}
+            {formatCompactNumber(post.likeCount)} likes - {formatRelativeTime(post.createdAt)}
           </Text>
         </View>
 
@@ -423,3 +422,4 @@ function PostCardInner({
 }
 
 export const PostCard = React.memo(PostCardInner);
+

@@ -15,8 +15,10 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../config/firebase";
+import { ChapterEventItem, MeetingNote } from "../types/features";
 import { UserProfile } from "../types/social";
 import { createUserNotification } from "./notificationService";
+import { SchoolSearchResult } from "./schoolService";
 import { toIso } from "./firestoreUtils";
 
 export type Chapter = {
@@ -126,6 +128,60 @@ export async function searchChapters(rawQuery: string): Promise<Chapter[]> {
   return chapters.filter((chapter) =>
     `${chapter.name} ${chapter.school} ${chapter.city} ${chapter.state}`.toLowerCase().includes(queryText),
   );
+}
+
+export async function findChapterBySchoolName(schoolName: string): Promise<Chapter | null> {
+  const normalized = schoolName.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  const chapters = await searchChapters(schoolName);
+  return chapters.find((chapter) => chapter.school.trim().toLowerCase() === normalized) ?? null;
+}
+
+function chapterIdFromSchool(school: SchoolSearchResult): string {
+  const parts = [school.state, school.city, school.name]
+    .join(" ")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72);
+  return parts || "fbla-chapter";
+}
+
+export async function createChapterForSchool(
+  school: SchoolSearchResult,
+  creator: UserProfile,
+): Promise<Chapter> {
+  await ensureSampleChaptersSeeded();
+
+  const baseId = chapterIdFromSchool(school);
+  let id = baseId;
+  let attempt = 1;
+  // Ensure unique chapter document IDs.
+  while ((await getDoc(doc(db, "chapters", id))).exists()) {
+    attempt += 1;
+    id = `${baseId}-${attempt}`;
+  }
+
+  const chapter: Chapter = {
+    id,
+    name: `${school.name} FBLA Chapter`,
+    school: school.name,
+    city: school.city,
+    state: school.state,
+    memberCount: 1,
+    officers: [`${creator.displayName} - President`],
+  };
+
+  await setDoc(doc(db, "chapters", id), {
+    ...chapter,
+    createdByUid: creator.uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return chapter;
 }
 
 export async function submitChapterJoinRequest(chapter: Chapter, user: UserProfile): Promise<void> {
@@ -305,4 +361,175 @@ export async function fetchLatestAnnouncement(): Promise<AnnouncementItem | null
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "Administrator",
     createdAt: toIso(data.createdAt),
   };
+}
+
+function parseChapterEvent(id: string, data: Record<string, unknown>): ChapterEventItem {
+  return {
+    id,
+    chapterId: typeof data.chapterId === "string" ? data.chapterId : "",
+    schoolId: typeof data.schoolId === "string" ? data.schoolId : "",
+    title: typeof data.title === "string" ? data.title : "",
+    description: typeof data.description === "string" ? data.description : "",
+    location: typeof data.location === "string" ? data.location : "",
+    dateTime: typeof data.dateTime === "string" ? data.dateTime : "",
+    mandatory: Boolean(data.mandatory),
+    rsvpEnabled: data.rsvpEnabled !== false,
+    attendeeIds: Array.isArray(data.attendeeIds)
+      ? data.attendeeIds.filter((item): item is string => typeof item === "string")
+      : [],
+    capacity: typeof data.capacity === "number" ? data.capacity : undefined,
+    createdByUid: typeof data.createdByUid === "string" ? data.createdByUid : "",
+    createdByName: typeof data.createdByName === "string" ? data.createdByName : "Officer",
+    createdAt: toIso(data.createdAt),
+  };
+}
+
+function parseMeetingNote(id: string, data: Record<string, unknown>): MeetingNote {
+  return {
+    id,
+    chapterId: typeof data.chapterId === "string" ? data.chapterId : "",
+    schoolId: typeof data.schoolId === "string" ? data.schoolId : "",
+    meetingDate: typeof data.meetingDate === "string" ? data.meetingDate : "",
+    agenda: Array.isArray(data.agenda) ? data.agenda.filter((x): x is string => typeof x === "string") : [],
+    decisions: Array.isArray(data.decisions)
+      ? data.decisions.filter((x): x is string => typeof x === "string")
+      : [],
+    attendees: Array.isArray(data.attendees)
+      ? data.attendees
+          .map((item) => {
+            if (!item || typeof item !== "object") {
+              return null;
+            }
+            const row = item as Record<string, unknown>;
+            const uid = typeof row.uid === "string" ? row.uid : "";
+            const name = typeof row.name === "string" ? row.name : "";
+            if (!uid || !name) {
+              return null;
+            }
+            return { uid, name };
+          })
+          .filter((item): item is { uid: string; name: string } => Boolean(item))
+      : [],
+    actionItems: Array.isArray(data.actionItems)
+      ? data.actionItems
+          .map((item) => {
+            if (!item || typeof item !== "object") {
+              return null;
+            }
+            const row = item as Record<string, unknown>;
+            const text = typeof row.text === "string" ? row.text : "";
+            if (!text) {
+              return null;
+            }
+            return {
+              id: typeof row.id === "string" ? row.id : `${text}_${Math.random().toString(36).slice(2, 8)}`,
+              text,
+              assigneeUid: typeof row.assigneeUid === "string" ? row.assigneeUid : "",
+              assigneeName: typeof row.assigneeName === "string" ? row.assigneeName : "",
+              dueDate: typeof row.dueDate === "string" ? row.dueDate : "",
+              done: Boolean(row.done),
+            };
+          })
+          .filter((item): item is MeetingNote["actionItems"][number] => Boolean(item))
+      : [],
+    createdByUid: typeof data.createdByUid === "string" ? data.createdByUid : "",
+    createdByName: typeof data.createdByName === "string" ? data.createdByName : "Officer",
+    createdAt: toIso(data.createdAt),
+  };
+}
+
+export async function createChapterEvent(
+  actor: UserProfile,
+  payload: Omit<ChapterEventItem, "id" | "chapterId" | "schoolId" | "attendeeIds" | "createdByUid" | "createdByName" | "createdAt">,
+): Promise<string> {
+  const ref = doc(collection(db, "chapterEvents"));
+  await setDoc(ref, {
+    chapterId: actor.chapterId ?? "",
+    schoolId: actor.schoolId,
+    title: payload.title,
+    description: payload.description,
+    location: payload.location,
+    dateTime: payload.dateTime,
+    mandatory: payload.mandatory,
+    rsvpEnabled: payload.rsvpEnabled,
+    capacity: payload.capacity ?? null,
+    attendeeIds: [],
+    createdByUid: actor.uid,
+    createdByName: actor.displayName,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  if (actor.chapterId) {
+    const chapterUsers = await getDocs(
+      query(collection(db, "users"), where("chapterId", "==", actor.chapterId), limit(300)),
+    );
+    await Promise.all(
+      chapterUsers.docs
+        .map((userDoc) => userDoc.id)
+        .filter((uid) => uid !== actor.uid)
+        .map((uid) =>
+          createUserNotification(uid, {
+            type: "message",
+            title: "New Chapter Event",
+            body: `${payload.title} was posted by ${actor.displayName}.`,
+            metadata: {
+              eventId: ref.id,
+              chapterId: actor.chapterId ?? "",
+              mandatory: payload.mandatory ? "true" : "false",
+            },
+          }).catch(() => undefined),
+        ),
+    );
+  }
+  return ref.id;
+}
+
+export async function fetchChapterEvents(chapterId: string): Promise<ChapterEventItem[]> {
+  const snap = await getDocs(
+    query(collection(db, "chapterEvents"), where("chapterId", "==", chapterId), orderBy("dateTime", "asc"), limit(200)),
+  );
+  return snap.docs.map((row) => parseChapterEvent(row.id, row.data() as Record<string, unknown>));
+}
+
+export async function toggleChapterEventRsvp(eventId: string, uid: string): Promise<void> {
+  const ref = doc(db, "chapterEvents", eventId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) {
+      return;
+    }
+    const current = parseChapterEvent(snap.id, snap.data() as Record<string, unknown>);
+    const next = current.attendeeIds.includes(uid)
+      ? current.attendeeIds.filter((id) => id !== uid)
+      : [...current.attendeeIds, uid];
+    tx.set(ref, { attendeeIds: next, updatedAt: serverTimestamp() }, { merge: true });
+  });
+}
+
+export async function createMeetingNote(
+  actor: UserProfile,
+  payload: Omit<MeetingNote, "id" | "chapterId" | "schoolId" | "createdByUid" | "createdByName" | "createdAt">,
+): Promise<string> {
+  const ref = doc(collection(db, "chapterMeetingNotes"));
+  await setDoc(ref, {
+    chapterId: actor.chapterId ?? "",
+    schoolId: actor.schoolId,
+    meetingDate: payload.meetingDate,
+    agenda: payload.agenda,
+    decisions: payload.decisions,
+    attendees: payload.attendees,
+    actionItems: payload.actionItems,
+    createdByUid: actor.uid,
+    createdByName: actor.displayName,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function fetchMeetingNotes(chapterId: string): Promise<MeetingNote[]> {
+  const snap = await getDocs(
+    query(collection(db, "chapterMeetingNotes"), where("chapterId", "==", chapterId), orderBy("meetingDate", "desc"), limit(120)),
+  );
+  return snap.docs.map((row) => parseMeetingNote(row.id, row.data() as Record<string, unknown>));
 }

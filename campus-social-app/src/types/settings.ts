@@ -15,6 +15,11 @@ export type AccessibilitySettings = {
   reduceAnimations: boolean;
   boldText: boolean;
   screenReaderHints: boolean;
+  oneHandedMode: boolean;
+  leftHandedMode: boolean;
+  hapticIntensity: "off" | "subtle" | "full";
+  colorBlindMode: "none" | "deuteranopia" | "protanopia" | "tritanopia";
+  focusMode: boolean;
 };
 
 export type AppearanceSettings = {

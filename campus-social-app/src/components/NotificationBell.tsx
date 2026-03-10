@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { NavigationProp, useNavigation } from "@react-navigation/native";
 import { Text, View } from "react-native";
 
@@ -24,7 +24,7 @@ export function NotificationBell() {
           accessibilityLabel="Open notifications"
           size={38}
         >
-          <MaterialCommunityIcons name="bell-outline" size={20} color={palette.colors.text} />
+          <Feather name="bell" size={20} color={palette.colors.text} />
         </GlassIconButton>
         {unreadCount > 0 ? (
           <View

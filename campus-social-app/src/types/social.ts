@@ -27,6 +27,9 @@ export type PointAction =
   | "complete_flashcard_deck"
   | "complete_presentation"
   | "complete_mock_judge"
+  | "duel_win"
+  | "duel_loss"
+  | "duel_correct_answer"
   | "seven_day_streak_bonus"
   | "perfect_test_score"
   | "first_post_bonus"
@@ -68,6 +71,16 @@ export type UserPlacement = {
   year: number;
 };
 
+export type UserRole = "member" | "officer" | "admin" | "superadmin";
+export type UserProfileType = "student" | "alumni";
+
+export type UserMilestone = {
+  id: string;
+  type: string;
+  date: string;
+  description: string;
+};
+
 export type UserProfile = {
   uid: string;
   displayName: string;
@@ -101,6 +114,8 @@ export type UserProfile = {
   followerIds: string[];
   followingIds: string[];
   pointsByAction: Partial<Record<PointAction, number>>;
+  xpMilestones?: string[];
+  milestones?: UserMilestone[];
   lastDailyLoginDate: string | null;
   joinedEventIds?: string[];
   officerPosition?: OfficerPosition;
@@ -110,8 +125,11 @@ export type UserProfile = {
   competitiveEvents?: string[];
   placements?: UserPlacement[];
   roleExperiences?: string[];
-  role?: "admin" | "member";
+  role?: UserRole;
+  profileType?: UserProfileType;
   banned?: boolean;
+  isSeeded?: boolean;
+  primaryEvent?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -180,6 +198,22 @@ export type EventItem = {
   startAt: string;
   attendeeIds: string[];
   attendeeCount: number;
+  capacity?: number;
+};
+
+export type SocialFeedPlatform = "x" | "instagram" | "facebook" | "youtube" | "tiktok";
+
+export type SocialFeedItem = {
+  platform: SocialFeedPlatform;
+  handle: string;
+  postText: string;
+  postDate: string;
+  postUrl: string;
+};
+
+export type FblaFact = {
+  id: string;
+  text: string;
 };
 
 export type AppNotificationType =

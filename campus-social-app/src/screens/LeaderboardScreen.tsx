@@ -1,4 +1,4 @@
-﻿import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import { Text } from "react-native-paper";
@@ -6,23 +6,59 @@ import { Text } from "react-native-paper";
 import { ScreenShell } from "../components/ScreenShell";
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { EmptyState } from "../components/ui/EmptyState";
+import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { TierBadge } from "../components/ui/TierBadge";
 import { useAuthContext } from "../context/AuthContext";
 import { useThemeContext } from "../context/ThemeContext";
+import { fetchDuelLeaderboard } from "../services/challengeService";
+import { subscribeRecognitionPlacements } from "../services/recognitionService";
 import { fetchLeaderboardOnce, subscribeLeaderboard } from "../services/socialService";
+import { DuelLeaderboardRow, RecognitionPlacement } from "../types/features";
 import { UserProfile } from "../types/social";
 import { formatCompactNumber } from "../utils/format";
 
 type PodiumTheme = {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: React.ComponentProps<typeof Feather>["name"];
+};
+
+type LeaderboardDisplayRow = {
+  uid: string;
+  displayName: string;
+  avatarUrl: string;
+  tier: UserProfile["tier"];
+  grade: string;
+  xp: number;
+  primaryEvent?: string;
+  isPlaceholder?: boolean;
 };
 
 const PODIUM: PodiumTheme[] = [
-  { icon: "crown" },
-  { icon: "medal" },
-  { icon: "star-circle" },
+  { icon: "award" },
+  { icon: "star" },
+  { icon: "shield" },
 ];
+
+const SEEDED_LEADERBOARD_ROWS: LeaderboardDisplayRow[] = [
+  { uid: "seed_lb_alex", displayName: "Alex M.", avatarUrl: "", tier: "Gold", grade: "12", xp: 280, primaryEvent: "Business Law", isPlaceholder: true },
+  { uid: "seed_lb_jordan", displayName: "Jordan K.", avatarUrl: "", tier: "Silver", grade: "11", xp: 145, primaryEvent: "Public Speaking", isPlaceholder: true },
+  { uid: "seed_lb_sam", displayName: "Sam R.", avatarUrl: "", tier: "Silver", grade: "11", xp: 120, primaryEvent: "Entrepreneurship", isPlaceholder: true },
+  { uid: "seed_lb_taylor", displayName: "Taylor B.", avatarUrl: "", tier: "Bronze", grade: "10", xp: 65, primaryEvent: "Marketing", isPlaceholder: true },
+  { uid: "seed_lb_riley", displayName: "Riley C.", avatarUrl: "", tier: "Bronze", grade: "10", xp: 52, primaryEvent: "Coding & Programming", isPlaceholder: true },
+];
+
+function toDisplayRow(user: UserProfile): LeaderboardDisplayRow {
+  return {
+    uid: user.uid,
+    displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
+    tier: user.tier,
+    grade: user.grade,
+    xp: user.xp,
+    primaryEvent: user.primaryEvent,
+    isPlaceholder: user.isSeeded,
+  };
+}
 
 function PodiumCard({
   user,
@@ -31,7 +67,7 @@ function PodiumCard({
   mutedColor,
   surfaceColor,
 }: {
-  user: UserProfile;
+  user: LeaderboardDisplayRow;
   theme: PodiumTheme;
   textColor: string;
   mutedColor: string;
@@ -56,7 +92,7 @@ function PodiumCard({
             {formatCompactNumber(user.xp)} XP
           </Text>
         </View>
-        <MaterialCommunityIcons name={theme.icon} size={22} color={mutedColor} />
+        <Feather name={theme.icon} size={22} color={mutedColor} />
       </View>
     </GlassSurface>
   );
@@ -67,6 +103,9 @@ export function LeaderboardScreen() {
   const { palette } = useThemeContext();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<"xp" | "recognition" | "duels">("xp");
+  const [recognitionRows, setRecognitionRows] = useState<RecognitionPlacement[]>([]);
+  const [duelRows, setDuelRows] = useState<DuelLeaderboardRow[]>([]);
 
   useEffect(() => {
     if (!profile) {
@@ -81,6 +120,35 @@ export function LeaderboardScreen() {
       },
     );
     return unsubscribe;
+  }, [profile?.schoolId]);
+
+  useEffect(() => {
+    if (!profile?.schoolId) {
+      setRecognitionRows([]);
+      return;
+    }
+    const unsubscribe = subscribeRecognitionPlacements(profile.schoolId, setRecognitionRows);
+    return unsubscribe;
+  }, [profile?.schoolId]);
+
+  useEffect(() => {
+    if (!profile?.schoolId) {
+      setDuelRows([]);
+      return;
+    }
+    let active = true;
+    void fetchDuelLeaderboard(profile.schoolId)
+      .then((rows) => {
+        if (active) {
+          setDuelRows(rows);
+        }
+      })
+      .catch((error) => {
+        console.warn("Duel leaderboard fetch failed:", error);
+      });
+    return () => {
+      active = false;
+    };
   }, [profile?.schoolId]);
 
   const refresh = async () => {
@@ -99,126 +167,196 @@ export function LeaderboardScreen() {
     }
   };
 
-  const topThree = users.slice(0, 3);
-  const rest = users.slice(3, 10);
+  const realRankedRows = useMemo(
+    () =>
+      users
+        .filter((item) => !item.isSeeded && item.xp > 0)
+        .sort((a, b) => b.xp - a.xp)
+        .map((item) => toDisplayRow(item)),
+    [users],
+  );
+  const leaderboardRows = useMemo(() => {
+    if (realRankedRows.length >= 5) {
+      return realRankedRows;
+    }
+    const existingIds = new Set(realRankedRows.map((row) => row.uid));
+    const filler = SEEDED_LEADERBOARD_ROWS.filter((row) => !existingIds.has(row.uid));
+    return [...realRankedRows, ...filler];
+  }, [realRankedRows]);
+  const showPlaceholderNote = realRankedRows.length < 5;
+  const topThreeRows = leaderboardRows.slice(0, 3);
+  const restRows = leaderboardRows.slice(3, 10);
   const myRank = useMemo(() => {
     if (!profile) {
       return null;
     }
-    const index = users.findIndex((item) => item.uid === profile.uid);
+    const index = leaderboardRows.findIndex((item) => item.uid === profile.uid);
     if (index === -1) {
       return null;
     }
     return {
       rank: index + 1,
-      user: users[index],
+      user: leaderboardRows[index],
     };
-  }, [profile, users]);
+  }, [leaderboardRows, profile]);
 
   return (
     <ScreenShell
       title="Leaderboard"
-      subtitle="Top students ranked by XP."
+      subtitle="XP, recognition wall, and duel rankings."
       refreshing={refreshing}
       onRefresh={() => void refresh()}
     >
-      {users.length === 0 ? (
-        <EmptyState title="No Leaderboard Data" message="Pull to refresh after users start earning XP." />
-      ) : (
-        <View style={{ gap: 10 }}>
-          {topThree.map((user, index) => (
-            <View key={user.uid}>
-              <PodiumCard
-                user={user}
-                theme={PODIUM[index]}
-                textColor={palette.colors.text}
-                mutedColor={palette.colors.textSecondary}
-                surfaceColor={palette.colors.surface}
-              />
-            </View>
-          ))}
+      <View style={{ marginBottom: 12 }}>
+        <GlassSegmentedControl
+          value={tab}
+          options={[
+            { value: "xp", label: "XP" },
+            { value: "recognition", label: "Recognition" },
+            { value: "duels", label: "Duels" },
+          ]}
+          onValueChange={(value) => {
+            if (value === "xp" || value === "recognition" || value === "duels") {
+              setTab(value);
+            }
+          }}
+        />
+      </View>
 
-          {rest.map((user, index) => (
-            <View key={user.uid}>
-              <GlassSurface
-                style={{
-                  padding: 10,
-                  backgroundColor: palette.colors.glass,
-                  borderColor: palette.colors.glassBorder,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <Text style={{ width: 24, fontWeight: "900", color: palette.colors.textSecondary }}>
-                    {index + 4}
-                  </Text>
-                  <AvatarWithStatus uri={user.avatarUrl} size={38} online tier={user.tier} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
-                      {user.displayName}
+      {tab === "xp" ? (
+        leaderboardRows.length === 0 ? (
+          <EmptyState title="No leaderboard data" message="Pull to refresh after users start earning XP." />
+        ) : (
+          <View style={{ gap: 10 }}>
+            {topThreeRows.map((user, index) => (
+              <View key={user.uid}>
+                <PodiumCard
+                  user={user}
+                  theme={PODIUM[index]}
+                  textColor={palette.colors.text}
+                  mutedColor={palette.colors.textSecondary}
+                  surfaceColor={palette.colors.surface}
+                />
+              </View>
+            ))}
+
+            {restRows.map((user, index) => (
+              <View key={user.uid}>
+                <GlassSurface
+                  style={{
+                    padding: 10,
+                    backgroundColor: palette.colors.glass,
+                    borderColor: palette.colors.glassBorder,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Text style={{ width: 24, fontWeight: "900", color: palette.colors.textSecondary }}>
+                      {index + 4}
                     </Text>
-                    <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
-                      {user.grade}th grade
+                    <AvatarWithStatus uri={user.avatarUrl} size={38} online tier={user.tier} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
+                        {user.displayName}
+                      </Text>
+                      <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                        {user.primaryEvent ? user.primaryEvent : `${user.grade}th grade`}
+                      </Text>
+                    </View>
+                    <TierBadge tier={user.tier} />
+                    <Text style={{ color: palette.colors.text, fontFamily: "monospace", fontWeight: "700" }}>
+                      {formatCompactNumber(user.xp)} XP
                     </Text>
                   </View>
-                  <TierBadge tier={user.tier} />
+                </GlassSurface>
+              </View>
+            ))}
+
+            {myRank ? (
+              <GlassSurface
+                style={{
+                  marginTop: 2,
+                  padding: 12,
+                  borderColor: palette.colors.primary,
+                  backgroundColor: palette.colors.cardTint,
+                }}
+              >
+                <Text style={{ color: palette.colors.primary, fontWeight: "900", marginBottom: 4 }}>
+                  Your Rank
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <Text style={{ width: 24, fontWeight: "900", color: palette.colors.text }}>#{myRank.rank}</Text>
+                  <AvatarWithStatus uri={myRank.user.avatarUrl} size={40} online tier={myRank.user.tier} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
+                      {myRank.user.displayName}
+                    </Text>
+                    <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                      {myRank.user.primaryEvent ? myRank.user.primaryEvent : `${myRank.user.grade}th grade`}
+                    </Text>
+                  </View>
+                  <TierBadge tier={myRank.user.tier} />
                   <Text style={{ color: palette.colors.text, fontFamily: "monospace", fontWeight: "700" }}>
-                    {formatCompactNumber(user.xp)} XP
+                    {formatCompactNumber(myRank.user.xp)} XP
                   </Text>
                 </View>
               </GlassSurface>
-            </View>
-          ))}
+            ) : null}
 
-          {myRank ? (
-            <GlassSurface
-              style={{
-                marginTop: 2,
-                padding: 12,
-                borderColor: palette.colors.primary,
-                backgroundColor: palette.colors.cardTint,
-              }}
-            >
-              <Text style={{ color: palette.colors.primary, fontWeight: "900", marginBottom: 4 }}>
-                Your Rank
+            {showPlaceholderNote ? (
+              <Text style={{ color: palette.colors.textMuted, fontSize: 12, textAlign: "center" }}>
+                Placeholder members shown until chapter members join.
               </Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <Text style={{ width: 24, fontWeight: "900", color: palette.colors.text }}>#{myRank.rank}</Text>
-                <AvatarWithStatus uri={myRank.user.avatarUrl} size={40} online tier={myRank.user.tier} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
-                    {myRank.user.displayName}
-                  </Text>
-                  <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
-                    {myRank.user.grade}th grade
-                  </Text>
-                </View>
-                <TierBadge tier={myRank.user.tier} />
-                <Text style={{ color: palette.colors.text, fontFamily: "monospace", fontWeight: "700" }}>
-                  {formatCompactNumber(myRank.user.xp)} XP
+            ) : null}
+          </View>
+        )
+      ) : null}
+
+      {tab === "recognition" ? (
+        recognitionRows.length === 0 ? (
+          <EmptyState title="No chapter wins yet" message="Placement submissions will appear here." />
+        ) : (
+          <View style={{ gap: 8 }}>
+            {recognitionRows.slice(0, 40).map((item) => (
+              <GlassSurface key={item.id} style={{ padding: 12 }}>
+                <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
+                  {item.userName}
                 </Text>
-              </View>
-            </GlassSurface>
-          ) : null}
+                <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>
+                  {item.place} • {item.eventName} • {item.level} {item.year}
+                </Text>
+                <Text
+                  style={{
+                    color: item.verified ? palette.colors.success : palette.colors.warning,
+                    marginTop: 4,
+                    fontSize: 12,
+                  }}
+                >
+                  {item.verified ? "Verified" : "Pending verification"}
+                </Text>
+              </GlassSurface>
+            ))}
+          </View>
+        )
+      ) : null}
 
-          <GlassSurface
-            style={{
-              padding: 12,
-              backgroundColor: palette.colors.glass,
-              borderColor: palette.colors.glassBorder,
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <MaterialCommunityIcons name="lock-outline" size={18} color={palette.colors.textSecondary} />
-              <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
-                How does your school rank?
-              </Text>
-            </View>
-            <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
-              School vs school leaderboard is a premium teaser feature.
-            </Text>
-          </GlassSurface>
-        </View>
-      )}
+      {tab === "duels" ? (
+        duelRows.length === 0 ? (
+          <EmptyState title="No duel rankings yet" message="Complete at least 5 duels to qualify." />
+        ) : (
+          <View style={{ gap: 8 }}>
+            {duelRows.map((row, index) => (
+              <GlassSurface key={row.uid} style={{ padding: 12 }}>
+                <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
+                  #{index + 1} {row.name}
+                </Text>
+                <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>
+                  {Math.round(row.winRate * 100)}% win rate • {row.wins}W-{row.losses}L • {row.totalDuels} duels
+                </Text>
+              </GlassSurface>
+            ))}
+          </View>
+        )
+      ) : null}
     </ScreenShell>
   );
 }

@@ -19,6 +19,11 @@ type AwardContext = {
   streakCount?: number;
 };
 
+const ONE_TIME_MILESTONES: Partial<Record<PointAction, string>> = {
+  first_post_bonus: "first_post_bonus",
+  profile_completed_bonus: "profile_completed_bonus",
+};
+
 function xpBodyForAction(action: PointAction, points: number, context?: AwardContext): string {
   switch (action) {
     case "attending_event":
@@ -47,6 +52,12 @@ function xpBodyForAction(action: PointAction, points: number, context?: AwardCon
       return `+${points} XP - Presentation practice complete!`;
     case "complete_mock_judge":
       return `+${points} XP - Mock judge session complete!`;
+    case "duel_win":
+      return `+${points} XP - You won a head-to-head challenge!`;
+    case "duel_loss":
+      return `+${points} XP - Challenge complete. Keep training.`;
+    case "duel_correct_answer":
+      return `+${points} XP - Correct duel answers bonus.`;
     case "seven_day_streak_bonus":
       return `+${points} XP - 7-day streak bonus!`;
     case "perfect_test_score":
@@ -107,6 +118,7 @@ export async function awardPointsToUser(
   uid: string,
   action: PointAction,
   context?: AwardContext,
+  pointsOverride?: number,
 ): Promise<PointAwardResult> {
   const userRef = doc(db, "users", uid);
 
@@ -128,18 +140,47 @@ export async function awardPointsToUser(
     const currentBadges = Array.isArray(data.badges)
       ? data.badges.filter((item): item is string => typeof item === "string")
       : [];
+    const currentMilestones = Array.isArray(data.xpMilestones)
+      ? data.xpMilestones.filter((item): item is string => typeof item === "string")
+      : [];
+    const nextMilestones = [...currentMilestones];
+    const journeyMilestones = Array.isArray(data.milestones)
+      ? data.milestones.filter(
+          (item): item is { id: string; type: string; date: string; description: string } =>
+            Boolean(item) &&
+            typeof item === "object" &&
+            typeof (item as { id?: unknown }).id === "string" &&
+            typeof (item as { date?: unknown }).date === "string" &&
+            typeof (item as { description?: unknown }).description === "string",
+        )
+      : [];
+    const nextJourneyMilestones = [...journeyMilestones];
     const nextBadges = [...currentBadges];
 
-    let pointsAwarded = POINT_VALUES[action] ?? 0;
+    let pointsAwarded =
+      typeof pointsOverride === "number" && Number.isFinite(pointsOverride)
+        ? Math.max(0, pointsOverride)
+        : POINT_VALUES[action] ?? 0;
     let firstPostBonusAwarded = 0;
 
-    const actionAlreadyAwarded = (currentPointMap[action] || 0) > 0;
-    if ((action === "first_post_bonus" || action === "profile_completed_bonus") && actionAlreadyAwarded) {
+    const oneTimeMilestone = ONE_TIME_MILESTONES[action];
+    const alreadyCompletedOneTime =
+      Boolean(oneTimeMilestone) && currentMilestones.includes(oneTimeMilestone as string);
+    if (alreadyCompletedOneTime) {
       pointsAwarded = 0;
+    } else if (oneTimeMilestone && pointsAwarded > 0) {
+      nextMilestones.push(oneTimeMilestone);
     }
 
-    if (action === "posting" && (currentPointMap.posting || 0) === 0) {
+    if (action === "posting" && !currentMilestones.includes("first_post_bonus")) {
       firstPostBonusAwarded = POINT_VALUES.first_post_bonus;
+      nextMilestones.push("first_post_bonus");
+      nextJourneyMilestones.unshift({
+        id: `first_post_${Date.now()}`,
+        type: "first_post",
+        date: new Date().toISOString(),
+        description: "Published your first FBLA post",
+      });
     }
 
     const totalAwarded = pointsAwarded + firstPostBonusAwarded;
@@ -158,6 +199,24 @@ export async function awardPointsToUser(
       nextBadges.push("Social Butterfly");
     }
 
+    if (action === "profile_completed_bonus" && !currentMilestones.includes("profile_completed_bonus")) {
+      nextJourneyMilestones.unshift({
+        id: `profile_complete_${Date.now()}`,
+        type: "profile_complete",
+        date: new Date().toISOString(),
+        description: "Completed your profile setup",
+      });
+    }
+
+    if (previousTier.name !== newTier.name) {
+      nextJourneyMilestones.unshift({
+        id: `tier_${newTier.name.toLowerCase()}_${Date.now()}`,
+        type: "tier_upgrade",
+        date: new Date().toISOString(),
+        description: `Reached ${newTier.name} tier`,
+      });
+    }
+
     tx.set(
       userRef,
       {
@@ -165,6 +224,8 @@ export async function awardPointsToUser(
         tier: newTier.name,
         updatedAt: serverTimestamp(),
         badges: nextBadges,
+        xpMilestones: Array.from(new Set(nextMilestones)),
+        milestones: nextJourneyMilestones.slice(0, 120),
         pointsByAction: {
           ...currentPointMap,
           [action]: (currentPointMap[action] || 0) + pointsAwarded,
@@ -196,18 +257,23 @@ export async function awardPointsToUser(
   });
 
   await writeAwardNotifications(uid, result);
-  console.log("[XP Award]", {
-    uid,
-    action,
-    awarded: result.pointsAwarded,
-    totalXp: result.newXp,
-  });
   return result;
 }
 
-export async function awardDailyLoginIfNeeded(uid: string): Promise<PointAwardResult | null> {
-  const userRef = doc(db, "users", uid);
+let loginProcessedForDay = "";
+const processedLoginUsers = new Set<string>();
+
+export async function handleDailyLogin(uid: string): Promise<PointAwardResult | null> {
   const today = todayKey();
+  if (loginProcessedForDay !== today) {
+    loginProcessedForDay = today;
+    processedLoginUsers.clear();
+  }
+  if (processedLoginUsers.has(uid)) {
+    return null;
+  }
+
+  const userRef = doc(db, "users", uid);
 
   const result = await runTransaction(db, async (tx) => {
     const snap = await tx.get(userRef);
@@ -262,12 +328,45 @@ export async function awardDailyLoginIfNeeded(uid: string): Promise<PointAwardRe
     const currentBadges = Array.isArray(data.badges)
       ? data.badges.filter((item): item is string => typeof item === "string")
       : [];
+    const journeyMilestones = Array.isArray(data.milestones)
+      ? data.milestones.filter(
+          (item): item is { id: string; type: string; date: string; description: string } =>
+            Boolean(item) &&
+            typeof item === "object" &&
+            typeof (item as { id?: unknown }).id === "string" &&
+            typeof (item as { date?: unknown }).date === "string" &&
+            typeof (item as { description?: unknown }).description === "string",
+        )
+      : [];
+    const nextJourneyMilestones = [...journeyMilestones];
     const nextBadges = [...currentBadges];
     if (nextStreak >= 3 && !nextBadges.includes("Streak Starter")) {
       nextBadges.push("Streak Starter");
     }
     if (nextStreak >= 7 && !nextBadges.includes("Consistency Pro")) {
       nextBadges.push("Consistency Pro");
+    }
+    nextJourneyMilestones.unshift({
+      id: `daily_login_${today}`,
+      type: "daily_login",
+      date: new Date().toISOString(),
+      description: `Logged in and continued your streak (Day ${nextStreak})`,
+    });
+    if (streakBonusPoints > 0) {
+      nextJourneyMilestones.unshift({
+        id: `streak_bonus_${today}_${nextStreak}`,
+        type: "streak_bonus",
+        date: new Date().toISOString(),
+        description: `Hit a ${nextStreak}-day streak bonus`,
+      });
+    }
+    if (previousTier.name !== newTier.name) {
+      nextJourneyMilestones.unshift({
+        id: `tier_${newTier.name.toLowerCase()}_${today}`,
+        type: "tier_upgrade",
+        date: new Date().toISOString(),
+        description: `Reached ${newTier.name} tier`,
+      });
     }
 
     tx.set(
@@ -282,6 +381,7 @@ export async function awardDailyLoginIfNeeded(uid: string): Promise<PointAwardRe
         streakCount: nextStreak,
         updatedAt: serverTimestamp(),
         badges: nextBadges,
+        milestones: nextJourneyMilestones.slice(0, 120),
         pointsByAction: {
           ...currentPointMap,
           daily_login: (currentPointMap.daily_login || 0) + dailyLoginPoints,
@@ -311,17 +411,16 @@ export async function awardDailyLoginIfNeeded(uid: string): Promise<PointAwardRe
     };
   });
 
+  processedLoginUsers.add(uid);
+
   if (result) {
     await writeAwardNotifications(uid, result);
-    console.log("[XP Award]", {
-      uid,
-      action: result.action,
-      awarded: result.pointsAwarded,
-      totalXp: result.newXp,
-      streak: result.streakCount ?? 1,
-    });
   }
 
   return result;
+}
+
+export async function awardDailyLoginIfNeeded(uid: string): Promise<PointAwardResult | null> {
+  return handleDailyLogin(uid);
 }
 

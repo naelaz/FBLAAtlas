@@ -2,12 +2,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { TextStyle } from "react-native";
 
+import { HapticIntensity, setHapticIntensity } from "../services/haptics";
+
 type AccessibilityState = {
   fontScale: number;
   highContrastMode: boolean;
   reduceAnimations: boolean;
   boldText: boolean;
   screenReaderHints: boolean;
+  oneHandedMode: boolean;
+  leftHandedMode: boolean;
+  hapticIntensity: HapticIntensity;
+  colorBlindMode: "none" | "deuteranopia" | "protanopia" | "tritanopia";
+  focusMode: boolean;
 };
 
 type AccessibilityContextValue = AccessibilityState & {
@@ -17,6 +24,13 @@ type AccessibilityContextValue = AccessibilityState & {
   setReduceAnimations: (value: boolean) => void;
   setBoldText: (value: boolean) => void;
   setScreenReaderHints: (value: boolean) => void;
+  setOneHandedMode: (value: boolean) => void;
+  setLeftHandedMode: (value: boolean) => void;
+  setHapticIntensityMode: (value: HapticIntensity) => void;
+  setColorBlindMode: (
+    value: AccessibilityState["colorBlindMode"],
+  ) => void;
+  setFocusMode: (value: boolean) => void;
   scaleFont: (size: number) => number;
   getFontWeight: (normal: TextStyle["fontWeight"]) => TextStyle["fontWeight"];
   getAccessibilityHint: (hint?: string) => string | undefined;
@@ -30,6 +44,11 @@ const DEFAULT_ACCESSIBILITY_STATE: AccessibilityState = {
   reduceAnimations: false,
   boldText: false,
   screenReaderHints: true,
+  oneHandedMode: false,
+  leftHandedMode: false,
+  hapticIntensity: "full",
+  colorBlindMode: "none",
+  focusMode: false,
 };
 
 const AccessibilityContext = createContext<AccessibilityContextValue | undefined>(undefined);
@@ -65,6 +84,31 @@ function parseState(raw: string | null): AccessibilityState {
         typeof parsed.screenReaderHints === "boolean"
           ? parsed.screenReaderHints
           : DEFAULT_ACCESSIBILITY_STATE.screenReaderHints,
+      oneHandedMode:
+        typeof parsed.oneHandedMode === "boolean"
+          ? parsed.oneHandedMode
+          : DEFAULT_ACCESSIBILITY_STATE.oneHandedMode,
+      leftHandedMode:
+        typeof parsed.leftHandedMode === "boolean"
+          ? parsed.leftHandedMode
+          : DEFAULT_ACCESSIBILITY_STATE.leftHandedMode,
+      hapticIntensity:
+        parsed.hapticIntensity === "off" ||
+        parsed.hapticIntensity === "subtle" ||
+        parsed.hapticIntensity === "full"
+          ? parsed.hapticIntensity
+          : DEFAULT_ACCESSIBILITY_STATE.hapticIntensity,
+      colorBlindMode:
+        parsed.colorBlindMode === "none" ||
+        parsed.colorBlindMode === "deuteranopia" ||
+        parsed.colorBlindMode === "protanopia" ||
+        parsed.colorBlindMode === "tritanopia"
+          ? parsed.colorBlindMode
+          : DEFAULT_ACCESSIBILITY_STATE.colorBlindMode,
+      focusMode:
+        typeof parsed.focusMode === "boolean"
+          ? parsed.focusMode
+          : DEFAULT_ACCESSIBILITY_STATE.focusMode,
     };
   } catch {
     return DEFAULT_ACCESSIBILITY_STATE;
@@ -111,23 +155,44 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
   }, [state]);
 
   const setFontScale = useCallback((value: number) => {
-    setState((prev) => ({ ...prev, fontScale: clampFontScale(value) }));
+    const next = clampFontScale(value);
+    setState((prev) => (prev.fontScale === next ? prev : { ...prev, fontScale: next }));
   }, []);
 
   const setHighContrastMode = useCallback((value: boolean) => {
-    setState((prev) => ({ ...prev, highContrastMode: value }));
+    setState((prev) => (prev.highContrastMode === value ? prev : { ...prev, highContrastMode: value }));
   }, []);
 
   const setReduceAnimations = useCallback((value: boolean) => {
-    setState((prev) => ({ ...prev, reduceAnimations: value }));
+    setState((prev) => (prev.reduceAnimations === value ? prev : { ...prev, reduceAnimations: value }));
   }, []);
 
   const setBoldText = useCallback((value: boolean) => {
-    setState((prev) => ({ ...prev, boldText: value }));
+    setState((prev) => (prev.boldText === value ? prev : { ...prev, boldText: value }));
   }, []);
 
   const setScreenReaderHints = useCallback((value: boolean) => {
-    setState((prev) => ({ ...prev, screenReaderHints: value }));
+    setState((prev) => (prev.screenReaderHints === value ? prev : { ...prev, screenReaderHints: value }));
+  }, []);
+
+  const setOneHandedMode = useCallback((value: boolean) => {
+    setState((prev) => (prev.oneHandedMode === value ? prev : { ...prev, oneHandedMode: value }));
+  }, []);
+
+  const setLeftHandedMode = useCallback((value: boolean) => {
+    setState((prev) => (prev.leftHandedMode === value ? prev : { ...prev, leftHandedMode: value }));
+  }, []);
+
+  const setHapticIntensityMode = useCallback((value: HapticIntensity) => {
+    setState((prev) => (prev.hapticIntensity === value ? prev : { ...prev, hapticIntensity: value }));
+  }, []);
+
+  const setColorBlindMode = useCallback((value: AccessibilityState["colorBlindMode"]) => {
+    setState((prev) => (prev.colorBlindMode === value ? prev : { ...prev, colorBlindMode: value }));
+  }, []);
+
+  const setFocusMode = useCallback((value: boolean) => {
+    setState((prev) => (prev.focusMode === value ? prev : { ...prev, focusMode: value }));
   }, []);
 
   const scaleFont = useCallback(
@@ -136,7 +201,32 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
   );
 
   const getFontWeight = useCallback(
-    (normal: TextStyle["fontWeight"]) => (state.boldText ? "700" : normal),
+    (normal: TextStyle["fontWeight"]) => {
+      if (!state.boldText || !normal) {
+        return normal;
+      }
+      const weight = String(normal).toLowerCase();
+      switch (weight) {
+        case "normal":
+        case "400":
+        case "regular":
+          return "500";
+        case "500":
+        case "medium":
+          return "600";
+        case "600":
+        case "semibold":
+          return "700";
+        case "700":
+        case "bold":
+          return "800";
+        case "800":
+        case "heavy":
+          return "900";
+        default:
+          return normal;
+      }
+    },
     [state.boldText],
   );
 
@@ -144,6 +234,10 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
     (hint?: string) => (state.screenReaderHints ? hint : undefined),
     [state.screenReaderHints],
   );
+
+  useEffect(() => {
+    setHapticIntensity(state.hapticIntensity);
+  }, [state.hapticIntensity]);
 
   const value = useMemo<AccessibilityContextValue>(
     () => ({
@@ -154,6 +248,11 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
       setReduceAnimations,
       setBoldText,
       setScreenReaderHints,
+      setOneHandedMode,
+      setLeftHandedMode,
+      setHapticIntensityMode,
+      setColorBlindMode,
+      setFocusMode,
       scaleFont,
       getFontWeight,
       getAccessibilityHint,
@@ -164,10 +263,15 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
       ready,
       scaleFont,
       setBoldText,
+      setColorBlindMode,
       setFontScale,
+      setFocusMode,
+      setHapticIntensityMode,
       setHighContrastMode,
+      setOneHandedMode,
       setReduceAnimations,
       setScreenReaderHints,
+      setLeftHandedMode,
       state,
     ],
   );

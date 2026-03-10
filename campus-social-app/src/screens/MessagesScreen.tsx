@@ -16,7 +16,6 @@ import { useAuthContext } from "../context/AuthContext";
 import { useMessaging } from "../context/MessagingContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
-import { formatDateTime } from "../services/firestoreUtils";
 import { hapticTap } from "../services/haptics";
 import {
   createOrGetConversation,
@@ -26,6 +25,7 @@ import {
 import { fetchSchoolUsersOnce } from "../services/socialService";
 import { UserProfile } from "../types/social";
 import { ScreenShell } from "../components/ScreenShell";
+import { formatRelativeTime } from "../utils/format";
 
 export function MessagesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -243,7 +243,7 @@ export function MessagesScreen() {
                           {other ? <TierBadge tier={other.tier} /> : null}
                         </View>
                         <Text style={{ color: palette.colors.muted, fontSize: 12 }}>
-                          {formatDateTime(conversation.updatedAt)}
+                          {formatRelativeTime(conversation.updatedAt)}
                         </Text>
                       </View>
                       <Text

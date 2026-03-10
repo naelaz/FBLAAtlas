@@ -88,6 +88,8 @@ export function createDefaultUserProfile(uid: string): Omit<UserProfile, "create
     followerIds: [],
     followingIds: [],
     pointsByAction: {},
+    xpMilestones: [],
+    milestones: [],
     lastDailyLoginDate: null,
     joinedEventIds: [],
     officerPosition: "Member",
@@ -98,7 +100,10 @@ export function createDefaultUserProfile(uid: string): Omit<UserProfile, "create
     placements: [],
     roleExperiences: [],
     role: "member",
+    profileType: "student",
     banned: false,
+    isSeeded: false,
+    primaryEvent: "",
   };
 }
 
@@ -192,6 +197,27 @@ function parseUser(uid: string, data: Record<string, unknown>): UserProfile {
       typeof data.pointsByAction === "object" && data.pointsByAction !== null
         ? (data.pointsByAction as UserProfile["pointsByAction"])
         : {},
+    xpMilestones: Array.isArray(data.xpMilestones)
+      ? data.xpMilestones.filter((item): item is string => typeof item === "string")
+      : [],
+    milestones: Array.isArray(data.milestones)
+      ? data.milestones
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") {
+              return null;
+            }
+            const record = entry as Record<string, unknown>;
+            const id = typeof record.id === "string" ? record.id : "";
+            const type = typeof record.type === "string" ? record.type : "";
+            const date = typeof record.date === "string" ? record.date : "";
+            const description = typeof record.description === "string" ? record.description : "";
+            if (!id || !date || !description) {
+              return null;
+            }
+            return { id, type, date, description };
+          })
+          .filter((item): item is { id: string; type: string; date: string; description: string } => Boolean(item))
+      : [],
     lastDailyLoginDate:
       typeof data.lastDailyLoginDate === "string" ? data.lastDailyLoginDate : lastLoginDate,
     joinedEventIds: Array.isArray(data.joinedEventIds)
@@ -279,8 +305,17 @@ function parseUser(uid: string, data: Record<string, unknown>): UserProfile {
     roleExperiences: Array.isArray(data.roleExperiences)
       ? data.roleExperiences.filter((item): item is string => typeof item === "string")
       : [],
-    role: data.role === "admin" ? "admin" : "member",
+    role:
+      data.role === "superadmin" ||
+      data.role === "admin" ||
+      data.role === "officer" ||
+      data.role === "member"
+        ? data.role
+        : "member",
+    profileType: data.profileType === "alumni" ? "alumni" : "student",
     banned: typeof data.banned === "boolean" ? data.banned : false,
+    isSeeded: typeof data.isSeeded === "boolean" ? data.isSeeded : false,
+    primaryEvent: typeof data.primaryEvent === "string" ? data.primaryEvent : "",
     createdAt: toIso(data.createdAt),
     updatedAt: toIso(data.updatedAt),
   };
@@ -293,6 +328,14 @@ export async function ensureUserProfile(uid: string): Promise<UserProfile> {
     const base = createDefaultUserProfile(uid);
     await setDoc(ref, {
       ...base,
+      milestones: [
+        {
+          id: `joined_${Date.now()}`,
+          type: "joined",
+          date: new Date().toISOString(),
+          description: "Joined FBLA Atlas",
+        },
+      ],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });

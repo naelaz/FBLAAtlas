@@ -6,13 +6,17 @@ admin.initializeApp();
 
 /**
  * Syncs Firebase Auth custom claims when users/{uid}.role changes.
- * If role == "admin", writes { role: "admin" } custom claim.
- * Otherwise clears role claim back to "member".
+ * Supports role claims: member, officer, admin, superadmin.
  */
 export const syncAdminClaim = onDocumentWritten("users/{uid}", async (event) => {
   const uid = event.params.uid;
   const afterData = event.data?.after?.data() as { role?: string } | undefined;
-  const role = afterData?.role === "admin" ? "admin" : "member";
+  const role =
+    afterData?.role === "superadmin" ||
+    afterData?.role === "admin" ||
+    afterData?.role === "officer"
+      ? afterData.role
+      : "member";
 
   try {
     const user = await admin.auth().getUser(uid);
@@ -27,4 +31,3 @@ export const syncAdminClaim = onDocumentWritten("users/{uid}", async (event) => 
     logger.error("Failed to sync admin custom claim", { uid, error });
   }
 });
-

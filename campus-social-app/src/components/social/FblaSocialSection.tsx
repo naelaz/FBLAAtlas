@@ -1,311 +1,137 @@
-import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, View } from "react-native";
-import { Text } from "react-native-paper";
 import { Facebook, Globe, Instagram, Music2, Youtube } from "lucide-react-native";
-import { WebView } from "react-native-webview";
+import React, { useEffect, useState } from "react";
+import { Linking, Pressable, ScrollView, View } from "react-native";
+import { Text } from "react-native-paper";
 
 import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
 import { hapticTap } from "../../services/haptics";
+import { formatRelativeDateTime } from "../../services/firestoreUtils";
+import {
+  fetchSocialFeedCards,
+  SOCIAL_PLATFORM_META,
+} from "../../services/socialContentService";
+import { SocialFeedItem, SocialFeedPlatform } from "../../types/social";
 import { GlassSurface } from "../ui/GlassSurface";
 
-type PlatformId = "x" | "instagram" | "facebook" | "youtube" | "tiktok";
-
-type SocialPlatform = {
-  id: PlatformId;
-  name: string;
-  browserUrl: string;
-  mobileWebUrl: string;
-  appUrl: string;
-  borderColor: string;
-};
-
-const SOCIAL_PLATFORMS: SocialPlatform[] = [
-  {
-    id: "x",
-    name: "X",
-    browserUrl: "https://twitter.com/FBLA_National",
-    mobileWebUrl: "https://mobile.twitter.com/FBLA_National",
-    appUrl: "twitter://user?screen_name=FBLA_National",
-    borderColor: "#141414",
-  },
-  {
-    id: "instagram",
-    name: "Instagram",
-    browserUrl: "https://www.instagram.com/fbla_pbl",
-    mobileWebUrl: "https://www.instagram.com/fbla_pbl",
-    appUrl: "instagram://user?username=fbla_pbl",
-    borderColor: "#e1306c",
-  },
-  {
-    id: "facebook",
-    name: "Facebook",
-    browserUrl: "https://www.facebook.com/FBLAnational",
-    mobileWebUrl: "https://m.facebook.com/FBLAnational",
-    appUrl: "fb://facewebmodal/f?href=https://www.facebook.com/FBLAnational",
-    borderColor: "#1877f2",
-  },
-  {
-    id: "youtube",
-    name: "YouTube",
-    browserUrl: "https://www.youtube.com/@FBLANational",
-    mobileWebUrl: "https://m.youtube.com/@FBLANational",
-    appUrl: "youtube://www.youtube.com/@FBLANational",
-    borderColor: "#ff0000",
-  },
-  {
-    id: "tiktok",
-    name: "TikTok",
-    browserUrl: "https://www.tiktok.com/@fbla_pbl",
-    mobileWebUrl: "https://m.tiktok.com/@fbla_pbl",
-    appUrl: "tiktok://user?username=fbla_pbl",
-    borderColor: "#111111",
-  },
-];
-
-function PlatformIcon({ id }: { id: PlatformId }) {
-  switch (id) {
+function PlatformIcon({ platform }: { platform: SocialFeedPlatform }) {
+  const { palette } = useThemeContext();
+  switch (platform) {
     case "instagram":
-      return <Instagram size={18} color="#e1306c" />;
+      return <Instagram size={18} color={SOCIAL_PLATFORM_META.instagram.color} />;
     case "facebook":
-      return <Facebook size={18} color="#1877f2" />;
+      return <Facebook size={18} color={SOCIAL_PLATFORM_META.facebook.color} />;
     case "youtube":
-      return <Youtube size={18} color="#ff0000" />;
+      return <Youtube size={18} color={SOCIAL_PLATFORM_META.youtube.color} />;
     case "tiktok":
-      return <Music2 size={18} color="#f4f4f2" />;
+      return <Music2 size={18} color={SOCIAL_PLATFORM_META.tiktok.color} />;
     case "x":
     default:
-      return (
-        <Text style={{ color: "#f4f4f2", fontWeight: "900", fontSize: 16, lineHeight: 18 }}>X</Text>
-      );
+      return <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 15 }}>𝕏</Text>;
   }
 }
 
-function SocialPlatformCard({ platform }: { platform: SocialPlatform }) {
+async function openPlatformLink(platform: SocialFeedPlatform, fallbackUrl: string): Promise<void> {
+  const appLinks: Record<SocialFeedPlatform, string> = {
+    x: "twitter://user?screen_name=FBLA_National",
+    instagram: "instagram://user?username=fbla_pbl",
+    facebook: "fb://profile/171402746357725",
+    youtube: "youtube://www.youtube.com/@FBLANational",
+    tiktok: "snssdk1233://user/profile/6974628816454589446",
+  };
+  try {
+    const appLink = appLinks[platform];
+    if (await Linking.canOpenURL(appLink)) {
+      await Linking.openURL(appLink);
+      return;
+    }
+  } catch {
+    // fall through to browser
+  }
+  await Linking.openURL(fallbackUrl);
+}
+
+function SocialCard({ item }: { item: SocialFeedItem }) {
   const { palette } = useThemeContext();
   const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  const openPlatform = useCallback(async () => {
-    try {
-      const canOpen = await Linking.canOpenURL(platform.appUrl);
-      if (canOpen) {
-        await Linking.openURL(platform.appUrl);
-        return;
-      }
-    } catch {
-      // Fall through to browser.
-    }
-
-    try {
-      await Linking.openURL(platform.browserUrl);
-    } catch (error) {
-      console.warn(`Unable to open ${platform.name}:`, error);
-    }
-  }, [platform.appUrl, platform.browserUrl, platform.name]);
+  const meta = SOCIAL_PLATFORM_META[item.platform];
+  const accentColor = item.platform === "x" ? palette.colors.text : meta.color;
 
   return (
     <GlassSurface
       style={{
-        width: 160,
-        height: 200,
+        width: 170,
+        minHeight: 208,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: platform.borderColor,
+        borderColor: palette.colors.border,
+        borderLeftWidth: 3,
+        borderLeftColor: accentColor,
         backgroundColor: palette.colors.surface,
-        overflow: "hidden",
-        padding: 0,
+        padding: 10,
       }}
     >
-      <View
-        style={{
-          height: 44,
-          paddingHorizontal: 10,
-          borderBottomWidth: 1,
-          borderBottomColor: palette.colors.divider,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 6,
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
-          <PlatformIcon id={platform.id} />
-          <Text
-            numberOfLines={1}
-            style={{
-              color: palette.colors.text,
-              fontWeight: getFontWeight("700"),
-              fontSize: scaleFont(12),
-            }}
-          >
-            {platform.name}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <PlatformIcon platform={item.platform} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: palette.colors.text, fontWeight: getFontWeight("700"), fontSize: scaleFont(13) }}>
+            {meta.name}
+          </Text>
+          <Text style={{ color: palette.colors.textSecondary, fontSize: scaleFont(11) }}>
+            {item.handle}
           </Text>
         </View>
-        <Pressable
-          onPress={() => {
-            hapticTap();
-            void openPlatform();
-          }}
-          style={{
-            minHeight: 24,
-            borderRadius: 999,
-            paddingHorizontal: 8,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: palette.colors.inputSurface,
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Follow ${platform.name}`}
-          accessibilityHint={getAccessibilityHint(`Opens ${platform.name} in app or browser`)}
-        >
-          <Text
-            style={{
-              color: palette.colors.text,
-              fontWeight: getFontWeight("700"),
-              fontSize: scaleFont(11),
-            }}
-          >
-            Follow
-          </Text>
-        </Pressable>
       </View>
 
-      <View style={{ flex: 1, backgroundColor: palette.colors.surfaceAlt }}>
-        {!failed ? (
-          <>
-            <WebView
-              source={{ uri: platform.mobileWebUrl }}
-              style={{ flex: 1, backgroundColor: palette.colors.surfaceAlt }}
-              scrollEnabled={false}
-              bounces={false}
-              pointerEvents="none"
-              onLoadStart={() => {
-                setLoading(true);
-                setFailed(false);
-              }}
-              onError={() => {
-                setFailed(true);
-                setLoading(false);
-              }}
-              onLoadEnd={() => {
-                setLoading(false);
-              }}
-              javaScriptEnabled
-              domStorageEnabled
-            />
-            {loading ? (
-              <View
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  backgroundColor: palette.colors.surfaceAlt,
-                }}
-              >
-                <ActivityIndicator size="small" color={palette.colors.primary} />
-                <Text style={{ color: palette.colors.textSecondary, fontSize: scaleFont(11) }}>
-                  Loading feed...
-                </Text>
-              </View>
-            ) : null}
-          </>
-        ) : (
-          <View
-            style={{
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "center",
-              paddingHorizontal: 10,
-              gap: 8,
-            }}
-          >
-            <PlatformIcon id={platform.id} />
-            <Text
-              style={{
-                color: palette.colors.text,
-                fontWeight: getFontWeight("700"),
-                fontSize: scaleFont(12),
-                textAlign: "center",
-              }}
-            >
-              {platform.name}
-            </Text>
-            <Pressable
-              onPress={() => {
-                hapticTap();
-                void openPlatform();
-              }}
-              style={{
-                minHeight: 28,
-                borderRadius: 999,
-                paddingHorizontal: 10,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: palette.colors.border,
-                backgroundColor: palette.colors.inputSurface,
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Visit ${platform.name}`}
-              accessibilityHint={getAccessibilityHint(`Opens ${platform.name} in browser`)}
-            >
-              <Text
-                style={{
-                  color: palette.colors.text,
-                  fontWeight: getFontWeight("700"),
-                  fontSize: scaleFont(11),
-                }}
-              >
-                Tap to visit
-              </Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
+      <Text style={{ color: palette.colors.textSecondary, marginTop: 8, fontSize: scaleFont(12) }}>
+        {meta.description}
+      </Text>
 
-      <View
+      <GlassSurface
         style={{
-          height: 38,
-          borderTopWidth: 1,
-          borderTopColor: palette.colors.divider,
-          paddingHorizontal: 8,
-          justifyContent: "center",
+          marginTop: 8,
+          borderRadius: 12,
+          padding: 8,
+          backgroundColor: palette.colors.surfaceAlt,
         }}
       >
-        <Pressable
-          onPress={() => {
-            hapticTap();
-            void openPlatform();
-          }}
-          style={{
-            minHeight: 28,
-            borderRadius: 999,
-            backgroundColor: palette.colors.inputSurface,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Open ${platform.name} in app`}
-          accessibilityHint={getAccessibilityHint(`Opens ${platform.name} app, or browser if app is unavailable`)}
-        >
-          <Text
+        <Text style={{ color: palette.colors.text, fontSize: scaleFont(12) }} numberOfLines={5}>
+          {item.postText}
+        </Text>
+        {item.postDate ? (
+          <Text style={{ color: palette.colors.textSecondary, marginTop: 6, fontSize: scaleFont(11) }}>
+            Updated {formatRelativeDateTime(item.postDate)}
+          </Text>
+        ) : null}
+      </GlassSurface>
+
+      <Pressable
+        onPress={() => {
+          hapticTap();
+          void openPlatformLink(item.platform, item.postUrl || meta.followUrl);
+        }}
+        style={{ marginTop: 10 }}
+        accessibilityRole="button"
+        accessibilityLabel={`Follow on ${meta.name}`}
+        accessibilityHint={getAccessibilityHint(`Opens ${meta.name} profile`)}
+      >
+        {({ pressed }) => (
+          <GlassSurface
+            pressed={pressed}
             style={{
-              color: palette.colors.text,
-              fontWeight: getFontWeight("700"),
-              fontSize: scaleFont(11),
+              minHeight: 36,
+              borderRadius: 999,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: palette.colors.inputSurface,
             }}
           >
-            Open in app
-          </Text>
-        </Pressable>
-      </View>
+            <Text style={{ color: palette.colors.text, fontWeight: getFontWeight("700"), fontSize: scaleFont(12) }}>
+              Follow on {meta.name}
+            </Text>
+          </GlassSurface>
+        )}
+      </Pressable>
     </GlassSurface>
   );
 }
@@ -313,6 +139,25 @@ function SocialPlatformCard({ platform }: { platform: SocialPlatform }) {
 export function FblaSocialSection() {
   const { palette } = useThemeContext();
   const { scaleFont, getFontWeight } = useAccessibility();
+  const [items, setItems] = useState<SocialFeedItem[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const next = await fetchSocialFeedCards();
+        if (mounted) {
+          setItems(next);
+        }
+      } catch (error) {
+        console.warn("Unable to load social feed cards:", error);
+      }
+    };
+    void load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <View style={{ marginBottom: 12 }}>
@@ -331,13 +176,9 @@ export function FblaSocialSection() {
         </Text>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 10, paddingRight: 6 }}
-      >
-        {SOCIAL_PLATFORMS.map((platform) => (
-          <SocialPlatformCard key={platform.id} platform={platform} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 6 }}>
+        {items.map((item) => (
+          <SocialCard key={item.platform} item={item} />
         ))}
       </ScrollView>
     </View>

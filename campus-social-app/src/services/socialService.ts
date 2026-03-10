@@ -118,6 +118,9 @@ function parseActivity(id: string, data: Record<string, unknown>): ActivityItem 
 }
 
 function parseEvent(id: string, data: Record<string, unknown>): EventItem {
+  const attendeeIds = Array.isArray(data.attendeeIds)
+    ? data.attendeeIds.filter((item): item is string => typeof item === "string")
+    : [];
   return {
     id,
     schoolId: typeof data.schoolId === "string" ? data.schoolId : "",
@@ -135,10 +138,10 @@ function parseEvent(id: string, data: Record<string, unknown>): EventItem {
     coverImageUrl:
       typeof data.coverImageUrl === "string" ? data.coverImageUrl : undefined,
     startAt: toIso(data.startAt),
-    attendeeIds: Array.isArray(data.attendeeIds)
-      ? data.attendeeIds.filter((item): item is string => typeof item === "string")
-      : [],
-    attendeeCount: typeof data.attendeeCount === "number" ? data.attendeeCount : 0,
+    attendeeIds,
+    attendeeCount:
+      typeof data.attendeeCount === "number" ? data.attendeeCount : attendeeIds.length,
+    capacity: typeof data.capacity === "number" ? data.capacity : undefined,
   };
 }
 
@@ -197,7 +200,7 @@ async function createActivity(
   });
 }
 export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
-  const seedRef = doc(db, "app_meta", `seed_${user.schoolId}_v1`);
+  const seedRef = doc(db, "app_meta", `seed_${user.schoolId}_v2`);
   const existing = await getDoc(seedRef);
   if (existing.exists()) {
     return;
@@ -206,62 +209,15 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
   const demoUsers: UserProfile[] = [
     {
       ...user,
-      displayName: "Avery Chen",
-      uid: "demo_avery",
-      grade: "11",
-      xp: 1480,
-      tier: "Silver" as UserProfile["tier"],
-      followerIds: [],
-      followingIds: [],
-      bio: "Robotics captain and coding mentor.",
-      pointsByAction: {},
-      lastLoginDate: null,
-      lastDailyLoginDate: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      ...user,
-      displayName: "Maya Patel",
-      uid: "demo_maya",
-      grade: "11",
-      xp: 4200,
-      tier: "Platinum" as UserProfile["tier"],
-      followerIds: [],
-      followingIds: [],
-      bio: "DECA, FBLA, and tennis.",
-      pointsByAction: {},
-      lastLoginDate: null,
-      lastDailyLoginDate: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      ...user,
-      displayName: "Noah Brooks",
-      uid: "demo_noah",
-      grade: "10",
-      xp: 780,
-      tier: "Silver" as UserProfile["tier"],
-      followerIds: [],
-      followingIds: [],
-      bio: "FBLA chapter photographer.",
-      pointsByAction: {},
-      lastLoginDate: null,
-      lastDailyLoginDate: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      ...user,
-      displayName: "Luna Garcia",
-      uid: "demo_luna",
+      displayName: "Alex M.",
+      uid: "demo_alex",
       grade: "12",
-      xp: 8600,
-      tier: "Diamond" as UserProfile["tier"],
+      xp: 280,
+      tier: "Gold" as UserProfile["tier"],
+      primaryEvent: "Business Law",
       followerIds: [],
       followingIds: [],
-      bio: "Student body VP and hackathon organizer.",
+      bio: "Focused on Business Law and chapter leadership.",
       pointsByAction: {},
       lastLoginDate: null,
       lastDailyLoginDate: null,
@@ -270,14 +226,66 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
     },
     {
       ...user,
-      displayName: "Jordan Kim",
-      uid: "demo_jordan",
-      grade: "9",
-      xp: 240,
-      tier: "Bronze" as UserProfile["tier"],
+      displayName: "Jordan K.",
+      uid: "demo_jordan_k",
+      grade: "11",
+      xp: 145,
+      tier: "Silver" as UserProfile["tier"],
+      primaryEvent: "Public Speaking",
       followerIds: [],
       followingIds: [],
-      bio: "First-year coding club member.",
+      bio: "Speech practice and presentation prep.",
+      pointsByAction: {},
+      lastLoginDate: null,
+      lastDailyLoginDate: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      ...user,
+      displayName: "Sam R.",
+      uid: "demo_sam_r",
+      grade: "10",
+      xp: 120,
+      tier: "Silver" as UserProfile["tier"],
+      primaryEvent: "Entrepreneurship",
+      followerIds: [],
+      followingIds: [],
+      bio: "Startup plans and pitch decks.",
+      pointsByAction: {},
+      lastLoginDate: null,
+      lastDailyLoginDate: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      ...user,
+      displayName: "Taylor B.",
+      uid: "demo_taylor_b",
+      grade: "10",
+      xp: 65,
+      tier: "Bronze" as UserProfile["tier"],
+      primaryEvent: "Marketing",
+      followerIds: [],
+      followingIds: [],
+      bio: "Marketing campaigns and chapter outreach.",
+      pointsByAction: {},
+      lastLoginDate: null,
+      lastDailyLoginDate: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      ...user,
+      displayName: "Riley C.",
+      uid: "demo_riley_c",
+      grade: "9",
+      xp: 52,
+      tier: "Bronze" as UserProfile["tier"],
+      primaryEvent: "Coding & Programming",
+      followerIds: [],
+      followingIds: [],
+      bio: "Learning fast in coding and app dev.",
       pointsByAction: {},
       lastLoginDate: null,
       lastDailyLoginDate: null,
@@ -299,7 +307,14 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
     badges: ["First Login", "Social Starter"],
   }));
 
+  const systemAuthor = {
+    uid: "seed_fbla_atlas",
+    displayName: "FBLA Atlas",
+    avatarColor: AVATAR_FALLBACK_COLORS[0],
+  };
+
   const now = Date.now();
+  const dayMs = 1000 * 60 * 60 * 24;
   const batch = writeBatch(db);
 
   for (const demoUser of demoUsers) {
@@ -307,6 +322,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
       doc(db, "users", demoUser.uid),
       {
         ...demoUser,
+        isSeeded: true,
         createdAt: Timestamp.fromDate(new Date(now - 1000 * 60 * 60 * 48)),
         updatedAt: serverTimestamp(),
       },
@@ -314,30 +330,137 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
     );
   }
 
+  batch.set(
+    doc(db, "users", systemAuthor.uid),
+    {
+      ...user,
+      uid: systemAuthor.uid,
+      displayName: systemAuthor.displayName,
+      avatarColor: systemAuthor.avatarColor,
+      avatarUrl: getUserAvatarFallbackUrl(systemAuthor.displayName),
+      role: "superadmin",
+      grade: "12",
+      xp: 0,
+      tier: "Bronze",
+      bio: "Official FBLA Atlas updates and coaching tips.",
+      badges: ["System"],
+      isSeeded: true,
+      createdAt: Timestamp.fromDate(new Date(now - dayMs * 5)),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
   const postSeeds = [
     {
       id: "seed_post_1",
-      author: demoUsers[0],
-      content: "Anyone prepping for next week's business pitch challenge?",
+      author: systemAuthor,
+      content:
+        "Welcome to FBLA Atlas — your chapter home base for competition prep, meetings, and member connection. Complete your profile to get started!",
       imageUrl: getBusinessImage("seed_post_1"),
-      likeCount: 12,
-      commentCount: 2,
+      likeCount: 24,
+      commentCount: 6,
+      tags: ["Chapter News"],
+      createdAt: new Date(now).getTime(),
     },
     {
       id: "seed_post_2",
-      author: demoUsers[1],
-      content: "Study hall in room 210 at 3:45 PM. Bring your math packet.",
-      imageUrl: getSocialImage("seed_post_2"),
-      likeCount: 22,
-      commentCount: 5,
+      author: { uid: demoUsers[0].uid, displayName: demoUsers[0].displayName, avatarColor: demoUsers[0].avatarColor },
+      content:
+        "Just finished a 45-minute timed practice for Business Law. Scored 84% — grinding for that 90+ bonus before DLC. Who else is prepping this week?",
+      imageUrl: getBusinessImage("seed_post_2"),
+      likeCount: 18,
+      commentCount: 4,
+      tags: ["Competition Prep", "Business Law"],
+      createdAt: new Date(now - 1000 * 60 * 60 * 2).getTime(),
     },
     {
       id: "seed_post_3",
-      author: demoUsers[3],
-      content: "Signed us up for the spring volunteer drive. Need 10 helpers.",
+      author: systemAuthor,
+      content:
+        "Did you know? The top 3 most competed events at NLC are Business Law, Public Speaking, and Entrepreneurship. Start practicing early to stand out.",
       imageUrl: getEventImageByCategory("Social", "seed_post_3"),
       likeCount: 31,
+      commentCount: 7,
+      tags: ["Tips", "NLC"],
+      createdAt: new Date(now - dayMs).getTime(),
+    },
+    {
+      id: "seed_post_4",
+      author: { uid: demoUsers[1].uid, displayName: demoUsers[1].displayName, avatarColor: demoUsers[1].avatarColor },
+      content:
+        "Our chapter's mock presentation night was amazing. Six members ran their full presentations with Q&A. The feedback from officers was incredibly helpful.",
+      imageUrl: getSocialImage("seed_post_4"),
+      likeCount: 27,
+      commentCount: 5,
+      tags: ["Chapter Life", "Presentations"],
+      createdAt: new Date(now - dayMs * 1.5).getTime(),
+    },
+    {
+      id: "seed_post_5",
+      author: systemAuthor,
+      content:
+        "Presentation tip: judges remember your opening and closing lines most. Build both before you polish slides.",
+      imageUrl: getBusinessImage("seed_post_5"),
+      likeCount: 42,
+      commentCount: 9,
+      tags: ["Tips", "Competition Prep"],
+      createdAt: new Date(now - dayMs * 2).getTime(),
+    },
+    {
+      id: "seed_post_6",
+      author: { uid: demoUsers[2].uid, displayName: demoUsers[2].displayName, avatarColor: demoUsers[2].avatarColor },
+      content:
+        "Submitted my business plan for Entrepreneurship today. 15 pages of market research, financial projections, and competitive analysis. Feeling confident about regionals!",
+      imageUrl: getBusinessImage("seed_post_6"),
+      likeCount: 35,
       commentCount: 8,
+      tags: ["Entrepreneurship", "Competition Prep"],
+      createdAt: new Date(now - dayMs * 2.5).getTime(),
+    },
+    {
+      id: "seed_post_7",
+      author: { uid: demoUsers[3].uid, displayName: demoUsers[3].displayName, avatarColor: demoUsers[3].avatarColor },
+      content:
+        "Chapter fundraiser update: we raised $340 from the bake sale! That covers registration fees for five members heading to SLC. Great teamwork everyone.",
+      imageUrl: getSocialImage("seed_post_7"),
+      likeCount: 53,
+      commentCount: 12,
+      tags: ["Chapter News", "Fundraising"],
+      createdAt: new Date(now - dayMs * 3).getTime(),
+    },
+    {
+      id: "seed_post_8",
+      author: systemAuthor,
+      content:
+        "Role-play prep 101: Practice your 7-minute presentation until it feels natural, then rehearse answering unexpected judge questions. Confidence comes from repetition.",
+      imageUrl: getEventImageByCategory("FBLA", "seed_post_8"),
+      likeCount: 29,
+      commentCount: 3,
+      tags: ["Tips", "Role Play"],
+      createdAt: new Date(now - dayMs * 4).getTime(),
+    },
+    {
+      id: "seed_post_9",
+      author: { uid: demoUsers[4].uid, displayName: demoUsers[4].displayName, avatarColor: demoUsers[4].avatarColor },
+      content:
+        "First FBLA meeting as a freshman and I already signed up for Coding & Programming. Can't wait to build something cool for the competition!",
+      imageUrl: getEventImageByCategory("Academic", "seed_post_9"),
+      likeCount: 44,
+      commentCount: 11,
+      tags: ["New Member", "Coding & Programming"],
+      createdAt: new Date(now - dayMs * 5).getTime(),
+    },
+    {
+      id: "seed_post_10",
+      author: { uid: demoUsers[0].uid, displayName: demoUsers[0].displayName, avatarColor: demoUsers[0].avatarColor },
+      content:
+        "Pro tip for objective tests: focus on the FBLA handbook sections that cover parliamentary procedure, business ethics, and financial literacy. Those three areas make up nearly 40% of questions.",
+      imageUrl: getBusinessImage("seed_post_10"),
+      likeCount: 61,
+      commentCount: 14,
+      tags: ["Tips", "Study Guide"],
+      createdAt: new Date(now - dayMs * 6).getTime(),
     },
   ];
 
@@ -354,6 +477,7 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
         authorName: seed.author.displayName,
         authorAvatarColor: seed.author.avatarColor,
         imageUrl: seed.imageUrl,
+        tags: seed.tags ?? [],
         content: seed.content,
         likeCount: seed.likeCount,
         commentCount: seed.commentCount,
@@ -362,33 +486,248 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
         userReactions: {
           [seed.author.uid]: "🔥",
         },
-        createdAt: Timestamp.fromDate(new Date(now - (index + 1) * 1000 * 60 * 90)),
+        isSeeded: true,
+        createdAt: Timestamp.fromDate(new Date(seed.createdAt)),
         updatedAt: serverTimestamp(),
       },
       { merge: true },
     );
   });
 
+  const today = new Date();
+  const weekday = today.getDay();
+  const daysUntilFriday = ((5 - weekday + 7) % 7) || 7;
+  const nextFriday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() + daysUntilFriday,
+    18,
+    0,
+    0,
+    0,
+  );
+
   const eventSeeds = [
     {
       id: "seed_event_1",
-      title: "FBLA Startup Night",
-      description: "Pitch your startup concept in 3 minutes.",
-      location: "Auditorium",
+      title: "District Leadership Conference",
+      description: "Compete at the district level in your registered events. Top placers advance to SLC. Dress code: professional business attire required.",
+      location: "Convention Center — check with your adviser",
       category: "FBLA" as const,
       coverImageUrl: getEventImageByCategory("FBLA", "seed_event_1"),
-      startAt: Timestamp.fromDate(new Date(now + 1000 * 60 * 60 * 24 * 2)),
-      attendeeIds: [demoUsers[0].uid, demoUsers[1].uid],
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 42)),
+      attendeeIds: demoUsers.slice(0, 4).map((u) => u.uid),
+      capacity: 120,
     },
     {
       id: "seed_event_2",
-      title: "Coding Interview Workshop",
-      description: "Mock interviews and resume review.",
-      location: "Room 204",
+      title: "Chapter Practice Night",
+      description:
+        "Group practice session for all members competing this season. Run timed presentations, take practice tests, and get peer feedback.",
+      location: "School Library, Room 204",
       category: "Academic" as const,
       coverImageUrl: getEventImageByCategory("Academic", "seed_event_2"),
-      startAt: Timestamp.fromDate(new Date(now + 1000 * 60 * 60 * 24 * 4)),
-      attendeeIds: [demoUsers[3].uid, demoUsers[4].uid],
+      startAt: Timestamp.fromDate(nextFriday),
+      attendeeIds: demoUsers.slice(0, 3).map((u) => u.uid),
+      capacity: 40,
+    },
+    {
+      id: "seed_event_3",
+      title: "State Leadership Conference",
+      description: "State-level competition. Top placers in each event advance to NLC. Two-day event with networking sessions and workshops.",
+      location: "State Convention Center",
+      category: "FBLA" as const,
+      coverImageUrl: getEventImageByCategory("FBLA", "seed_event_3"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 90)),
+      attendeeIds: demoUsers.slice(0, 3).map((u) => u.uid),
+      capacity: 150,
+    },
+    {
+      id: "seed_event_4",
+      title: "National Leadership Conference",
+      description: "The national FBLA competition — the biggest stage in high school business. Network with 12,000+ members from across the country.",
+      location: "Atlanta, GA",
+      category: "FBLA" as const,
+      coverImageUrl: getEventImageByCategory("FBLA", "seed_event_4"),
+      startAt: Timestamp.fromDate(new Date("2026-06-24T09:00:00.000Z")),
+      attendeeIds: demoUsers.slice(0, 2).map((u) => u.uid),
+      capacity: 200,
+    },
+    {
+      id: "seed_event_5",
+      title: "Officer Elections",
+      description: "Annual chapter officer elections. Candidates will deliver 2-minute speeches followed by a vote. All members are encouraged to attend and participate.",
+      location: "Room 112",
+      category: "FBLA" as const,
+      coverImageUrl: getEventImageByCategory("FBLA", "seed_event_5"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 10)),
+      attendeeIds: demoUsers.map((u) => u.uid),
+      capacity: 60,
+    },
+    {
+      id: "seed_event_6",
+      title: "Mock Interview Workshop",
+      description: "Practice professional interviews with local business volunteers. Receive real-time feedback on your responses, body language, and presentation. Business professional dress required.",
+      location: "Career Center, Building B",
+      category: "Academic" as const,
+      coverImageUrl: getEventImageByCategory("Academic", "seed_event_6"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 5)),
+      attendeeIds: demoUsers.slice(1, 4).map((u) => u.uid),
+      capacity: 30,
+    },
+    {
+      id: "seed_event_7",
+      title: "Fundraiser: Business Trivia Night",
+      description: "Test your business knowledge in a fun team trivia format. Entry fee goes toward SLC travel costs. Pizza and drinks provided.",
+      location: "School Cafeteria",
+      category: "Social" as const,
+      coverImageUrl: getEventImageByCategory("Social", "seed_event_7"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 14)),
+      attendeeIds: demoUsers.slice(0, 5).map((u) => u.uid),
+      capacity: 80,
+    },
+    {
+      id: "seed_event_8",
+      title: "Presentation Skills Bootcamp",
+      description: "Intensive 3-hour workshop on building compelling presentations. Cover slide design, storytelling, and handling judge Q&A. Bring your laptop.",
+      location: "Computer Lab, Room 310",
+      category: "Academic" as const,
+      coverImageUrl: getEventImageByCategory("Academic", "seed_event_8"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 7)),
+      attendeeIds: demoUsers.slice(0, 3).map((u) => u.uid),
+      capacity: 25,
+    },
+    {
+      id: "seed_event_9",
+      title: "Chapter Social: Game Night",
+      description: "Unwind with your chapter! Board games, snacks, and team building. A great way to meet new members before competition season heats up.",
+      location: "Student Lounge",
+      category: "Social" as const,
+      coverImageUrl: getEventImageByCategory("Social", "seed_event_9"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 21)),
+      attendeeIds: demoUsers.map((u) => u.uid),
+      capacity: 50,
+    },
+    {
+      id: "seed_event_10",
+      title: "Business Plan Review Session",
+      description: "Bring your draft business plans for peer review. Officers and returning competitors will provide structured feedback based on FBLA judging criteria.",
+      location: "Library Conference Room",
+      category: "FBLA" as const,
+      coverImageUrl: getEventImageByCategory("FBLA", "seed_event_10"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 3)),
+      attendeeIds: demoUsers.slice(1, 4).map((u) => u.uid),
+      capacity: 20,
+    },
+    {
+      id: "seed_event_11",
+      title: "Guest Speaker: Young Entrepreneur Panel",
+      description: "Three local entrepreneurs under 25 share their startup journeys and answer your questions. Excellent networking opportunity.",
+      location: "Auditorium",
+      category: "FBLA" as const,
+      coverImageUrl: getEventImageByCategory("FBLA", "seed_event_11"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 18)),
+      attendeeIds: demoUsers.slice(0, 4).map((u) => u.uid),
+      capacity: 100,
+    },
+    {
+      id: "seed_event_12",
+      title: "Study Session: Objective Tests",
+      description: "Group study for objective test events (Business Law, Economics, Accounting). Share study guides and quiz each other.",
+      location: "Room 204",
+      category: "Academic" as const,
+      coverImageUrl: getEventImageByCategory("Academic", "seed_event_12"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 2)),
+      attendeeIds: demoUsers.slice(0, 3).map((u) => u.uid),
+      capacity: 20,
+    },
+    {
+      id: "seed_event_13",
+      title: "Community Service: Financial Literacy Day",
+      description: "Teach basic financial literacy to middle school students. Counts toward community service hours and looks great on your FBLA portfolio.",
+      location: "Jefferson Middle School",
+      category: "Social" as const,
+      coverImageUrl: getEventImageByCategory("Social", "seed_event_13"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 28)),
+      attendeeIds: demoUsers.slice(2, 5).map((u) => u.uid),
+      capacity: 15,
+    },
+    {
+      id: "seed_event_14",
+      title: "Coding Sprint: App Dev Prep",
+      description: "Timed coding challenge to simulate competition conditions. Build a small app feature in 60 minutes, then present your solution.",
+      location: "Computer Lab, Room 310",
+      category: "Academic" as const,
+      coverImageUrl: getEventImageByCategory("Academic", "seed_event_14"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 8)),
+      attendeeIds: [demoUsers[4].uid, demoUsers[2].uid],
+      capacity: 20,
+    },
+    {
+      id: "seed_event_15",
+      title: "Chapter Meeting",
+      description: "Weekly chapter meeting. Agenda: competition updates, upcoming deadlines, and committee reports. All members should attend.",
+      location: "Room 112",
+      category: "FBLA" as const,
+      coverImageUrl: getEventImageByCategory("FBLA", "seed_event_15"),
+      startAt: Timestamp.fromDate(new Date(now + 1000 * 60 * 60 * 3)),
+      attendeeIds: demoUsers.map((u) => u.uid),
+      capacity: 60,
+    },
+    {
+      id: "seed_event_16",
+      title: "Public Speaking Practice",
+      description: "Open mic session for members to practice their speeches. Receive constructive feedback from peers and officers. All skill levels welcome.",
+      location: "Auditorium, Stage Area",
+      category: "Academic" as const,
+      coverImageUrl: getEventImageByCategory("Academic", "seed_event_16"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs + 1000 * 60 * 60 * 4)),
+      attendeeIds: demoUsers.slice(0, 3).map((u) => u.uid),
+      capacity: 25,
+    },
+    {
+      id: "seed_event_17",
+      title: "Accounting Study Group",
+      description: "Collaborative study session for Accounting event prep. Bring your notes and practice problems. Tutoring available from returning competitors.",
+      location: "Library Study Room B",
+      category: "Academic" as const,
+      coverImageUrl: getEventImageByCategory("Academic", "seed_event_17"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs + 1000 * 60 * 60 * 6)),
+      attendeeIds: [demoUsers[0].uid, demoUsers[2].uid, demoUsers[4].uid],
+      capacity: 15,
+    },
+    {
+      id: "seed_event_18",
+      title: "FBLA Spirit Week Kickoff",
+      description: "Celebrate FBLA Week! Wear your chapter shirts, participate in daily challenges, and earn extra XP all week. Prizes for top participants.",
+      location: "Main Hallway & Cafeteria",
+      category: "Social" as const,
+      coverImageUrl: getEventImageByCategory("Social", "seed_event_18"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 4)),
+      attendeeIds: demoUsers.map((u) => u.uid),
+      capacity: 100,
+    },
+    {
+      id: "seed_event_19",
+      title: "Resume Workshop",
+      description: "Learn to build a professional resume for job applications and FBLA portfolios. Bring a laptop to create yours during the session.",
+      location: "Career Center, Room 105",
+      category: "Academic" as const,
+      coverImageUrl: getEventImageByCategory("Academic", "seed_event_19"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 6)),
+      attendeeIds: demoUsers.slice(1, 5).map((u) => u.uid),
+      capacity: 30,
+    },
+    {
+      id: "seed_event_20",
+      title: "Networking Mixer",
+      description: "Casual networking event with local business professionals and FBLA alumni. Practice your elevator pitch and make real connections.",
+      location: "School Commons",
+      category: "Social" as const,
+      coverImageUrl: getEventImageByCategory("Social", "seed_event_20"),
+      startAt: Timestamp.fromDate(new Date(now + dayMs * 12)),
+      attendeeIds: demoUsers.slice(0, 4).map((u) => u.uid),
+      capacity: 50,
     },
   ];
 
@@ -405,15 +744,19 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
         startAt: event.startAt,
         attendeeIds: event.attendeeIds,
         attendeeCount: event.attendeeIds.length,
+        capacity: event.capacity,
+        isSeeded: true,
       },
       { merge: true },
     );
   });
 
   const storySeeds = [
-    { id: "seed_story_1", user: demoUsers[0], content: "Mock trial finals today!" },
-    { id: "seed_story_2", user: demoUsers[1], content: "Lunch meetup at quad 🍕" },
-    { id: "seed_story_3", user: demoUsers[2], content: "New photo dump from game night" },
+    { id: "seed_story_1", user: demoUsers[0], content: "Scored 92% on my Business Law practice test!" },
+    { id: "seed_story_2", user: demoUsers[1], content: "Presentation rehearsal in 30 min — wish me luck" },
+    { id: "seed_story_3", user: demoUsers[2], content: "Just submitted my business plan draft" },
+    { id: "seed_story_4", user: demoUsers[3], content: "Chapter meeting tonight at 5 PM!" },
+    { id: "seed_story_5", user: demoUsers[4], content: "First coding sprint done — built a calculator app" },
   ];
 
   storySeeds.forEach((story, index) => {
@@ -451,9 +794,31 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
     doc(db, "homeFeed", "seed_announcement_1"),
     {
       title: "Welcome to FBLA Atlas",
-      body: "Use posts, stories, events, and messages to stay connected in your chapter.",
+      body: "Your all-in-one dashboard for FBLA competition prep, chapter events, and member connection. Start by joining your chapter and picking your events.",
       author: "FBLA Atlas Team",
+      createdAt: Timestamp.fromDate(new Date(now - 1000 * 60 * 60 * 2)),
+    },
+    { merge: true },
+  );
+
+  batch.set(
+    doc(db, "homeFeed", "seed_announcement_2"),
+    {
+      title: "Competition Season Is Here",
+      body: "DLC is 6 weeks away. Use Practice to run timed tests, flashcards, and mock presentations. Challenge a chapter member to a head-to-head duel!",
+      author: "Chapter Officers",
       createdAt: Timestamp.fromDate(new Date(now - 1000 * 60 * 60 * 12)),
+    },
+    { merge: true },
+  );
+
+  batch.set(
+    doc(db, "homeFeed", "seed_announcement_3"),
+    {
+      title: "New: Study Sessions & Challenges",
+      body: "Create study sessions with your chapter, challenge members to practice duels, and track your progress on the leaderboard.",
+      author: "FBLA Atlas Team",
+      createdAt: Timestamp.fromDate(new Date(now - dayMs)),
     },
     { merge: true },
   );
@@ -521,17 +886,31 @@ export async function seedSchoolDataForUser(user: UserProfile): Promise<void> {
   const newsSeeds = [
     {
       id: "seed_news_1",
-      title: "Principal Update: Spring Showcase Dates",
-      body: "Student showcase signups open this Friday in the activities office.",
+      title: "DLC Registration Deadline This Friday",
+      body: "All members planning to compete at the District Leadership Conference must submit their event registration by Friday. See your chapter adviser for the form.",
       pinned: true,
       bannerUrl: getNewsBannerImage("seed_news_1"),
     },
     {
       id: "seed_news_2",
-      title: "Library Extends Study Hours",
-      body: "Library will stay open until 6:30 PM during finals week.",
+      title: "Library Extends Study Hours for Competition Season",
+      body: "Library will stay open until 7 PM on weekdays through the end of March. Reserved study rooms available for FBLA practice groups.",
       pinned: false,
       bannerUrl: getNewsBannerImage("seed_news_2"),
+    },
+    {
+      id: "seed_news_3",
+      title: "FBLA Chapter Wins School Spirit Award",
+      body: "Congratulations to our FBLA chapter for receiving the School Spirit Award at the fall assembly! Thank you to all members who contributed to community events this semester.",
+      pinned: false,
+      bannerUrl: getNewsBannerImage("seed_news_3"),
+    },
+    {
+      id: "seed_news_4",
+      title: "New Practice Resources Available",
+      body: "Updated objective test question banks and presentation rubrics are now available in the Practice section. Includes 200+ new questions aligned with this year's FBLA topic areas.",
+      pinned: true,
+      bannerUrl: getNewsBannerImage("seed_news_4"),
     },
   ];
 
@@ -1167,6 +1546,8 @@ export function subscribeSchoolUsers(
             joinedEventIds: Array.isArray(data.joinedEventIds)
               ? data.joinedEventIds.filter((item): item is string => typeof item === "string")
               : [],
+            isSeeded: typeof data.isSeeded === "boolean" ? data.isSeeded : false,
+            primaryEvent: typeof data.primaryEvent === "string" ? data.primaryEvent : "",
             createdAt: toIso(data.createdAt),
             updatedAt: toIso(data.updatedAt),
           } satisfies UserProfile;
@@ -1274,6 +1655,8 @@ export async function fetchSchoolUsersOnce(schoolId: string): Promise<UserProfil
         joinedEventIds: Array.isArray(data.joinedEventIds)
           ? data.joinedEventIds.filter((item): item is string => typeof item === "string")
           : [],
+        isSeeded: typeof data.isSeeded === "boolean" ? data.isSeeded : false,
+        primaryEvent: typeof data.primaryEvent === "string" ? data.primaryEvent : "",
         createdAt: toIso(data.createdAt),
         updatedAt: toIso(data.updatedAt),
       } satisfies UserProfile;

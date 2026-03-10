@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { NavigationProp, useNavigation } from "@react-navigation/native";
 import { View } from "react-native";
 
@@ -17,7 +17,7 @@ export function SettingsHeaderButton() {
         accessibilityLabel="Open settings"
         size={38}
       >
-        <MaterialCommunityIcons name="cog-outline" size={20} color={palette.colors.text} />
+        <Feather name="settings" size={20} color={palette.colors.text} />
       </GlassIconButton>
     </View>
   );

@@ -33,6 +33,11 @@ export function createDefaultSettings(): AppSettings {
       reduceAnimations: false,
       boldText: false,
       screenReaderHints: true,
+      oneHandedMode: false,
+      leftHandedMode: false,
+      hapticIntensity: "full",
+      colorBlindMode: "none",
+      focusMode: false,
     },
     appearance: {
       themeName: DEFAULT_THEME,
@@ -146,6 +151,31 @@ function parseSettings(data: Record<string, unknown>): AppSettings {
         typeof accessibility.screenReaderHints === "boolean"
           ? accessibility.screenReaderHints
           : base.accessibility.screenReaderHints,
+      oneHandedMode:
+        typeof accessibility.oneHandedMode === "boolean"
+          ? accessibility.oneHandedMode
+          : base.accessibility.oneHandedMode,
+      leftHandedMode:
+        typeof accessibility.leftHandedMode === "boolean"
+          ? accessibility.leftHandedMode
+          : base.accessibility.leftHandedMode,
+      hapticIntensity:
+        accessibility.hapticIntensity === "off" ||
+        accessibility.hapticIntensity === "subtle" ||
+        accessibility.hapticIntensity === "full"
+          ? accessibility.hapticIntensity
+          : base.accessibility.hapticIntensity,
+      colorBlindMode:
+        accessibility.colorBlindMode === "none" ||
+        accessibility.colorBlindMode === "deuteranopia" ||
+        accessibility.colorBlindMode === "protanopia" ||
+        accessibility.colorBlindMode === "tritanopia"
+          ? accessibility.colorBlindMode
+          : base.accessibility.colorBlindMode,
+      focusMode:
+        typeof accessibility.focusMode === "boolean"
+          ? accessibility.focusMode
+          : base.accessibility.focusMode,
     },
     appearance: {
       themeName: coerceThemeName(appearance.themeName),

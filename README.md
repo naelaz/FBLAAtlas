@@ -52,7 +52,7 @@ npx expo start
 
 Then scan the QR code in Expo Go on your phone.
 
-## Demo Credentials
+## Demo Credentials   
 
 - Email: any valid email format
 - Password: `Fbla2026!`

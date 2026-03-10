@@ -95,6 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (!firebaseUser) {
+          console.log("[NavAction] AuthState -> Auth screen (no user)");
           setUid(null);
           setProfile(null);
           setIsGuest(false);
@@ -104,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (firebaseUser.isAnonymous) {
+          console.log("[NavAction] AuthState -> Guest mode");
           if (!guestModeRef.current) {
             await signOut(auth);
             setUid(null);
@@ -129,7 +131,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setUid(firebaseUser.uid);
         setIsGuest(false);
-        await ensureUserProfile(firebaseUser.uid);
+        try {
+          const ensuredProfile = await ensureUserProfile(firebaseUser.uid);
+          setProfile(ensuredProfile);
+          console.log("[AuthState] profile ready", {
+            uid: firebaseUser.uid,
+            onboardingCompleted: Boolean(ensuredProfile.onboardingCompleted),
+          });
+        } catch (profileError) {
+          console.warn("Profile ensure failed, using local fallback profile:", profileError);
+          const fallbackBase = createDefaultUserProfile(firebaseUser.uid);
+          const fallbackProfile: UserProfile = {
+            ...fallbackBase,
+            displayName:
+              firebaseUser.displayName?.trim() ||
+              firebaseUser.email?.split("@")[0] ||
+              fallbackBase.displayName,
+            authProvider:
+              firebaseUser.providerData.some((provider) => provider.providerId === "google.com")
+                ? "google"
+                : "email",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          setProfile(fallbackProfile);
+          console.log("[AuthState] fallback profile applied", {
+            uid: firebaseUser.uid,
+            onboardingCompleted: Boolean(fallbackProfile.onboardingCompleted),
+          });
+        }
         setLoading(false);
       } catch (error) {
         console.warn("Auth bootstrap failed:", error);

@@ -8,13 +8,14 @@ import { GlassButton } from "../components/ui/GlassButton";
 import { GlassInput } from "../components/ui/GlassInput";
 import { JollySelect } from "../components/ui/JollySelect";
 import { GlassPill } from "../components/ui/GlassPill";
+import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { FBLA_COMPETITIVE_EVENTS } from "../constants/fblaEvents";
 import { useDashboard } from "../context/DashboardContext";
 import { useOnboarding } from "../context/OnboardingContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { useAuthContext } from "../context/AuthContext";
-import { setUserOnboardingCompleted } from "../services/userService";
+import { setUserOnboardingCompleted, updateUserProfileFields } from "../services/userService";
 import {
   Chapter,
   getChapterJoinRequestStatus,
@@ -32,6 +33,7 @@ export function OnboardingScreen() {
   const [chapterName, setChapterName] = useState("");
   const [chapterState, setChapterState] = useState("");
   const [officerRole, setOfficerRole] = useState("");
+  const [profileType, setProfileType] = useState<"student" | "alumni">("student");
   const [selectedEvent, setSelectedEvent] = useState("");
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [dlcDate, setDlcDate] = useState("");
@@ -43,6 +45,7 @@ export function OnboardingScreen() {
   const [chapterSelected, setChapterSelected] = useState<Chapter | null>(null);
   const [chapterRequestStatus, setChapterRequestStatus] = useState<"pending" | "approved" | "denied" | null>(null);
   const [chapterBusy, setChapterBusy] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   useEffect(() => {
     if (!chapterModalOpen) {
@@ -92,31 +95,96 @@ export function OnboardingScreen() {
     };
   }, [chapterSelected?.id, profile?.uid]);
 
-  const doneDisabled = useMemo(
-    () => !selectedEvents.length || !chapterName.trim(),
-    [selectedEvents.length, chapterName],
-  );
-
   const completeSetup = async () => {
-    await updateChapterProfile({
-      chapterName: chapterName.trim(),
-      chapterState: chapterState.trim(),
-      officerRole: officerRole.trim(),
+    if (completing) {
+      return;
+    }
+
+    setCompleting(true);
+    const resolvedChapterName = chapterName.trim() || chapterSelected?.name || profile?.chapterName || "FBLA Atlas Chapter";
+    const resolvedChapterState = chapterState.trim() || chapterSelected?.state || profile?.state || "CA";
+    const resolvedEvents = selectedEvents.length > 0 ? selectedEvents : profile?.competitiveEvents ?? [];
+
+    console.log("[NavAction] Onboarding continue pressed", {
+      step,
+      resolvedChapterName,
+      resolvedEventsCount: resolvedEvents.length,
     });
-    await setSelectedCompetitiveEvents(selectedEvents);
-    if (dlcDate.trim()) {
-      await setConferenceDate("DLC", dlcDate.trim());
+
+    try {
+      try {
+        await updateChapterProfile({
+          chapterName: resolvedChapterName,
+          chapterState: resolvedChapterState,
+          officerRole: officerRole.trim(),
+        });
+      } catch (error) {
+        console.warn("Onboarding chapter profile update failed:", error);
+      }
+
+      try {
+        await setSelectedCompetitiveEvents(resolvedEvents);
+      } catch (error) {
+        console.warn("Onboarding event selection save failed:", error);
+      }
+
+      if (dlcDate.trim()) {
+        try {
+          await setConferenceDate("DLC", dlcDate.trim());
+        } catch (error) {
+          console.warn("Onboarding DLC date save failed:", error);
+        }
+      }
+      if (slcDate.trim()) {
+        try {
+          await setConferenceDate("SLC", slcDate.trim());
+        } catch (error) {
+          console.warn("Onboarding SLC date save failed:", error);
+        }
+      }
+      if (nlcDate.trim()) {
+        try {
+          await setConferenceDate("NLC", nlcDate.trim());
+        } catch (error) {
+          console.warn("Onboarding NLC date save failed:", error);
+        }
+      }
+
+      if (uid) {
+        try {
+          await updateUserProfileFields(uid, {
+            profileType,
+            chapterName: resolvedChapterName,
+            state: resolvedChapterState,
+            competitiveEvents: resolvedEvents,
+          });
+        } catch (error) {
+          console.warn("Onboarding profile field update failed:", error);
+        }
+
+        try {
+          await setUserOnboardingCompleted(uid, true);
+        } catch (error) {
+          console.warn("Onboarding completion flag save failed:", error);
+        }
+      }
+
+      await completeOnboarding();
+      console.log("[NavAction] Onboarding complete -> Dashboard (AuthGate will mount MainTabs)");
+    } catch (error) {
+      console.error("Onboarding completion failed:", error);
+      try {
+        if (uid) {
+          await setUserOnboardingCompleted(uid, true).catch(() => undefined);
+        }
+        await completeOnboarding();
+        console.log("[NavAction] Onboarding fallback -> Dashboard");
+      } catch (fallbackError) {
+        console.error("Onboarding fallback completion failed:", fallbackError);
+      }
+    } finally {
+      setCompleting(false);
     }
-    if (slcDate.trim()) {
-      await setConferenceDate("SLC", slcDate.trim());
-    }
-    if (nlcDate.trim()) {
-      await setConferenceDate("NLC", nlcDate.trim());
-    }
-    if (uid) {
-      await setUserOnboardingCompleted(uid, true);
-    }
-    await completeOnboarding();
   };
 
   return (
@@ -151,6 +219,23 @@ export function OnboardingScreen() {
             <GlassInput value={chapterName} onChangeText={setChapterName} label="Chapter Name" />
             <GlassInput value={chapterState} onChangeText={setChapterState} label="State" />
             <GlassInput value={officerRole} onChangeText={setOfficerRole} label="Officer Role (optional)" />
+            <View style={{ marginTop: 4 }}>
+              <Text style={{ color: palette.colors.textSecondary, marginBottom: 6, fontWeight: "700", fontSize: 12 }}>
+                FBLA Profile Type
+              </Text>
+              <GlassSegmentedControl
+                value={profileType}
+                options={[
+                  { value: "student", label: "Student" },
+                  { value: "alumni", label: "Alumni" },
+                ]}
+                onValueChange={(value) => {
+                  if (value === "student" || value === "alumni") {
+                    setProfileType(value);
+                  }
+                }}
+              />
+            </View>
             <GlassButton
               variant="ghost"
               label="Join Existing Chapter"
@@ -248,7 +333,8 @@ export function OnboardingScreen() {
               variant="solid"
               label="Launch FBLA Dashboard"
               style={{ flex: 1 }}
-              disabled={doneDisabled}
+              disabled={completing}
+              loading={completing}
               onPress={() => void completeSetup()}
             />
           )}

@@ -20,12 +20,14 @@ import { Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
 import { GlassButton } from "../components/ui/GlassButton";
+import { GlassDropdown } from "../components/ui/GlassDropdown";
 import { GlassInput } from "../components/ui/GlassInput";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { db } from "../config/firebase";
 import { getTierForXp } from "../constants/gamification";
 import { useAuthContext } from "../context/AuthContext";
 import { useThemeContext } from "../context/ThemeContext";
+import { usePermissions } from "../hooks/usePermissions";
 import { RootStackParamList } from "../navigation/types";
 import {
   approveChapterJoinRequest,
@@ -36,8 +38,13 @@ import {
 } from "../services/chapterService";
 import { toIso } from "../services/firestoreUtils";
 import { hapticTap } from "../services/haptics";
+import { SOCIAL_PLATFORM_META, upsertSocialFeedPost } from "../services/socialContentService";
 import { fetchAllUsers } from "../services/userService";
 import { UserProfile } from "../types/social";
+import { verifyRecognitionPlacement, removeRecognitionPlacement, subscribeRecognitionPlacements } from "../services/recognitionService";
+import { ChapterDuesSettings, DuesRecord, RecognitionPlacement } from "../types/features";
+import { fetchChapterDuesSettings, setChapterDuesSettings, setMemberDuesPaid, subscribeChapterDuesStatus, markAllChapterMembersUnpaid } from "../services/duesService";
+import { formatRelativeTime } from "../utils/format";
 
 type ModerationPost = {
   id: string;
@@ -67,6 +74,8 @@ export function AdminDashboardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile, refreshProfile } = useAuthContext();
   const { palette } = useThemeContext();
+  const permissions = usePermissions();
+  const canManageDues = permissions.canManageDues();
 
   const [queryText, setQueryText] = useState("");
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -76,6 +85,9 @@ export function AdminDashboardScreen() {
   const [pendingRequests, setPendingRequests] = useState<ChapterJoinRequest[]>([]);
   const [chapterUsers, setChapterUsers] = useState<UserProfile[]>([]);
   const [announcement, setAnnouncement] = useState("");
+  const [socialPlatform, setSocialPlatform] = useState<"x" | "instagram" | "facebook" | "youtube" | "tiktok">("instagram");
+  const [socialPostText, setSocialPostText] = useState("");
+  const [socialPostUrl, setSocialPostUrl] = useState("");
   const [stats, setStats] = useState<AdminStats>({
     totalUsers: 0,
     activeToday: 0,
@@ -84,11 +96,13 @@ export function AdminDashboardScreen() {
     mostPracticedEvent: "N/A",
   });
   const [busy, setBusy] = useState(false);
+  const [placements, setPlacements] = useState<RecognitionPlacement[]>([]);
+  const [duesRows, setDuesRows] = useState<DuesRecord[]>([]);
+  const [duesSettings, setDuesSettings] = useState<ChapterDuesSettings>({ amount: 0, deadline: "", paymentLink: "" });
 
-  const isAdmin = profile?.role === "admin";
-  const isChapterOfficer =
-    profile?.officerPosition === "President" || Boolean(profile?.chapterRoles?.includes("Chapter Officer"));
-  const canAccessDashboard = Boolean(isAdmin || isChapterOfficer);
+  const isAdmin = permissions.isAdmin;
+  const isChapterOfficer = permissions.isOfficer;
+  const canAccessDashboard = permissions.canAccessAdminDash() || permissions.isOfficer;
 
   const logAdminAction = useCallback(
     async (action: string, targetUid?: string) => {
@@ -191,6 +205,25 @@ export function AdminDashboardScreen() {
     void loadData();
   }, [canAccessDashboard, loadData, navigation, profile]);
 
+  useEffect(() => {
+    if (!profile?.schoolId) {
+      return;
+    }
+    const unsub = subscribeRecognitionPlacements(profile.schoolId, (rows) => {
+      setPlacements(rows);
+    });
+    return unsub;
+  }, [profile?.schoolId]);
+
+  useEffect(() => {
+    if (!profile?.chapterId || !canManageDues) {
+      return;
+    }
+    void fetchChapterDuesSettings(profile.chapterId).then(setDuesSettings).catch(() => undefined);
+    const unsub = subscribeChapterDuesStatus(profile.chapterId, setDuesRows);
+    return unsub;
+  }, [canManageDues, profile?.chapterId]);
+
   const filteredUsers = useMemo(() => {
     const q = queryText.trim().toLowerCase();
     if (!q) {
@@ -231,6 +264,57 @@ export function AdminDashboardScreen() {
         </GlassSurface>
       ) : null}
 
+      {permissions.canVerifyPlacements() ? (
+        <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
+          <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 8 }}>
+            Placements Verification
+          </Text>
+          {placements.length === 0 ? (
+            <Text style={{ color: palette.colors.textSecondary }}>No placement submissions.</Text>
+          ) : (
+            placements.slice(0, 40).map((placement) => (
+              <View
+                key={placement.id}
+                style={{
+                  borderWidth: 1,
+                  borderColor: palette.colors.border,
+                  borderRadius: 12,
+                  padding: 10,
+                  marginBottom: 8,
+                }}
+              >
+                <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
+                  {placement.userName} - {placement.place} - {placement.eventName}
+                </Text>
+                <Text style={{ color: palette.colors.textSecondary }}>
+                  {placement.level} {placement.year} - {placement.verified ? "Verified" : "Pending"}
+                </Text>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                  {!placement.verified ? (
+                    <GlassButton
+                      variant="solid"
+                      label="Verify"
+                      style={{ flex: 1 }}
+                      onPress={async () => {
+                        await verifyRecognitionPlacement(placement.id, profile?.uid ?? "");
+                      }}
+                    />
+                  ) : null}
+                  <GlassButton
+                    variant="ghost"
+                    label="Remove"
+                    style={{ flex: 1 }}
+                    onPress={async () => {
+                      await removeRecognitionPlacement(placement.id);
+                    }}
+                  />
+                </View>
+              </View>
+            ))
+          )}
+        </GlassSurface>
+      ) : null}
+
       {isAdmin ? (
         <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
         <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 8 }}>
@@ -242,7 +326,7 @@ export function AdminDashboardScreen() {
           placeholder="Search users by name"
           label="User Search"
         />
-        <ScrollView style={{ maxHeight: 280, marginTop: 8 }}>
+        <ScrollView style={{ maxHeight: 280, marginTop: 8 }} keyboardShouldPersistTaps="handled">
           {filteredUsers.map((user) => (
             <Pressable key={user.uid} onPress={() => setSelectedUser(user)} style={{ marginBottom: 8 }}>
               {({ pressed }) => (
@@ -340,7 +424,7 @@ export function AdminDashboardScreen() {
                 {post.content}
               </Text>
               <Text style={{ color: palette.colors.textSecondary, marginTop: 4, fontSize: 12 }}>
-                {new Date(post.timestamp).toLocaleString()}
+                {formatRelativeTime(post.timestamp)}
               </Text>
               {post.flagged ? (
                 <Text style={{ color: palette.colors.warning, marginTop: 2, fontSize: 12 }}>
@@ -415,6 +499,71 @@ export function AdminDashboardScreen() {
         </GlassSurface>
       ) : null}
 
+      {isAdmin ? (
+        <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
+          <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 8 }}>
+            Social Media Posts
+          </Text>
+          <GlassDropdown
+            label="Platform"
+            value={socialPlatform}
+            options={(Object.keys(SOCIAL_PLATFORM_META) as Array<"x" | "instagram" | "facebook" | "youtube" | "tiktok">).map((platform) => ({
+              value: platform,
+              label: SOCIAL_PLATFORM_META[platform].name,
+              description: SOCIAL_PLATFORM_META[platform].handle,
+            }))}
+            onValueChange={(value) => {
+              if (
+                value === "x" ||
+                value === "instagram" ||
+                value === "facebook" ||
+                value === "youtube" ||
+                value === "tiktok"
+              ) {
+                setSocialPlatform(value);
+              }
+            }}
+            style={{ marginBottom: 8 }}
+          />
+          <GlassInput
+            value={socialPostText}
+            onChangeText={setSocialPostText}
+            label="Post Preview Text"
+            placeholder="Paste a short latest update for this platform."
+            multiline
+            inputWrapperStyle={{ borderRadius: 14 }}
+          />
+          <GlassInput
+            value={socialPostUrl}
+            onChangeText={setSocialPostUrl}
+            label="Post URL (optional)"
+            placeholder={SOCIAL_PLATFORM_META[socialPlatform].followUrl}
+            containerStyle={{ marginTop: 8 }}
+          />
+          <GlassButton
+            variant="solid"
+            label="Save Social Post"
+            style={{ marginTop: 8 }}
+            disabled={!socialPostText.trim()}
+            onPress={async () => {
+              if (!socialPostText.trim()) {
+                return;
+              }
+              hapticTap();
+              await upsertSocialFeedPost(
+                socialPlatform,
+                socialPostText,
+                socialPostUrl,
+                profile.displayName,
+              );
+              await logAdminAction(`update_social_feed:${socialPlatform}`);
+              setSocialPostText("");
+              setSocialPostUrl("");
+            }}
+          />
+        </GlassSurface>
+      ) : null}
+
       <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
         <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 8 }}>
           Chapter Management
@@ -478,7 +627,7 @@ export function AdminDashboardScreen() {
         <Text style={{ color: palette.colors.textSecondary, marginTop: 6, marginBottom: 8 }}>
           Chapter Members
         </Text>
-        <ScrollView style={{ maxHeight: 220 }}>
+        <ScrollView style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled">
           {chapterUsers.map((user) => (
             <View
               key={user.uid}
@@ -518,6 +667,76 @@ export function AdminDashboardScreen() {
           ))}
         </ScrollView>
       </GlassSurface>
+
+      {permissions.canManageDues() && profile?.chapterId ? (
+        <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
+          <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 8 }}>
+            Dues Management
+          </Text>
+          <GlassInput
+            label="Amount"
+            value={String(duesSettings.amount || "")}
+            onChangeText={(value) => setDuesSettings((prev) => ({ ...prev, amount: Number(value) || 0 }))}
+            keyboardType="numeric"
+          />
+          <GlassInput
+            containerStyle={{ marginTop: 8 }}
+            label="Deadline"
+            value={duesSettings.deadline}
+            onChangeText={(value) => setDuesSettings((prev) => ({ ...prev, deadline: value }))}
+            placeholder="YYYY-MM-DD"
+          />
+          <GlassInput
+            containerStyle={{ marginTop: 8 }}
+            label="Payment Link"
+            value={duesSettings.paymentLink}
+            onChangeText={(value) => setDuesSettings((prev) => ({ ...prev, paymentLink: value }))}
+            placeholder="https://..."
+          />
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+            <GlassButton
+              variant="solid"
+              label="Save Dues Settings"
+              style={{ flex: 1 }}
+              onPress={async () => {
+                await setChapterDuesSettings(profile.chapterId ?? "", duesSettings);
+              }}
+            />
+            <GlassButton
+              variant="ghost"
+              label="Mark All Unpaid"
+              style={{ flex: 1 }}
+              onPress={async () => {
+                await markAllChapterMembersUnpaid(profile.chapterId ?? "");
+              }}
+            />
+          </View>
+          <Text style={{ color: palette.colors.textSecondary, marginTop: 10 }}>
+            {duesRows.filter((row) => row.paid).length} of {duesRows.length} members paid
+          </Text>
+          <ScrollView style={{ maxHeight: 220, marginTop: 8 }} keyboardShouldPersistTaps="handled">
+            {chapterUsers.map((user) => {
+              const paid = duesRows.find((row) => row.uid === user.uid)?.paid ?? false;
+              return (
+                <View key={`dues_${user.uid}`} style={{ marginBottom: 8 }}>
+                  <GlassSurface style={{ padding: 10 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={{ color: palette.colors.text }}>{user.displayName}</Text>
+                      <GlassButton
+                        variant={paid ? "ghost" : "solid"}
+                        label={paid ? "Paid" : "Unpaid"}
+                        onPress={async () => {
+                          await setMemberDuesPaid(profile.chapterId ?? "", user.uid, !paid);
+                        }}
+                      />
+                    </View>
+                  </GlassSurface>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </GlassSurface>
+      ) : null}
 
       <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
         <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 8 }}>

@@ -11,53 +11,69 @@ import { useAuthContext } from "../context/AuthContext";
 import { useThemeContext } from "../context/ThemeContext";
 import {
   Chapter,
+  createChapterForSchool,
+  findChapterBySchoolName,
   getChapterJoinRequestStatus,
-  searchChapters,
   submitChapterJoinRequest,
 } from "../services/chapterService";
 import { hapticSuccess, hapticTap } from "../services/haptics";
+import { DEFAULT_SCHOOL_NAME, updateUserProfileFields } from "../services/userService";
+import { formatSchoolLabel, School, searchSchools } from "../utils/schoolSearch";
 
 export function JoinChapterScreen() {
   const { profile } = useAuthContext();
   const { palette } = useThemeContext();
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Chapter[]>([]);
+
+  const [schoolQuery, setSchoolQuery] = useState("");
+  const [schoolResults, setSchoolResults] = useState<School[]>([]);
+  const [schoolLoading, setSchoolLoading] = useState(false);
+  const [schoolError, setSchoolError] = useState("");
+  const [schoolRetryTick, setSchoolRetryTick] = useState(0);
+
+  const [selectedSchool, setSelectedSchool] = useState<School | null>(null);
+  const [chapterName, setChapterName] = useState("");
+
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [status, setStatus] = useState<"pending" | "approved" | "denied" | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [checkingChapter, setCheckingChapter] = useState(false);
   const [sending, setSending] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const next = await searchChapters(query);
-        if (!cancelled) {
-          setResults(next);
+    const queryValue = schoolQuery.trim();
+    if (queryValue.length < 2) {
+      setSchoolResults([]);
+      setSchoolLoading(false);
+      setSchoolError("");
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          setSchoolLoading(true);
+          setSchoolError("");
+          const next = await searchSchools(queryValue);
+          setSchoolResults(next);
+        } catch (error) {
+          console.warn("School search failed:", error);
+          setSchoolResults([]);
+          setSchoolError("Could not load schools, try again.");
+        } finally {
+          setSchoolLoading(false);
         }
-      } catch (error) {
-        if (!cancelled) {
-          console.warn("Chapter search failed:", error);
-          setResults([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [query]);
+      })();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [schoolQuery, schoolRetryTick]);
 
   useEffect(() => {
     if (!profile || !selectedChapter) {
       setStatus(null);
       return;
     }
+
     let cancelled = false;
     const loadStatus = async () => {
       try {
@@ -72,6 +88,7 @@ export function JoinChapterScreen() {
         }
       }
     };
+
     void loadStatus();
     return () => {
       cancelled = true;
@@ -91,6 +108,46 @@ export function JoinChapterScreen() {
     return "Request to Join";
   }, [status]);
 
+  const selectSchool = async (school: School) => {
+    if (!profile) {
+      return;
+    }
+
+    hapticTap();
+    setSelectedSchool(school);
+    setChapterName(school.name);
+    setSchoolQuery("");
+    setSchoolResults([]);
+
+    const shouldBackfillSchool =
+      !profile.schoolName || profile.schoolName === DEFAULT_SCHOOL_NAME || !profile.schoolCity || !profile.state;
+
+    if (shouldBackfillSchool) {
+      try {
+        await updateUserProfileFields(profile.uid, {
+          schoolName: school.name,
+          schoolCity: school.city,
+          state: school.state,
+        });
+      } catch (error) {
+        console.warn("School auto-fill update failed:", error);
+      }
+    }
+
+    setCheckingChapter(true);
+    try {
+      const existing = await findChapterBySchoolName(school.name);
+      setSelectedChapter(existing);
+      setStatus(null);
+    } catch (error) {
+      console.warn("Chapter lookup failed:", error);
+      setSelectedChapter(null);
+      setStatus(null);
+    } finally {
+      setCheckingChapter(false);
+    }
+  };
+
   if (!profile) {
     return (
       <ScreenShell title="Join Chapter" subtitle="Loading..." showBackButton>
@@ -103,114 +160,192 @@ export function JoinChapterScreen() {
     <ScreenShell title="Join Chapter" subtitle="Find your school chapter and request access." showBackButton>
       <GlassSurface style={{ padding: 16, marginBottom: 12 }}>
         <GlassInput
-          label="Search Chapters"
-          placeholder="Type school or chapter name"
-          value={query}
-          onChangeText={setQuery}
+          label="Search Schools"
+          placeholder="Type your school name"
+          value={schoolQuery}
+          onChangeText={setSchoolQuery}
         />
-      </GlassSurface>
 
-      <GlassSurface style={{ padding: 16, marginBottom: 12 }}>
-        <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 16, marginBottom: 10 }}>
-          Results
-        </Text>
-        {loading ? (
-          <Text style={{ color: palette.colors.textMuted }}>Searching chapters...</Text>
-        ) : results.length === 0 ? (
-          <EmptyState title="No chapters found" message="Try a different school or city." />
-        ) : (
-          <ScrollView style={{ maxHeight: 260 }}>
-            {results.map((chapter) => (
-              <Pressable
-                key={chapter.id}
-                onPress={() => {
-                  hapticTap();
-                  setSelectedChapter(chapter);
-                }}
-                style={{ marginBottom: 8 }}
-              >
-                {({ pressed }) => (
-                  <GlassSurface
-                    pressed={pressed}
-                    style={{
-                      padding: 12,
-                      borderColor: selectedChapter?.id === chapter.id ? palette.colors.accent : palette.colors.border,
-                    }}
-                  >
-                    <Text style={{ color: palette.colors.text, fontWeight: "600", fontSize: 14 }}>
-                      {chapter.name}
-                    </Text>
-                    <Text style={{ color: palette.colors.textMuted, fontSize: 12, marginTop: 2 }}>
-                      {chapter.school} • {chapter.city}, {chapter.state}
-                    </Text>
-                    <Text style={{ color: palette.colors.textMuted, fontSize: 12 }}>
-                      Members: {chapter.memberCount}
-                    </Text>
-                  </GlassSurface>
-                )}
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-      </GlassSurface>
-
-      {selectedChapter ? (
-        <GlassSurface style={{ padding: 16 }}>
-          <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 16 }}>
-            {selectedChapter.name}
-          </Text>
-          <Text style={{ color: palette.colors.textMuted, marginTop: 4 }}>
-            {selectedChapter.school} • {selectedChapter.city}, {selectedChapter.state}
-          </Text>
-          <Text style={{ color: palette.colors.textMuted, marginTop: 6 }}>
-            Member count: {selectedChapter.memberCount}
-          </Text>
-          <Text
+        {selectedSchool ? (
+          <View
             style={{
-              color: palette.colors.textMuted,
-              marginTop: 20,
-              marginBottom: 10,
-              fontSize: 13,
-              fontWeight: "600",
-              letterSpacing: 0.8,
-              textTransform: "uppercase",
+              marginTop: 8,
+              alignSelf: "flex-start",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: palette.colors.border,
+              backgroundColor: palette.colors.inputSurface,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
             }}
           >
-            Officers
-          </Text>
-          {selectedChapter.officers.length > 0 ? (
-            selectedChapter.officers.map((officer, index) => (
-              <Text key={`${officer}-${index}`} style={{ color: palette.colors.text, fontSize: 14, marginBottom: 6 }}>
-                {officer}
-              </Text>
-            ))
-          ) : (
-            <Text style={{ color: palette.colors.textMuted }}>No officer list available yet.</Text>
-          )}
-          <GlassButton
-            variant="solid"
-            label={statusLabel}
-            style={{ marginTop: 12 }}
-            disabled={status === "pending" || status === "approved" || sending}
-            loading={sending}
-            onPress={async () => {
-              try {
-                setSending(true);
-                await submitChapterJoinRequest(selectedChapter, profile);
-                setStatus("pending");
-                hapticSuccess();
-              } catch (error) {
-                console.warn("Chapter request failed:", error);
-              } finally {
-                setSending(false);
-              }
-            }}
+            <Text style={{ color: palette.colors.text, fontSize: 12 }}>{selectedSchool.name}</Text>
+            <Pressable
+              onPress={() => {
+                setSelectedSchool(null);
+                setSelectedChapter(null);
+                setStatus(null);
+                setChapterName("");
+              }}
+            >
+              <Text style={{ color: palette.colors.textMuted, fontSize: 12 }}>X</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {schoolLoading ? <Text style={{ color: palette.colors.textSecondary, marginTop: 8 }}>Searching schools...</Text> : null}
+
+        {schoolError ? (
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 8 }}>
+            <Text style={{ color: palette.colors.danger, flex: 1 }}>{schoolError}</Text>
+            <GlassButton
+              variant="ghost"
+              size="sm"
+              label="Retry"
+              fullWidth={false}
+              onPress={() => setSchoolRetryTick((prev) => prev + 1)}
+            />
+          </View>
+        ) : null}
+
+        {schoolResults.length > 0 ? (
+          <GlassSurface style={{ padding: 8, maxHeight: 180, marginTop: 8 }}>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {schoolResults.map((school) => (
+                <Pressable
+                  key={`${school.name}-${school.state}-${school.city}`}
+                  onPress={() => {
+                    void selectSchool(school);
+                  }}
+                  style={{
+                    paddingVertical: 8,
+                    borderBottomWidth: 1,
+                    borderBottomColor: palette.colors.divider,
+                  }}
+                >
+                  <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{formatSchoolLabel(school)}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </GlassSurface>
+        ) : null}
+
+        {!schoolLoading && !schoolError && schoolQuery.trim().length >= 2 && schoolResults.length === 0 ? (
+          <Text style={{ color: palette.colors.textMuted, marginTop: 8 }}>No schools found. Try a different search.</Text>
+        ) : null}
+      </GlassSurface>
+
+      {selectedSchool ? (
+        <GlassSurface style={{ padding: 16, marginBottom: 12 }}>
+          <GlassInput
+            label="Chapter Name"
+            value={chapterName}
+            onChangeText={setChapterName}
+            placeholder="Chapter name"
           />
-          {status === "pending" ? (
-            <Text style={{ color: palette.colors.success, marginTop: 8 }}>
-              Request sent. A chapter officer will review it soon.
-            </Text>
-          ) : null}
+
+          {checkingChapter ? (
+            <Text style={{ color: palette.colors.textMuted, marginTop: 10 }}>Checking for an existing chapter...</Text>
+          ) : selectedChapter ? (
+            <>
+              <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 16, marginTop: 10 }}>
+                {selectedChapter.name}
+              </Text>
+              <Text style={{ color: palette.colors.textMuted, fontSize: 12, marginTop: 2 }}>
+                {selectedChapter.school} - {selectedChapter.city}, {selectedChapter.state}
+              </Text>
+              <Text style={{ color: palette.colors.textMuted, marginTop: 6 }}>
+                Member count: {selectedChapter.memberCount}
+              </Text>
+
+              <Text
+                style={{
+                  color: palette.colors.textMuted,
+                  marginTop: 16,
+                  marginBottom: 8,
+                  fontSize: 11,
+                  fontWeight: "700",
+                  letterSpacing: 1,
+                  textTransform: "uppercase",
+                }}
+              >
+                Officers
+              </Text>
+              {selectedChapter.officers.length > 0 ? (
+                selectedChapter.officers.map((officer, index) => (
+                  <Text key={`${officer}-${index}`} style={{ color: palette.colors.text, fontSize: 14, marginBottom: 6 }}>
+                    {officer}
+                  </Text>
+                ))
+              ) : (
+                <Text style={{ color: palette.colors.textMuted }}>No officer list available yet.</Text>
+              )}
+
+              <GlassButton
+                variant="solid"
+                label={statusLabel}
+                style={{ marginTop: 12 }}
+                disabled={status === "pending" || status === "approved" || sending}
+                loading={sending}
+                onPress={async () => {
+                  try {
+                    setSending(true);
+                    await submitChapterJoinRequest(selectedChapter, profile);
+                    setStatus("pending");
+                    hapticSuccess();
+                  } catch (error) {
+                    console.warn("Chapter request failed:", error);
+                  } finally {
+                    setSending(false);
+                  }
+                }}
+              />
+              {status === "pending" ? (
+                <Text style={{ color: palette.colors.success, marginTop: 8 }}>
+                  Request sent. A chapter officer will review it soon.
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <Text style={{ color: palette.colors.textMuted, marginTop: 10 }}>
+                No chapter exists yet for this school.
+              </Text>
+              <GlassButton
+                variant="solid"
+                label={`Create a Chapter for ${selectedSchool.name}`}
+                style={{ marginTop: 10 }}
+                loading={creating}
+                disabled={creating}
+                onPress={async () => {
+                  try {
+                    setCreating(true);
+                    const created = await createChapterForSchool(selectedSchool, profile);
+                    await updateUserProfileFields(profile.uid, {
+                      chapterId: created.id,
+                      chapterName: created.name,
+                      schoolName: selectedSchool.name,
+                      schoolCity: selectedSchool.city,
+                      state: selectedSchool.state,
+                      officerPosition: "President",
+                      chapterRoles: Array.from(new Set([...(profile.chapterRoles ?? []), "Chapter Officer"])),
+                      role: profile.role === "member" ? "officer" : profile.role,
+                    });
+                    setSelectedChapter(created);
+                    setStatus("approved");
+                    hapticSuccess();
+                  } catch (error) {
+                    console.warn("Create chapter failed:", error);
+                  } finally {
+                    setCreating(false);
+                  }
+                }}
+              />
+            </>
+          )}
         </GlassSurface>
       ) : null}
     </ScreenShell>

@@ -1,5 +1,6 @@
+import { Compass } from "lucide-react-native";
 import React from "react";
-import Svg, { Defs, LinearGradient, Path, Stop, Text as SvgText } from "react-native-svg";
+import { View } from "react-native";
 
 import { useThemeContext } from "../../context/ThemeContext";
 
@@ -8,36 +9,26 @@ type SchoolCrestIconProps = {
   initials?: string;
 };
 
-export function SchoolCrestIcon({ size = 40, initials = "FA" }: SchoolCrestIconProps) {
+export function SchoolCrestIcon({ size = 40 }: SchoolCrestIconProps) {
   const { palette } = useThemeContext();
-  const gradientId = `crestGradient_${palette.name}`;
+  const containerSize = Math.max(20, size);
+  const iconSize = Math.max(14, containerSize - 10);
 
   return (
-    <Svg width={size} height={size} viewBox="0 0 64 64">
-      <Defs>
-        <LinearGradient id={gradientId} x1="4" y1="2" x2="60" y2="58">
-          <Stop offset="0%" stopColor={palette.colors.secondary} />
-          <Stop offset="100%" stopColor={palette.colors.primary} />
-        </LinearGradient>
-      </Defs>
-      <Path
-        d="M32 4L55 12V30C55 43 46 54 32 60C18 54 9 43 9 30V12L32 4Z"
-        fill={`url(#${gradientId})`}
-      />
-      <Path
-        d="M32 10L49 16V30C49 40.4 42 49 32 54C22 49 15 40.4 15 30V16L32 10Z"
-        fill={palette.colors.glassBorder}
-      />
-      <SvgText
-        x="32"
-        y="36"
-        textAnchor="middle"
-        fontSize="16"
-        fontWeight="700"
-        fill={palette.colors.onPrimary}
-      >
-        {initials}
-      </SvgText>
-    </Svg>
+    <View
+      style={{
+        width: containerSize,
+        height: containerSize,
+        borderRadius: containerSize / 2,
+        borderWidth: 1,
+        borderColor: palette.colors.border,
+        backgroundColor: palette.colors.surface,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Compass size={iconSize} color={palette.colors.text} strokeWidth={2.1} />
+    </View>
   );
 }
+

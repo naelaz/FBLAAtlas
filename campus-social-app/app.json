@@ -5,6 +5,7 @@
     "scheme": "fblaatlas",
     "version": "1.0.0",
     "orientation": "portrait",
+    "backgroundColor": "#0A0A0A",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
@@ -19,6 +20,7 @@
       }
     },
     "android": {
+      "backgroundColor": "#0A0A0A",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

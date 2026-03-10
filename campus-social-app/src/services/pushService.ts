@@ -190,3 +190,17 @@ export async function configurePracticeReminders(enabled: boolean): Promise<void
   });
   await writeStoredReminderIds([id]);
 }
+
+export async function cancelAllScheduledNotifications(): Promise<void> {
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) {
+    return;
+  }
+
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch (error) {
+    console.warn("Failed to cancel scheduled notifications:", error);
+  }
+  await writeStoredReminderIds([]);
+}

@@ -5,10 +5,12 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   limit,
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   where,
@@ -989,7 +991,73 @@ export async function savePracticeAttempt(
     createdAt: serverTimestamp(),
   });
 
+  await setDoc(
+    doc(db, "eventStats", payload.eventId),
+    {
+      eventId: payload.eventId,
+      eventName: payload.eventName,
+      practiceCount: increment(1),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  const userRef = doc(db, "users", uid);
+  await runTransaction(db, async (tx) => {
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists()) {
+      return;
+    }
+    const data = userSnap.data() as Record<string, unknown>;
+    const milestones = Array.isArray(data.milestones)
+      ? data.milestones.filter(
+          (item): item is { id: string; type: string; date: string; description: string } =>
+            Boolean(item) &&
+            typeof item === "object" &&
+            typeof (item as { type?: unknown }).type === "string" &&
+            typeof (item as { date?: unknown }).date === "string" &&
+            typeof (item as { description?: unknown }).description === "string",
+        )
+      : [];
+    if (milestones.some((item) => item.type === "first_practice")) {
+      return;
+    }
+    tx.set(
+      userRef,
+      {
+        milestones: [
+          {
+            id: `first_practice_${Date.now()}`,
+            type: "first_practice",
+            date: new Date().toISOString(),
+            description: `Completed first ${payload.eventName} practice`,
+          },
+          ...milestones,
+        ].slice(0, 120),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  });
+
   await syncPracticeProfile(uid);
+}
+
+export async function fetchPopularPracticeEventIds(limitCount = 5): Promise<string[]> {
+  try {
+    const snap = await getDocs(
+      query(collection(db, "eventStats"), orderBy("practiceCount", "desc"), limit(limitCount)),
+    );
+    return snap.docs
+      .map((row) => {
+        const data = row.data() as Record<string, unknown>;
+        return typeof data.eventId === "string" ? data.eventId : row.id;
+      })
+      .filter((value): value is string => Boolean(value));
+  } catch (error) {
+    console.warn("Failed to fetch popular practice events:", error);
+    return [];
+  }
 }
 
 export async function fetchPracticeAttempts(
@@ -1048,16 +1116,15 @@ export function subscribePracticeLeaderboard(
   const q = query(
     collection(db, "practiceProfiles"),
     where("schoolId", "==", schoolId),
-    orderBy("averageScore", "desc"),
     limit(25),
   );
 
   return onSnapshot(
     q,
     (snap) => {
-      const rows = snap.docs.map((docSnap) =>
-        parseLeaderboardRow(docSnap.data() as Record<string, unknown>),
-      );
+      const rows = snap.docs
+        .map((docSnap) => parseLeaderboardRow(docSnap.data() as Record<string, unknown>))
+        .sort((a, b) => b.averageScore - a.averageScore);
       onChange(rows);
     },
     (error) => {

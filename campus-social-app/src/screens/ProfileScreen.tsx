@@ -1,10 +1,11 @@
-﻿import { useNavigation } from "@react-navigation/native";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
 import { ChevronDown, Plus, Search, X } from "lucide-react-native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, Share, View } from "react-native";
+import { Alert, Linking, Modal, Pressable, ScrollView, Share, View } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { Text } from "react-native-paper";
 import Animated, {
@@ -24,6 +25,7 @@ import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { TierBadge } from "../components/ui/TierBadge";
 import { ScreenShell } from "../components/ScreenShell";
+import { useAccessibility } from "../context/AccessibilityContext";
 import { useAuthContext } from "../context/AuthContext";
 import { useGamification } from "../context/GamificationContext";
 import { useThemeContext } from "../context/ThemeContext";
@@ -31,9 +33,12 @@ import { FBLA_COMPETITIVE_EVENTS } from "../constants/fblaEvents";
 import { getTierColor, getXpProgress } from "../constants/gamification";
 import { useAnimationDuration } from "../hooks/useAnimationDuration";
 import { RootStackParamList } from "../navigation/types";
+import { fetchUserDuelStats } from "../services/challengeService";
+import { fetchChapterDuesSettings, fetchMemberDuesStatus } from "../services/duesService";
 import { formatRelativeDateTime } from "../services/firestoreUtils";
 import { awardPointsToUser } from "../services/gamificationService";
 import { hapticSuccess, hapticTap } from "../services/haptics";
+import { submitPlacementToRecognitionWall } from "../services/recognitionService";
 import { fetchPostsOnce, fetchRecentActivityForUser, fetchSchoolUsersOnce } from "../services/socialService";
 import {
   clearProfileAvatar,
@@ -42,17 +47,12 @@ import {
   uploadProfileAvatar,
 } from "../services/userService";
 import { ActivityItem, ChapterRole, OfficerPosition, PlacementLevel, PlacementResult, PostItem, UserPlacement, UserProfile } from "../types/social";
+import { formatSchoolLabel, School, searchSchools } from "../utils/schoolSearch";
 import { formatCompactNumber } from "../utils/format";
 
 type StatSheetType = "posts" | "followers" | "following" | null;
 
 type EditSectionKey = "role" | "school" | "events" | "achievements" | "bio";
-
-type SchoolSearchResult = {
-  name: string;
-  city: string;
-  state: string;
-};
 
 const OFFICER_POSITIONS: OfficerPosition[] = [
   "President",
@@ -98,10 +98,27 @@ function placementEmoji(place: PlacementResult): string {
   return "🏅";
 }
 
+function lightenHex(hex: string, amount = 0.15): string {
+  const clean = hex.replace("#", "");
+  const normalized =
+    clean.length === 3
+      ? `${clean[0]}${clean[0]}${clean[1]}${clean[1]}${clean[2]}${clean[2]}`
+      : clean;
+  const value = Number.parseInt(normalized, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  const mix = (channel: number) => Math.round(channel + (255 - channel) * amount);
+  const toHex = (channel: number) => channel.toString(16).padStart(2, "0");
+  return `#${toHex(mix(r))}${toHex(mix(g))}${toHex(mix(b))}`;
+}
+
 export function ProfileScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, "Profile">>();
+  const route = useRoute<RouteProp<RootStackParamList, "Profile">>();
   const { profile: authProfile } = useAuthContext();
   const { palette } = useThemeContext();
+  const { colorBlindMode } = useAccessibility();
   const { handleAwardResult } = useGamification();
   const xpFillDuration = useAnimationDuration(380);
 
@@ -122,8 +139,10 @@ export function ProfileScreen() {
   const [editSchoolCity, setEditSchoolCity] = useState("");
   const [editSchoolState, setEditSchoolState] = useState("");
   const [schoolQuery, setSchoolQuery] = useState("");
-  const [schoolResults, setSchoolResults] = useState<SchoolSearchResult[]>([]);
+  const [schoolResults, setSchoolResults] = useState<School[]>([]);
   const [schoolLoading, setSchoolLoading] = useState(false);
+  const [schoolError, setSchoolError] = useState("");
+  const [schoolRetryTick, setSchoolRetryTick] = useState(0);
   const [eventSearch, setEventSearch] = useState("");
   const [editCompetitiveEvents, setEditCompetitiveEvents] = useState<string[]>([]);
   const [maxEventsError, setMaxEventsError] = useState(false);
@@ -145,6 +164,8 @@ export function ProfileScreen() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [profileCompletionAwarded, setProfileCompletionAwarded] = useState(false);
+  const [duelStats, setDuelStats] = useState<{ wins: number; losses: number }>({ wins: 0, losses: 0 });
+  const [duesStatus, setDuesStatus] = useState<{ paid: boolean; deadline: string; paymentLink: string } | null>(null);
 
   const shareCardRef = useRef<ViewShot>(null);
   const xpFill = useSharedValue(0);
@@ -167,6 +188,14 @@ export function ProfileScreen() {
   }, [authProfile]);
 
   useEffect(() => {
+    if (!route.params?.openEdit) {
+      return;
+    }
+    setEditOpen(true);
+    navigation.setParams({ openEdit: undefined });
+  }, [navigation, route.params?.openEdit]);
+
+  useEffect(() => {
     if (!authProfile?.uid) {
       setLiveProfile(null);
       return;
@@ -186,6 +215,57 @@ export function ProfileScreen() {
   useEffect(() => {
     xpFill.value = withTiming(xpProgress.progress, { duration: xpFillDuration });
   }, [xpFill, xpFillDuration, xpProgress.progress]);
+
+  useEffect(() => {
+    if (!profile?.uid) {
+      setDuelStats({ wins: 0, losses: 0 });
+      return;
+    }
+    let active = true;
+    void fetchUserDuelStats(profile.uid)
+      .then((stats) => {
+        if (active) {
+          setDuelStats({ wins: stats.wins, losses: stats.losses });
+        }
+      })
+      .catch((error) => {
+        console.warn("Duel stats load failed:", error);
+      });
+    return () => {
+      active = false;
+    };
+  }, [profile?.uid]);
+
+  useEffect(() => {
+    if (!profile?.uid || !profile.chapterId) {
+      setDuesStatus(null);
+      return;
+    }
+    let active = true;
+    void Promise.all([
+      fetchMemberDuesStatus(profile.chapterId, profile.uid),
+      fetchChapterDuesSettings(profile.chapterId),
+    ])
+      .then(([row, settings]) => {
+        if (active) {
+          setDuesStatus(
+            row
+              ? {
+                  paid: row.paid,
+                  deadline: settings.deadline,
+                  paymentLink: settings.paymentLink,
+                }
+              : null,
+          );
+        }
+      })
+      .catch((error) => {
+        console.warn("Dues status load failed:", error);
+      });
+    return () => {
+      active = false;
+    };
+  }, [profile?.chapterId, profile?.uid]);
 
 
   const refresh = async () => {
@@ -247,59 +327,28 @@ export function ProfileScreen() {
     if (queryValue.length < 2) {
       setSchoolResults([]);
       setSchoolLoading(false);
+      setSchoolError("");
       return;
     }
     const timer = setTimeout(() => {
       void (async () => {
         try {
           setSchoolLoading(true);
-          const where = encodeURIComponent(`search(name,"${queryValue.replace(/"/g, "")}")`);
-          const response = await fetch(
-            `https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/us-public-schools/records?limit=20&where=${where}`,
-          );
-          if (!response.ok) {
-            throw new Error("School search request failed.");
-          }
-          const payload = (await response.json()) as {
-            results?: Array<Record<string, unknown>>;
-          };
-          const next = (payload.results ?? [])
-            .map((item) => {
-              const name = typeof item.name === "string" ? item.name : "";
-              const city =
-                typeof item.city === "string"
-                  ? item.city
-                  : typeof item.city_name === "string"
-                    ? item.city_name
-                    : "";
-              const state =
-                typeof item.state === "string"
-                  ? item.state
-                  : typeof item.state_name === "string"
-                    ? item.state_name
-                    : "";
-              if (!name || !state) {
-                return null;
-              }
-              return {
-                name,
-                city,
-                state,
-              } satisfies SchoolSearchResult;
-            })
-            .filter((item): item is SchoolSearchResult => Boolean(item));
+          setSchoolError("");
+          const next = await searchSchools(queryValue);
           setSchoolResults(next);
         } catch (error) {
           console.warn("School search failed:", error);
           setSchoolResults([]);
+          setSchoolError("Could not load schools, try again.");
         } finally {
           setSchoolLoading(false);
         }
       })();
-    }, 350);
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [schoolQuery]);
+  }, [schoolQuery, schoolRetryTick]);
 
   const toggleSection = (section: EditSectionKey) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -390,7 +439,7 @@ export function ProfileScreen() {
 
   if (!profile) {
     return (
-      <ScreenShell title="Profile" subtitle="Loading profile..." showBackButton={false}>
+      <ScreenShell title="Profile" subtitle="Loading profile..." showBackButton>
         <EmptyState title="Loading" message="Fetching your profile..." />
       </ScreenShell>
     );
@@ -434,7 +483,11 @@ export function ProfileScreen() {
 
   const handleShareProfile = async () => {
     try {
-      const uri = await captureRef(shareCardRef, {
+      if (!shareCardRef.current) {
+        await Share.share({ message: "Check out my FBLA Atlas profile!" });
+        return;
+      }
+      const uri = await captureRef(shareCardRef.current, {
         format: "png",
         quality: 1,
       });
@@ -525,9 +578,24 @@ export function ProfileScreen() {
       subtitle="Your XP, streaks, badges, and account controls."
       refreshing={refreshing}
       onRefresh={() => void refresh()}
-      showBackButton={false}
+      showBackButton
     >
-      <View style={{ paddingTop: 8 }}>
+      <View style={{ paddingTop: 8, position: "relative" }}>
+        <LinearGradient
+          pointerEvents="none"
+          colors={[palette.colors.accentMuted, palette.colors.transparent]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={{
+            position: "absolute",
+            top: -18,
+            left: 30,
+            right: 30,
+            height: 170,
+            borderRadius: 999,
+            opacity: palette.isDark ? 0.14 : 0.07,
+          }}
+        />
         <View style={{ alignItems: "center", marginBottom: 16 }}>
           <AvatarWithStatus
             uri={profile.avatarUrl}
@@ -666,14 +734,83 @@ export function ProfileScreen() {
             style={[
               {
                 height: 12,
-                backgroundColor: tierColor,
                 borderRadius: 999,
+                overflow: "hidden",
               },
               xpFillStyle,
             ]}
-          />
+          >
+            <LinearGradient
+              colors={[tierColor, lightenHex(tierColor, 0.15)]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={{ flex: 1 }}
+            />
+          </Animated.View>
+          {colorBlindMode !== "none" ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 0,
+                flexDirection: "row",
+              }}
+            >
+              {Array.from({ length: 24 }).map((_, index) => (
+                <View
+                  // eslint-disable-next-line react/no-array-index-key
+                  key={`xp_pattern_${index}`}
+                  style={{
+                    width: 4,
+                    marginRight: 3,
+                    backgroundColor: index % 2 === 0 ? palette.colors.background : "transparent",
+                    opacity: 0.22,
+                  }}
+                />
+              ))}
+            </View>
+          ) : null}
         </View>
       </GlassSurface>
+
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+        <GlassSurface style={{ flex: 1, padding: 12 }}>
+          <Text style={{ color: palette.colors.text, fontWeight: "800" }}>Challenge Record</Text>
+          <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
+            {duelStats.wins}W - {duelStats.losses}L
+          </Text>
+        </GlassSurface>
+        <GlassSurface style={{ flex: 1, padding: 12 }}>
+          <Text style={{ color: palette.colors.text, fontWeight: "800" }}>Chapter Status</Text>
+          {duesStatus ? (
+            <>
+              <Text style={{ color: duesStatus.paid ? palette.colors.success : palette.colors.warning, marginTop: 4 }}>
+                {duesStatus.paid ? "Dues Paid" : "Dues Unpaid"}
+              </Text>
+              {duesStatus.deadline ? (
+                <Text style={{ color: palette.colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                  Deadline: {duesStatus.deadline}
+                </Text>
+              ) : null}
+              {!duesStatus.paid && duesStatus.paymentLink ? (
+                <Pressable
+                  onPress={() => {
+                    void Linking.openURL(duesStatus.paymentLink).catch(() => undefined);
+                  }}
+                  style={{ marginTop: 4 }}
+                >
+                  <Text style={{ color: palette.colors.primary, fontWeight: "700" }}>Pay Now</Text>
+                </Pressable>
+              ) : null}
+            </>
+          ) : (
+            <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>No dues info</Text>
+          )}
+        </GlassSurface>
+      </View>
 
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
         <GlassButton
@@ -730,9 +867,9 @@ export function ProfileScreen() {
           Achievements
         </Text>
         {profile.placements && profile.placements.length > 0 ? (
-          profile.placements.map((placement) => (
+          profile.placements.map((placement, index) => (
             <View
-              key={placement.id}
+              key={`${placement.id}_${index}`}
               style={{
                 borderBottomWidth: 1,
                 borderBottomColor: palette.colors.divider,
@@ -746,10 +883,71 @@ export function ProfileScreen() {
               <Text style={{ color: palette.colors.textSecondary }}>
                 {placement.competitionLevel} {placement.year}
               </Text>
+              <GlassButton
+                variant="ghost"
+                size="sm"
+                label="Submit to Recognition Wall"
+                style={{ marginTop: 6, alignSelf: "flex-start" }}
+                onPress={async () => {
+                  try {
+                    await submitPlacementToRecognitionWall(profile, {
+                      eventName: placement.eventName,
+                      place: placement.place,
+                      level: placement.competitionLevel,
+                      year: placement.year,
+                    });
+                  } catch (error) {
+                    console.warn("Placement submit failed:", error);
+                  }
+                }}
+              />
             </View>
           ))
         ) : (
           <Text style={{ color: palette.colors.textSecondary }}>No placements added yet.</Text>
+        )}
+      </GlassSurface>
+
+      <GlassSurface style={{ marginBottom: 16, padding: 12 }}>
+        <Text variant="titleMedium" style={{ fontWeight: "800", marginBottom: 8 }}>
+          FBLA Journey
+        </Text>
+        {(profile.milestones ?? []).length > 0 ? (
+          (profile.milestones ?? []).slice(0, 8).map((milestone, index, list) => (
+            <View
+              key={`${milestone.id}_${index}`}
+              style={{
+                flexDirection: "row",
+                gap: 10,
+                paddingBottom: 10,
+                marginBottom: 10,
+                borderBottomWidth: index === list.length - 1 ? 0 : 1,
+                borderBottomColor: palette.colors.divider,
+              }}
+            >
+              <View
+                style={{
+                  width: 10,
+                  height: 10,
+                  marginTop: 6,
+                  borderRadius: 5,
+                  backgroundColor: palette.colors.primary,
+                }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
+                  {milestone.description}
+                </Text>
+                <Text style={{ color: palette.colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                  {formatRelativeDateTime(milestone.date)}
+                </Text>
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text style={{ color: palette.colors.textSecondary }}>
+            Your milestones will appear here as you practice, post, and level up.
+          </Text>
         )}
       </GlassSurface>
 
@@ -758,9 +956,9 @@ export function ProfileScreen() {
           Recent Activity
         </Text>
         {activity.length > 0 ? (
-          activity.map((item) => (
+          activity.map((item, index) => (
             <View
-              key={item.id}
+              key={`${item.id}_${index}`}
               style={{
                 borderBottomWidth: 1,
                 borderBottomColor: palette.colors.divider,
@@ -788,8 +986,8 @@ export function ProfileScreen() {
               </Text>
               <ScrollView contentContainerStyle={{ gap: 8 }}>
                 {statList.length > 0 ? (
-                  statList.map((row) => (
-                    <View key={row.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 }}>
+                  statList.map((row, index) => (
+                    <View key={`${row.id}_${index}`} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 }}>
                       {row.avatarUrl ? (
                         <AvatarWithStatus uri={row.avatarUrl} size={32} online tier={row.tier} />
                       ) : null}
@@ -943,9 +1141,21 @@ export function ProfileScreen() {
                     {schoolLoading ? (
                       <Text style={{ color: palette.colors.textSecondary }}>Searching schools...</Text>
                     ) : null}
+                    {schoolError ? (
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <Text style={{ color: palette.colors.danger, flex: 1 }}>{schoolError}</Text>
+                        <GlassButton
+                          variant="ghost"
+                          size="sm"
+                          label="Retry"
+                          fullWidth={false}
+                          onPress={() => setSchoolRetryTick((prev) => prev + 1)}
+                        />
+                      </View>
+                    ) : null}
                     {schoolResults.length > 0 ? (
                       <GlassSurface style={{ padding: 8, maxHeight: 180 }}>
-                        <ScrollView>
+                        <ScrollView keyboardShouldPersistTaps="handled">
                           {schoolResults.map((school) => (
                             <Pressable
                               key={`${school.name}-${school.state}-${school.city}`}
@@ -962,11 +1172,7 @@ export function ProfileScreen() {
                                 borderBottomColor: palette.colors.divider,
                               }}
                             >
-                              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{school.name}</Text>
-                              <Text style={{ color: palette.colors.textSecondary }}>
-                                {school.city ? `${school.city}, ` : ""}
-                                {school.state}
-                              </Text>
+                              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{formatSchoolLabel(school)}</Text>
                             </Pressable>
                           ))}
                         </ScrollView>
@@ -1126,9 +1332,9 @@ export function ProfileScreen() {
                       onPress={addPlacement}
                     />
 
-                    {editPlacements.map((placement) => (
+                    {editPlacements.map((placement, index) => (
                       <Swipeable
-                        key={placement.id}
+                        key={`${placement.id}_${index}`}
                         renderRightActions={() => (
                           <View
                             style={{
@@ -1311,6 +1517,8 @@ export function ProfileScreen() {
     </ScreenShell>
   );
 }
+
+
 
 
 

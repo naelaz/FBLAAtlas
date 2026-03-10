@@ -1,12 +1,14 @@
 ﻿import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Feather } from "@expo/vector-icons";
 import { Search, Target } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
-import { FlatList, View } from "react-native";
+import { FlatList, Pressable, View } from "react-native";
 import { Text } from "react-native-paper";
 
 import { Badge } from "../components/ui/badge";
 import { EmptyState } from "../components/ui/EmptyState";
+import { GlassButton } from "../components/ui/GlassButton";
 import { GlassDropdown } from "../components/ui/GlassDropdown";
 import { GlassInput } from "../components/ui/GlassInput";
 import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
@@ -24,13 +26,16 @@ import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
 import {
   buildPracticeDashboardSummary,
+  fetchPopularPracticeEventIds,
   recommendationFromSummary,
   subscribePracticeAttempts,
   subscribePracticeLeaderboard,
 } from "../services/practiceService";
+import { createStudySession, joinStudySession, subscribeStudySessions } from "../services/studySessionService";
 import { PracticeAttempt, PracticeLeaderboardEntry } from "../types/practice";
 import { ScreenShell } from "../components/ScreenShell";
 import { formatRelativeTime } from "../utils/format";
+import { StudySession } from "../types/features";
 
 type PracticeTab = "events" | "dashboard" | "leaderboard";
 
@@ -79,7 +84,12 @@ export function PracticeScreen() {
   const [category, setCategory] = useState<"All" | PracticeEventCategory>("All");
   const [attempts, setAttempts] = useState<PracticeAttempt[]>([]);
   const [leaderboard, setLeaderboard] = useState<PracticeLeaderboardEntry[]>([]);
+  const [popularEventIds, setPopularEventIds] = useState<Set<string>>(new Set());
   const [loadingAttempts, setLoadingAttempts] = useState(true);
+  const [studySessions, setStudySessions] = useState<StudySession[]>([]);
+  const [sessionEventName, setSessionEventName] = useState("");
+  const [sessionDescription, setSessionDescription] = useState("");
+  const [creatingSession, setCreatingSession] = useState(false);
 
   useEffect(() => {
     if (!profile) {
@@ -122,8 +132,48 @@ export function PracticeScreen() {
     return unsubscribe;
   }, [profile?.schoolId]);
 
+  useEffect(() => {
+    if (!profile?.schoolId) {
+      setStudySessions([]);
+      return;
+    }
+    const unsubscribe = subscribeStudySessions(profile.schoolId, setStudySessions);
+    return unsubscribe;
+  }, [profile?.schoolId]);
+
+  useEffect(() => {
+    let active = true;
+    const loadPopular = async () => {
+      const ids = await fetchPopularPracticeEventIds(5);
+      const fallbackIds =
+        ids.length > 0
+          ? ids
+          : FBLA_EVENT_DEFINITIONS.filter((event) =>
+              [
+                "Business Law",
+                "Public Speaking",
+                "Entrepreneurship",
+                "Marketing",
+                "Coding & Programming",
+              ].includes(event.name),
+            ).map((event) => event.id);
+      if (active) {
+        setPopularEventIds(new Set(fallbackIds));
+      }
+    };
+    void loadPopular();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const filteredEvents = useMemo(() => filterEvents(search, category), [search, category]);
+  const hasAnyPractice = attempts.length > 0;
   const summary = useMemo(() => buildPracticeDashboardSummary(attempts), [attempts]);
+  const readinessMap = useMemo(
+    () => new Map(summary.eventStats.map((item) => [item.eventId, item.averageScore])),
+    [summary.eventStats],
+  );
   const recommended = useMemo(() => recommendationFromSummary(summary), [summary]);
   const tabOptions = useMemo(
     () => [
@@ -139,6 +189,15 @@ export function PracticeScreen() {
         value: entry,
         label: entry,
         description: entry === "All" ? "All event categories" : `${entry} events`,
+      })),
+    [],
+  );
+  const eventNameOptions = useMemo(
+    () =>
+      FBLA_EVENT_DEFINITIONS.map((event) => ({
+        value: event.name,
+        label: event.name,
+        description: event.category,
       })),
     [],
   );
@@ -162,7 +221,34 @@ export function PracticeScreen() {
     <ScreenShell
       title="FBLA Practice"
       subtitle="AI tests, coaching, flashcards, and mock judging for every FBLA event."
-      headerAddon={<Target size={18} color={palette.colors.primary} />}
+      headerAddon={
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Target size={18} color={palette.colors.primary} />
+          <Pressable
+            onPress={() => navigation.navigate("Events")}
+            style={{
+              minHeight: 36,
+              minWidth: 72,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: palette.colors.border,
+              paddingHorizontal: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              backgroundColor: palette.colors.surface,
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Open Events"
+          >
+            <Feather name="calendar" size={14} color={palette.colors.text} />
+            <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 12 }}>
+              Events
+            </Text>
+          </Pressable>
+        </View>
+      }
       refreshing={loadingAttempts}
       onRefresh={() => {
         setLoadingAttempts(true);
@@ -202,6 +288,107 @@ export function PracticeScreen() {
 
       {tab === "events" ? (
         <>
+          <MagicCardRubric style={{ marginBottom: 10 }}>
+            <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 6 }}>
+              Group Study Sessions
+            </Text>
+            {!isGuest ? (
+              <>
+                <GlassDropdown
+                  label="Primary Event"
+                  value={sessionEventName}
+                  options={eventNameOptions}
+                  searchable
+                  onValueChange={(value) => setSessionEventName(value)}
+                />
+                <GlassInput
+                  containerStyle={{ marginTop: 8 }}
+                  value={sessionDescription}
+                  onChangeText={setSessionDescription}
+                  placeholder="What are you focusing on?"
+                />
+                <GlassButton
+                  variant="solid"
+                  size="sm"
+                  label={creatingSession ? "Starting..." : "Start Study Session"}
+                  style={{ marginTop: 8 }}
+                  disabled={creatingSession || !sessionEventName.trim()}
+                  onPress={async () => {
+                    const event = FBLA_EVENT_DEFINITIONS.find((item) => item.name === sessionEventName);
+                    if (!event || creatingSession) {
+                      return;
+                    }
+                    setCreatingSession(true);
+                    try {
+                      const sessionId = await createStudySession(profile, {
+                        eventIds: [event.id],
+                        eventNames: [event.name],
+                        description: sessionDescription.trim(),
+                        maxParticipants: 8,
+                        isChapterOnly: true,
+                        mode: "practice_together",
+                      });
+                      setSessionDescription("");
+                      navigation.navigate("StudySession", { sessionId });
+                    } catch (error) {
+                      console.warn("Create study session failed:", error);
+                    } finally {
+                      setCreatingSession(false);
+                    }
+                  }}
+                />
+              </>
+            ) : (
+              <Text style={{ color: palette.colors.textSecondary }}>
+                Sign in to create chapter study sessions.
+              </Text>
+            )}
+
+            <View style={{ marginTop: 10, gap: 8 }}>
+              {studySessions.length === 0 ? (
+                <Text style={{ color: palette.colors.textSecondary }}>No active sessions right now.</Text>
+              ) : (
+                studySessions.slice(0, 5).map((session) => {
+                  const joined = session.participantIds.includes(profile.uid);
+                  const isFull = session.participantIds.length >= session.maxParticipants;
+                  return (
+                    <GlassSurface key={session.id} style={{ padding: 10 }}>
+                      <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
+                        {session.eventNames.join(", ") || "FBLA Study"}
+                      </Text>
+                      <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>
+                        {session.createdByName} • {session.participantIds.length}/{session.maxParticipants} members
+                      </Text>
+                      {session.description ? (
+                        <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
+                          {session.description}
+                        </Text>
+                      ) : null}
+                      <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                        <GlassButton
+                          variant={joined ? "ghost" : "solid"}
+                          size="sm"
+                          label={joined ? "Open Session" : isFull ? "Session Full" : "Join Session"}
+                          disabled={!joined && isFull}
+                          onPress={async () => {
+                            try {
+                              if (!joined) {
+                                await joinStudySession(session.id, profile);
+                              }
+                              navigation.navigate("StudySession", { sessionId: session.id });
+                            } catch (error) {
+                              console.warn("Join study session failed:", error);
+                            }
+                          }}
+                        />
+                      </View>
+                    </GlassSurface>
+                  );
+                })
+              )}
+            </View>
+          </MagicCardRubric>
+
           <GlassInput
             value={search}
             onChangeText={setSearch}
@@ -231,6 +418,10 @@ export function PracticeScreen() {
             renderItem={({ item }) => {
               const badgeMeta = typeBadge(item.eventType);
               const selected = selectedEventLookup.has(item.name.toLowerCase());
+              const readiness = readinessMap.get(item.id);
+              const isNew = typeof readiness !== "number";
+              const isPopular = popularEventIds.has(item.id);
+              const isRecommendedStart = !hasAnyPractice && item.name === "Business Law";
 
               return (
                 <MagicCard
@@ -249,11 +440,29 @@ export function PracticeScreen() {
                       <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>
                         {item.category} • {item.teamEvent ? "Team" : "Individual"}
                       </Text>
+                      <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>
+                        Readiness: {typeof readiness === "number" ? `${readiness}%` : "Not started"}
+                      </Text>
                     </View>
                     <View style={{ alignItems: "flex-end", gap: 6 }}>
                       <Badge variant={badgeMeta.variant} size="sm" capitalize={false}>
                         {badgeMeta.label}
                       </Badge>
+                      {isNew ? (
+                        <Badge variant="gray-subtle" size="sm" capitalize={false}>
+                          New
+                        </Badge>
+                      ) : null}
+                      {isPopular ? (
+                        <Badge variant="amber-subtle" size="sm" capitalize={false}>
+                          Popular
+                        </Badge>
+                      ) : null}
+                      {isRecommendedStart ? (
+                        <Badge variant="blue-subtle" size="sm" capitalize={false}>
+                          Start here
+                        </Badge>
+                      ) : null}
                       {selected ? (
                         <Badge variant="green-subtle" size="sm" capitalize={false}>
                           Selected
@@ -378,4 +587,5 @@ export function PracticeScreen() {
     </ScreenShell>
   );
 }
+
 

@@ -1,31 +1,30 @@
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { CalendarDays, CircleUserRound, Cog, House, MessageCircle } from "lucide-react-native";
+import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import { Keyboard, Pressable, StyleSheet, View } from "react-native";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "react-native-paper";
 
+import { useAccessibility } from "../../context/AccessibilityContext";
 import { useMessaging } from "../../context/MessagingContext";
 import { useNavBarVisibility } from "../../context/NavBarVisibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
 import { useDashboard } from "../../context/DashboardContext";
 import { MainTabParamList } from "../../navigation/types";
 import { FinnRobotIcon } from "../branding/FinnRobotIcon";
-import { SchoolCrestIcon } from "../branding/SchoolCrestIcon";
 import { GlassSurface } from "../ui/GlassSurface";
 
 function labelForRoute(routeName: keyof MainTabParamList): string {
   switch (routeName) {
     case "Home":
       return "Home";
-    case "Events":
-      return "Events";
+    case "PracticeTab":
+      return "Practice";
     case "Finn":
       return "Finn";
     case "Messages":
       return "Inbox";
-    case "Profile":
-      return "Profile";
     case "SettingsTab":
       return "Settings";
     default:
@@ -33,30 +32,30 @@ function labelForRoute(routeName: keyof MainTabParamList): string {
   }
 }
 
-function iconForRoute(routeName: keyof MainTabParamList, color: string) {
+function iconForRoute(routeName: keyof MainTabParamList, color: string, focused: boolean) {
+  const iconSize = focused ? 24 : 24;
   switch (routeName) {
     case "Home":
-      return <SchoolCrestIcon size={24} initials="FA" />;
-    case "Events":
-      return <CalendarDays size={24} color={color} strokeWidth={2.2} />;
+      return <Feather name="home" size={iconSize} color={color} />;
+    case "PracticeTab":
+      return <Feather name="book-open" size={iconSize} color={color} />;
     case "Finn":
-      return <FinnRobotIcon size={24} />;
+      return <FinnRobotIcon size={iconSize + 2} />;
     case "Messages":
-      return <MessageCircle size={24} color={color} strokeWidth={2.2} />;
-    case "Profile":
-      return <CircleUserRound size={24} color={color} strokeWidth={2.2} />;
+      return <Feather name="message-circle" size={iconSize} color={color} />;
     case "SettingsTab":
-      return <Cog size={24} color={color} strokeWidth={2.2} />;
+      return <Feather name="settings" size={iconSize} color={color} />;
     default:
-      return <House size={24} color={color} strokeWidth={2.2} />;
+      return <Feather name="home" size={iconSize} color={color} />;
   }
 }
 
 export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { scaleFont, getFontWeight, oneHandedMode, leftHandedMode } = useAccessibility();
   const { unreadCount } = useMessaging();
   const { layout } = useDashboard();
-  const { hidden } = useNavBarVisibility();
+  const { navTranslateY } = useNavBarVisibility();
   const { palette } = useThemeContext();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
@@ -71,16 +70,21 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
     };
   }, []);
 
-  if (hidden || keyboardOpen) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: navTranslateY.value }],
+  }));
+
+  if (keyboardOpen) {
     return null;
   }
 
   return (
-    <View
+    <Animated.View
       style={[
         styles.wrapper,
+        animatedStyle,
         {
-          bottom: Math.max(insets.bottom, 10) + 8,
+          bottom: Math.max(insets.bottom, 10) + (oneHandedMode ? 4 : 8),
         },
       ]}
     >
@@ -94,13 +98,20 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
           paddingVertical: 8,
         }}
       >
-        <View style={styles.row}>
+        <View
+          style={[
+            styles.row,
+            {
+              flexDirection: leftHandedMode ? "row-reverse" : "row",
+            },
+          ]}
+        >
           {state.routes.map((route, index) => {
             const focused = state.index === index;
-            const color = focused ? palette.colors.text : palette.colors.muted;
+            const color = focused ? palette.colors.accent : palette.colors.textMuted;
             const isMessages = route.name === "Messages";
-            const isEvents = route.name === "Events";
-            const badgeCount = isMessages ? unreadCount : isEvents ? pendingPracticeCount : 0;
+            const isPractice = route.name === "PracticeTab";
+            const badgeCount = isMessages ? unreadCount : isPractice ? pendingPracticeCount : 0;
 
             return (
               <Pressable
@@ -120,12 +131,12 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
                 accessibilityLabel={labelForRoute(route.name as keyof MainTabParamList)}
               >
                 <View style={{ alignItems: "center", justifyContent: "center", width: "100%" }}>
-                  {iconForRoute(route.name as keyof MainTabParamList, color)}
+                  {iconForRoute(route.name as keyof MainTabParamList, color, focused)}
                   <Text
                     style={{
                       marginTop: 2,
-                      fontSize: 10,
-                      fontWeight: focused ? "700" : "600",
+                      fontSize: scaleFont(10),
+                      fontWeight: getFontWeight(focused ? "700" : "600"),
                       color,
                     }}
                     numberOfLines={1}
@@ -159,7 +170,7 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
           })}
         </View>
       </GlassSurface>
-    </View>
+    </Animated.View>
   );
 }
 

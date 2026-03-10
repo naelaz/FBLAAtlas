@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { NavigationProp, useNavigation } from "@react-navigation/native";
 
 import { useThemeContext } from "../context/ThemeContext";
@@ -16,7 +16,7 @@ export function FinnHeaderButton() {
       size={38}
       style={{ marginRight: 2 }}
     >
-      <MaterialCommunityIcons name="robot-outline" size={20} color={palette.colors.text} />
+      <Feather name="cpu" size={20} color={palette.colors.text} />
     </GlassIconButton>
   );
 }

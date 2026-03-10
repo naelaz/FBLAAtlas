@@ -1,7 +1,5 @@
 ﻿import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Haptics from "expo-haptics";
 import Animated, {
   Easing,
   cancelAnimation,
@@ -14,12 +12,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAccessibility } from "../context/AccessibilityContext";
 import { useAnimationDuration } from "../hooks/useAnimationDuration";
-import { todayKey } from "../services/firestoreUtils";
-import { awardDailyLoginIfNeeded } from "../services/gamificationService";
+import { handleDailyLogin } from "../services/gamificationService";
+import { hapticSuccess } from "../services/haptics";
 import { sendLocalPush } from "../services/pushService";
 import { PointAction, PointAwardResult } from "../types/social";
 import { useAuthContext } from "./AuthContext";
-import { useNotifications } from "./NotificationsContext";
+import { useOnboarding } from "./OnboardingContext";
 import { usePushNotifications } from "./PushNotificationsContext";
 import { useSettings } from "./SettingsContext";
 import { useThemeContext } from "./ThemeContext";
@@ -49,6 +47,19 @@ type GamificationContextValue = {
 };
 
 const GamificationContext = createContext<GamificationContextValue | undefined>(undefined);
+const TOAST_COOLDOWN_MS = 3000;
+const meaningfulXpActions: ReadonlySet<PointAction> = new Set([
+  "daily_login",
+  "complete_practice_test",
+  "score_90_bonus",
+  "complete_flashcard_deck",
+  "complete_presentation",
+  "complete_mock_judge",
+  "seven_day_streak_bonus",
+  "perfect_test_score",
+  "first_post_bonus",
+  "profile_completed_bonus",
+]);
 
 function formatAwardMessage(
   action: PointAction,
@@ -102,7 +113,7 @@ function formatAwardMessage(
 
 export function GamificationProvider({ children }: { children: React.ReactNode }) {
   const { profile } = useAuthContext();
-  const { notifications } = useNotifications();
+  const { completed: onboardingCompleted } = useOnboarding();
   const { enabled: pushEnabled } = usePushNotifications();
   const { settings } = useSettings();
   const { palette } = useThemeContext();
@@ -116,8 +127,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   const [queue, setQueue] = useState<XpToastState[]>([]);
   const [activeToast, setActiveToast] = useState<XpToastState | null>(null);
   const [tierUpgrade, setTierUpgrade] = useState<TierUpgradeState | null>(null);
-  const processedNotificationIds = useRef<Set<string>>(new Set());
-  const recentMessages = useRef<Map<string, number>>(new Map());
+  const lastToastAt = useRef(0);
   const toastTranslateY = useSharedValue(-150);
   const tierBannerTranslateY = useSharedValue(-150);
 
@@ -129,7 +139,11 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   }));
 
   const enqueueToast = useCallback((points: number, color: string, message: string) => {
-    recentMessages.current.set(message, Date.now());
+    const now = Date.now();
+    if (now - lastToastAt.current < TOAST_COOLDOWN_MS) {
+      return;
+    }
+    lastToastAt.current = now;
     setQueue((prev) => [
       ...prev,
       {
@@ -224,7 +238,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         return;
       }
 
-      if (result.pointsAwarded > 0 && settings.notifications.xpAlerts) {
+      if (result.pointsAwarded > 0 && settings.notifications.xpAlerts && meaningfulXpActions.has(result.action)) {
         const message = formatAwardMessage(
           result.action,
           result.pointsAwarded,
@@ -240,7 +254,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       }
 
       if (result.tierUpgraded) {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        hapticSuccess();
         setTierUpgrade({
           fromTier: result.previousTier.name,
           toTier: result.newTier.name,
@@ -257,6 +271,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       if (
         typeof result.streakCount === "number" &&
         result.streakCount > 1 &&
+        result.streakCount % 7 === 0 &&
         pushEnabled &&
         settings.notifications.globalPush &&
         settings.notifications.xpAlerts
@@ -266,9 +281,13 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     },
     [enqueueToast, pushEnabled, settings.notifications.globalPush, settings.notifications.xpAlerts],
   );
+  const handleAwardResultRef = useRef(handleAwardResult);
+  useEffect(() => {
+    handleAwardResultRef.current = handleAwardResult;
+  }, [handleAwardResult]);
 
   useEffect(() => {
-    if (!profile) {
+    if (!profile || !onboardingCompleted) {
       return;
     }
 
@@ -276,14 +295,9 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
     const runDailyReward = async () => {
       try {
-        const result = await awardDailyLoginIfNeeded(profile.uid);
+        const result = await handleDailyLogin(profile.uid);
         if (!cancelled && result) {
-          const bannerKey = `fbla_atlas_daily_login_banner_${profile.uid}_${todayKey()}`;
-          const alreadyShown = await AsyncStorage.getItem(bannerKey);
-          if (!alreadyShown) {
-            handleAwardResult(result);
-            await AsyncStorage.setItem(bannerKey, "1");
-          }
+          handleAwardResultRef.current(result);
         }
       } catch (error) {
         console.warn("Daily login reward failed:", error);
@@ -295,43 +309,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     return () => {
       cancelled = true;
     };
-  }, [profile?.uid, handleAwardResult]);
-
-  useEffect(() => {
-    const now = Date.now();
-    for (const [text, timestamp] of recentMessages.current.entries()) {
-      if (now - timestamp > 5000) {
-        recentMessages.current.delete(text);
-      }
-    }
-
-    notifications.forEach((item) => {
-      if (processedNotificationIds.current.has(item.id)) {
-        return;
-      }
-      processedNotificationIds.current.add(item.id);
-
-      if (item.type !== "xp") {
-        return;
-      }
-
-      if (!settings.notifications.xpAlerts) {
-        return;
-      }
-
-      if (recentMessages.current.has(item.body)) {
-        return;
-      }
-
-      const pointsMatch = item.body.match(/\+(\d+)\sXP/i);
-      const points = pointsMatch ? Number(pointsMatch[1]) : 0;
-      enqueueToast(points, palette.colors.primary, item.body);
-
-      if (pushEnabled && settings.notifications.globalPush && settings.notifications.xpAlerts) {
-        void sendLocalPush("XP Earned", item.body);
-      }
-    });
-  }, [notifications, enqueueToast, pushEnabled, settings.notifications.globalPush, settings.notifications.xpAlerts, palette.colors.primary]);
+  }, [profile?.uid, onboardingCompleted]);
 
   const value = useMemo(() => ({ handleAwardResult }), [handleAwardResult]);
 

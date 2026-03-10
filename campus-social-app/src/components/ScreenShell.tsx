@@ -1,13 +1,15 @@
 import { NavigationProp, ParamListBase, useNavigation, useRoute } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import { ChevronLeft } from "lucide-react-native";
 import { ReactNode } from "react";
-import { NativeScrollEvent, NativeSyntheticEvent, Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "react-native-paper";
 
 import { useAccessibility } from "../context/AccessibilityContext";
-import { useNavBarVisibility } from "../context/NavBarVisibilityContext";
+import { useSettings } from "../context/SettingsContext";
 import { useThemeContext } from "../context/ThemeContext";
+import { useNavBarScroll } from "../hooks/useNavBarScroll";
 import { GlassSurface } from "./ui/GlassSurface";
 
 type ScreenShellProps = {
@@ -33,24 +35,25 @@ export function ScreenShell({
   showBackButton,
   onBackPress,
 }: ScreenShellProps) {
-  const { reportScrollOffset, showNavBar } = useNavBarVisibility();
+  const { onScroll, onScrollBeginDrag, scrollEventThrottle } = useNavBarScroll();
   const { palette } = useThemeContext();
-  const { scaleFont, getFontWeight, getAccessibilityHint } = useAccessibility();
+  const {
+    scaleFont,
+    getFontWeight,
+    getAccessibilityHint,
+    focusMode,
+    setFocusMode,
+    leftHandedMode,
+  } = useAccessibility();
+  const { updateSettings } = useSettings();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute();
-
-  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    reportScrollOffset(event.nativeEvent.contentOffset.y);
-  };
 
   const computedBreadcrumb =
     breadcrumbItems ??
     (title.toLowerCase() === "home" ? ["Home"] : ["Home", title]);
   const canGoBack = navigation.canGoBack();
-  const shouldShowBack =
-    typeof showBackButton === "boolean"
-      ? showBackButton
-      : canGoBack || title.toLowerCase() !== "home";
+  const shouldShowBack = typeof showBackButton === "boolean" ? showBackButton : canGoBack;
 
   const goBackOrHome = () => {
     if (canGoBack) {
@@ -58,18 +61,11 @@ export function ScreenShell({
       return;
     }
 
-    const parent = navigation.getParent();
-    if (parent) {
-      try {
-        parent.navigate("Home" as never);
-        return;
-      } catch {
-        // fall through
-      }
-    }
-
     try {
-      navigation.navigate("Home" as never);
+      (navigation as unknown as { navigate: (name: string, params?: Record<string, unknown>) => void }).navigate(
+        "MainTabs",
+        { screen: "Home" },
+      );
     } catch {
       // no-op fallback for routes that don't expose Home directly
     }
@@ -77,14 +73,25 @@ export function ScreenShell({
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={
+          palette.isDark
+            ? [palette.colors.background, palette.colors.surfaceAlt]
+            : [palette.colors.background, palette.colors.surface]
+        }
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
+      />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }}
-        scrollEventThrottle={16}
+        scrollEventThrottle={scrollEventThrottle}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         onScroll={onScroll}
-        onScrollBeginDrag={showNavBar}
+        onScrollBeginDrag={onScrollBeginDrag}
         refreshControl={
           onRefresh ? (
             <RefreshControl
@@ -104,11 +111,26 @@ export function ScreenShell({
             marginBottom: 12,
             backgroundColor: palette.colors.surface,
             borderColor: palette.colors.border,
+            overflow: "hidden",
           }}
           elevation={2}
           intensity={palette.blur.lg}
         >
-          <View className="flex-row items-center justify-between gap-3">
+          <LinearGradient
+            pointerEvents="none"
+            colors={[palette.colors.surface, palette.colors.transparent]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{ position: "absolute", left: 0, right: 0, top: 0, height: 80 }}
+          />
+          <View
+            style={{
+              flexDirection: leftHandedMode ? "row-reverse" : "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4, gap: 8 }}>
                 {shouldShowBack ? (
@@ -138,8 +160,8 @@ export function ScreenShell({
                   style={{
                     color: palette.colors.textMuted,
                     fontWeight: getFontWeight("700"),
-                    fontSize: scaleFont(13),
-                    letterSpacing: 0.8,
+                    fontSize: scaleFont(11),
+                    letterSpacing: 1,
                     textTransform: "uppercase",
                   }}
                 >
@@ -168,6 +190,43 @@ export function ScreenShell({
             {headerAddon}
           </View>
         </GlassSurface>
+
+        {focusMode ? (
+          <GlassSurface
+            style={{
+              marginBottom: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              backgroundColor: palette.colors.surfaceAlt,
+              borderRadius: 12,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+            }}
+          >
+            <Text style={{ color: palette.colors.textSecondary, flex: 1 }}>
+              Focus Mode is on
+            </Text>
+            <Pressable
+              onPress={() => {
+                setFocusMode(false);
+                void updateSettings((prev) => ({
+                  ...prev,
+                  accessibility: { ...prev.accessibility, focusMode: false },
+                }));
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Disable focus mode"
+              accessibilityHint={getAccessibilityHint("Shows social tabs and features again")}
+              style={{ minHeight: 36, justifyContent: "center", paddingHorizontal: 8 }}
+            >
+              <Text style={{ color: palette.colors.primary, fontWeight: getFontWeight("700") }}>
+                Disable
+              </Text>
+            </Pressable>
+          </GlassSurface>
+        ) : null}
 
         {children}
       </ScrollView>

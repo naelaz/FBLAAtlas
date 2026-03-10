@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { useAuthContext } from "./AuthContext";
@@ -29,11 +29,26 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const { uid } = useAuthContext();
   const { setThemeName } = useThemeContext();
   const {
+    fontScale,
+    highContrastMode,
+    reduceAnimations,
+    boldText,
+    screenReaderHints,
+    oneHandedMode,
+    leftHandedMode,
+    hapticIntensity,
+    colorBlindMode,
+    focusMode,
     setFontScale,
     setHighContrastMode,
     setReduceAnimations,
     setBoldText,
     setScreenReaderHints,
+    setOneHandedMode,
+    setLeftHandedMode,
+    setHapticIntensityMode,
+    setColorBlindMode,
+    setFocusMode,
   } = useAccessibility();
   const [settings, setSettings] = useState<AppSettings>(createDefaultSettings());
   const [ready, setReady] = useState(false);
@@ -101,19 +116,64 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, [uid, setThemeName]);
 
   useEffect(() => {
-    setFontScale(settings.accessibility.textScale);
-    setHighContrastMode(settings.accessibility.highContrastMode);
-    setReduceAnimations(settings.accessibility.reduceAnimations);
-    setBoldText(settings.accessibility.boldText);
-    setScreenReaderHints(settings.accessibility.screenReaderHints);
+    if (fontScale !== settings.accessibility.textScale) {
+      setFontScale(settings.accessibility.textScale);
+    }
+    if (highContrastMode !== settings.accessibility.highContrastMode) {
+      setHighContrastMode(settings.accessibility.highContrastMode);
+    }
+    if (reduceAnimations !== settings.accessibility.reduceAnimations) {
+      setReduceAnimations(settings.accessibility.reduceAnimations);
+    }
+    if (boldText !== settings.accessibility.boldText) {
+      setBoldText(settings.accessibility.boldText);
+    }
+    if (screenReaderHints !== settings.accessibility.screenReaderHints) {
+      setScreenReaderHints(settings.accessibility.screenReaderHints);
+    }
+    if (oneHandedMode !== settings.accessibility.oneHandedMode) {
+      setOneHandedMode(settings.accessibility.oneHandedMode);
+    }
+    if (leftHandedMode !== settings.accessibility.leftHandedMode) {
+      setLeftHandedMode(settings.accessibility.leftHandedMode);
+    }
+    if (hapticIntensity !== settings.accessibility.hapticIntensity) {
+      setHapticIntensityMode(settings.accessibility.hapticIntensity);
+    }
+    if (colorBlindMode !== settings.accessibility.colorBlindMode) {
+      setColorBlindMode(settings.accessibility.colorBlindMode);
+    }
+    if (focusMode !== settings.accessibility.focusMode) {
+      setFocusMode(settings.accessibility.focusMode);
+    }
   }, [
+    boldText,
+    colorBlindMode,
+    focusMode,
+    fontScale,
+    hapticIntensity,
+    highContrastMode,
+    leftHandedMode,
+    oneHandedMode,
+    reduceAnimations,
+    screenReaderHints,
     setBoldText,
+    setColorBlindMode,
     setFontScale,
+    setFocusMode,
+    setHapticIntensityMode,
     setHighContrastMode,
+    setLeftHandedMode,
+    setOneHandedMode,
     setReduceAnimations,
     setScreenReaderHints,
     settings.accessibility.boldText,
+    settings.accessibility.colorBlindMode,
+    settings.accessibility.focusMode,
+    settings.accessibility.hapticIntensity,
     settings.accessibility.highContrastMode,
+    settings.accessibility.leftHandedMode,
+    settings.accessibility.oneHandedMode,
     settings.accessibility.reduceAnimations,
     settings.accessibility.screenReaderHints,
     settings.accessibility.textScale,
@@ -133,39 +193,43 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     void configurePracticeReminders(shouldEnableReminders);
   }, [uid, settings.notifications.globalPush, settings.notifications.practiceReminders]);
 
-  const syncUserPrivacyFields = async (next: AppSettings): Promise<void> => {
-    if (!uid) {
-      return;
-    }
-    await setDoc(
-      doc(db, "users", uid),
-      {
-        profileVisibility: next.privacy.profileVisibility,
-        showOnlineStatus: next.privacy.showOnlineStatus,
-        showMood: next.privacy.showMood,
-        allowFriendSuggestions: next.privacy.allowFriendSuggestions,
-        settingsUpdatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  };
+  const syncUserPrivacyFields = useCallback(
+    async (next: AppSettings): Promise<void> => {
+      if (!uid) {
+        return;
+      }
+      await setDoc(
+        doc(db, "users", uid),
+        {
+          profileVisibility: next.privacy.profileVisibility,
+          showOnlineStatus: next.privacy.showOnlineStatus,
+          showMood: next.privacy.showMood,
+          allowFriendSuggestions: next.privacy.allowFriendSuggestions,
+          settingsUpdatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    },
+    [uid],
+  );
 
-  const updateSettings = async (
-    updater: (previous: AppSettings) => AppSettings,
-  ): Promise<void> => {
-    if (!uid) {
-      return;
-    }
+  const updateSettings = useCallback(
+    async (updater: (previous: AppSettings) => AppSettings): Promise<void> => {
+      if (!uid) {
+        return;
+      }
 
-    const next = updater(settings);
-    setSettings(next);
-    await cacheSettings(uid, next);
-    await setThemeName(next.appearance.themeName);
-    await saveSettings(uid, next);
-    await syncUserPrivacyFields(next);
-  };
+      const next = updater(settings);
+      setSettings(next);
+      await cacheSettings(uid, next);
+      await setThemeName(next.appearance.themeName);
+      await saveSettings(uid, next);
+      await syncUserPrivacyFields(next);
+    },
+    [settings, setThemeName, syncUserPrivacyFields, uid],
+  );
 
-  const resetSettings = async (): Promise<void> => {
+  const resetSettings = useCallback(async (): Promise<void> => {
     if (!uid) {
       return;
     }
@@ -175,7 +239,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     await setThemeName(defaults.appearance.themeName);
     await saveSettings(uid, defaults);
     await syncUserPrivacyFields(defaults);
-  };
+  }, [setThemeName, syncUserPrivacyFields, uid]);
 
   const value = useMemo(
     () => ({

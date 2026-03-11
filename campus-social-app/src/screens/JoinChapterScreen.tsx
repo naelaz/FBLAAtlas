@@ -11,7 +11,6 @@ import { useAuthContext } from "../context/AuthContext";
 import { useThemeContext } from "../context/ThemeContext";
 import {
   Chapter,
-  createChapterForSchool,
   findChapterBySchoolName,
   getChapterJoinRequestStatus,
   submitChapterJoinRequest,
@@ -37,7 +36,6 @@ export function JoinChapterScreen() {
   const [status, setStatus] = useState<"pending" | "approved" | "denied" | null>(null);
   const [checkingChapter, setCheckingChapter] = useState(false);
   const [sending, setSending] = useState(false);
-  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     const queryValue = schoolQuery.trim();
@@ -311,39 +309,12 @@ export function JoinChapterScreen() {
             </>
           ) : (
             <>
-              <Text style={{ color: palette.colors.textMuted, marginTop: 10 }}>
-                No chapter exists yet for this school.
+              <Text style={{ color: palette.colors.textMuted, marginTop: 10, fontSize: 14 }}>
+                No chapter found for {selectedSchool.name} yet.
               </Text>
-              <GlassButton
-                variant="solid"
-                label={`Create a Chapter for ${selectedSchool.name}`}
-                style={{ marginTop: 10 }}
-                loading={creating}
-                disabled={creating}
-                onPress={async () => {
-                  try {
-                    setCreating(true);
-                    const created = await createChapterForSchool(selectedSchool, profile);
-                    await updateUserProfileFields(profile.uid, {
-                      chapterId: created.id,
-                      chapterName: created.name,
-                      schoolName: selectedSchool.name,
-                      schoolCity: selectedSchool.city,
-                      state: selectedSchool.state,
-                      officerPosition: "President",
-                      chapterRoles: Array.from(new Set([...(profile.chapterRoles ?? []), "Chapter Officer"])),
-                      role: profile.role === "member" ? "officer" : profile.role,
-                    });
-                    setSelectedChapter(created);
-                    setStatus("approved");
-                    hapticSuccess();
-                  } catch (error) {
-                    console.warn("Create chapter failed:", error);
-                  } finally {
-                    setCreating(false);
-                  }
-                }}
-              />
+              <Text style={{ color: palette.colors.textSecondary, marginTop: 6, fontSize: 13, lineHeight: 20 }}>
+                Contact your FBLA advisor or a chapter president to get your school set up. Once created, you can search and request to join here.
+              </Text>
             </>
           )}
         </GlassSurface>

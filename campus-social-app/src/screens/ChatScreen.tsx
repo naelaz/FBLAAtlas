@@ -348,15 +348,6 @@ export function ChatScreen({ route, navigation }: Props) {
             </Pressable>
           </View>
         </GlassSurface>
-        <GlassButton
-          variant="pill-sm"
-          label="Reply"
-          fullWidth={false}
-          onPress={() => {
-            hapticTap();
-            inputRef.current?.focus();
-          }}
-        />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

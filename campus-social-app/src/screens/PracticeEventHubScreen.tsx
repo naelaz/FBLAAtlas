@@ -72,6 +72,83 @@ const MODE_LABELS: Record<HubMode, string> = {
   mock_judge: "Mock Judge",
 };
 
+const FBLA_EVENT_GUIDELINES_URLS: Record<string, string> = {
+  "accounting": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Accounting.pdf",
+  "advanced-accounting": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Advanced-Accounting.pdf",
+  "advertising": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Advertising.pdf",
+  "agribusiness": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Agribusiness.pdf",
+  "banking-and-financial-systems": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Banking-and-Financial-Systems.pdf",
+  "broadcast-journalism": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Broadcast-Journalism.pdf",
+  "business-communication": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Business-Communication.pdf",
+  "business-ethics": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Business-Ethics.pdf",
+  "business-law": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Business-Law.pdf",
+  "business-management": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Business-Management.pdf",
+  "business-plan": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Business-Plan.pdf",
+  "career-portfolio": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Career-Portfolio.pdf",
+  "coding-and-programming": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Coding-and-Programming.pdf",
+  "community-service-project": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Community-Service-Project.pdf",
+  "computer-game-and-simulation": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Computer-Game-and-Simulation-Programming.pdf",
+  "computer-problem-solving": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Computer-Problem-Solving.pdf",
+  "customer-service": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Customer-Service.pdf",
+  "cybersecurity": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Cybersecurity.pdf",
+  "data-analysis": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Data-Analysis.pdf",
+  "data-science-and-ai": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Data-Science-and-AI.pdf",
+  "digital-animation": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Digital-Animation.pdf",
+  "digital-video-production": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Digital-Video-Production.pdf",
+  "economics": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Economics.pdf",
+  "entrepreneurship": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Entrepreneurship.pdf",
+  "event-planning": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Event-Planning.pdf",
+  "financial-planning": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Financial-Planning.pdf",
+  "graphic-design": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Graphic-Design.pdf",
+  "healthcare-administration": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Healthcare-Administration.pdf",
+  "hospitality-and-event-management": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Hospitality-and-Event-Management.pdf",
+  "human-resource-management": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Human-Resource-Management.pdf",
+  "impromptu-speaking": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Impromptu-Speaking.pdf",
+  "insurance-and-risk-management": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Insurance-and-Risk-Management.pdf",
+  "international-business": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/International-Business.pdf",
+  "introduction-to-business-communication": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Business-Communication.pdf",
+  "introduction-to-business-concepts": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Business-Concepts.pdf",
+  "introduction-to-business-procedures": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Business-Procedures.pdf",
+  "introduction-to-fbla": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-FBLA.pdf",
+  "introduction-to-information-technology": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Information-Technology.pdf",
+  "introduction-to-marketing-concepts": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Marketing-Concepts.pdf",
+  "introduction-to-parliamentary-procedure": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Parliamentary-Procedure.pdf",
+  "introduction-to-public-speaking": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Public-Speaking.pdf",
+  "introduction-to-retail-and-merchandising": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Retail-and-Merchandising.pdf",
+  "introduction-to-supply-chain-management": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Supply-Chain-Management.pdf",
+  "journalism": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Journalism.pdf",
+  "local-chapter-annual-business": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Local-Chapter-Annual-Business-Report.pdf",
+  "marketing": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Marketing.pdf",
+  "mobile-application-development": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Mobile-Application-Development.pdf",
+  "network-design": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Network-Design.pdf",
+  "networking-infrastructures": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Networking-Infrastructures.pdf",
+  "organizational-leadership": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Organizational-Leadership.pdf",
+  "parliamentary-procedure-individual": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Parliamentary-Procedure.pdf",
+  "parliamentary-procedure-team": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Parliamentary-Procedure.pdf",
+  "personal-finance": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Personal-Finance.pdf",
+  "project-management": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Project-Management.pdf",
+  "public-administration-and-management": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Public-Administration-and-Management.pdf",
+  "public-service-announcement": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Public-Service-Announcement.pdf",
+  "public-speaking": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Public-Speaking.pdf",
+  "real-estate": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Real-Estate.pdf",
+  "sales-presentation": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Sales-Presentation.pdf",
+  "securities-and-investments": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Securities-and-Investments.pdf",
+  "social-media-strategies": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Social-Media-Strategies.pdf",
+  "sports-and-entertainment-management": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Sports-and-Entertainment-Management.pdf",
+  "supply-chain-management": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Supply-Chain-Management.pdf",
+  "technology-support-and-services": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Technology-Support-and-Services.pdf",
+  "visual-design": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Visual-Design.pdf",
+  "website-coding-and-development": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Website-Coding-and-Development.pdf",
+  "website-design": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Website-Design.pdf",
+  "intro-to-fbla-creed-speaking": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-FBLA-Creed-Speaking.pdf",
+  "intro-to-programming": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Programming.pdf",
+  "intro-to-emerging-business-issues": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Emerging-Business-Issues.pdf",
+  "intro-to-business-presentation": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Business-Presentation.pdf",
+  "intro-to-social-media-strategy": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Social-Media-Strategy.pdf",
+  "introduction-to-decision-making": "https://connect.fbla.org/wp-content/uploads/files/FBLA/competitive-events/guidelines/2025-2026/Introduction-to-Decision-Making.pdf",
+};
+const FBLA_GUIDELINES_FALLBACK = "https://www.fbla.org/compete/events/";
+
 const JOB_INTERVIEW_QUESTIONS = [
   "Tell me about yourself and why you are interested in this role.",
   "Describe a time you demonstrated leadership in FBLA or another team setting.",
@@ -169,6 +246,13 @@ export function PracticeEventHubScreen({ route, navigation }: Props) {
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const hasAutoSubmittedRef = useRef(false);
   const warnedPhasesRef = useRef<Set<string>>(new Set());
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const phasePlan = useMemo(() => event?.presentationFlow?.phases ?? [], [event]);
 
@@ -334,8 +418,12 @@ export function PracticeEventHubScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     return () => {
-      if (recorder.isRecording) {
-        void recorder.stop().catch(() => undefined);
+      try {
+        if (recorder.isRecording) {
+          void recorder.stop().catch(() => undefined);
+        }
+      } catch {
+        // recorder already released — safe to ignore
       }
     };
   }, [recorder]);
@@ -544,8 +632,10 @@ export function PracticeEventHubScreen({ route, navigation }: Props) {
   };
 
   const startRecording = async () => {
+    if (!isMountedRef.current) return;
     try {
       const permission = await requestRecordingPermissionsAsync();
+      if (!isMountedRef.current) return;
       if (!permission.granted) {
         setError("Microphone permission is required for recording.");
         return;
@@ -557,28 +647,38 @@ export function PracticeEventHubScreen({ route, navigation }: Props) {
         shouldRouteThroughEarpiece: false,
       });
 
+      if (!isMountedRef.current) return;
       await recorder.prepareToRecordAsync();
+      if (!isMountedRef.current) return;
       recorder.record();
       setRecordingActive(true);
       setRecordingUri(null);
     } catch (recordingError) {
-      setError(recordingError instanceof Error ? recordingError.message : "Could not start recording.");
+      if (isMountedRef.current) {
+        setError(recordingError instanceof Error ? recordingError.message : "Could not start recording.");
+      }
     }
   };
 
   const stopRecording = async () => {
+    if (!isMountedRef.current) return;
     if (!recordingActive && !recorder.isRecording) {
       return;
     }
 
     try {
       await recorder.stop();
+      if (!isMountedRef.current) return;
       const uri = recorder.uri;
       setRecordingUri(uri ?? null);
     } catch (recordingError) {
-      setError(recordingError instanceof Error ? recordingError.message : "Could not stop recording.");
+      if (isMountedRef.current) {
+        setError(recordingError instanceof Error ? recordingError.message : "Could not stop recording.");
+      }
     } finally {
-      setRecordingActive(false);
+      if (isMountedRef.current) {
+        setRecordingActive(false);
+      }
     }
   };
 
@@ -787,6 +887,19 @@ export function PracticeEventHubScreen({ route, navigation }: Props) {
           />
         </View>
       </View>
+
+      <GlassButton
+        variant="primary"
+        label="Official FBLA Guidelines (PDF)"
+        style={{ marginBottom: 12 }}
+        onPress={() =>
+          navigation.navigate("EventGuidelines", {
+            title: `${event.name} — Official Guidelines`,
+            url: FBLA_EVENT_GUIDELINES_URLS[event.id] ?? FBLA_GUIDELINES_FALLBACK,
+          })
+        }
+      />
+
       <MagicCardRubric style={{ marginBottom: 12 }}>
         <Text style={{ color: palette.colors.text, fontWeight: "800" }}>Official Quick Reference</Text>
         <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>{event.description}</Text>
@@ -800,9 +913,6 @@ export function PracticeEventHubScreen({ route, navigation }: Props) {
             Phase flow: {event.presentationFlow.phases.map((item) => `${item.label} (${formatPhaseDuration(item)})`).join(" -> ")}
           </Text>
         ) : null}
-        <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>
-          Guidelines: https://www.fbla-pbl.org/fbla/competitive-events/  Docs: https://www.fbla-pbl.org/docs/
-        </Text>
       </MagicCardRubric>
 
       <View style={{ marginBottom: 10 }}>
@@ -958,9 +1068,6 @@ export function PracticeEventHubScreen({ route, navigation }: Props) {
                             disabled={Boolean(testResult)}
                             onPress={() => {
                               setTestAnswers((prev) => ({ ...prev, [question.id]: optionIndex }));
-                              if (!testResult && currentQuestionIndex < test.questions.length - 1) {
-                                setTimeout(() => setCurrentQuestionIndex((prev) => prev + 1), 300);
-                              }
                             }}
                           >
                             <GlassSurface
@@ -1227,20 +1334,20 @@ export function PracticeEventHubScreen({ route, navigation }: Props) {
 
           {cards.length > 0 ? (
             <>
-              <MagicCardFlashcard contentStyle={{ minHeight: 180, justifyContent: "center" }}>
-                <Text style={{ color: palette.colors.textSecondary, marginBottom: 8 }}>
-                  Card {cardIndex + 1} / {cards.length}
+              <MagicCardFlashcard contentStyle={{ minHeight: 280, justifyContent: "center", paddingVertical: 32, paddingHorizontal: 24 }}>
+                <Text style={{ color: palette.colors.textSecondary, marginBottom: 16, fontSize: 13, textAlign: "center", letterSpacing: 1, textTransform: "uppercase" }}>
+                  Card {cardIndex + 1} / {cards.length}  ·  {cardBackVisible ? "Answer" : "Question"}
                 </Text>
-                <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 18 }}>
+                <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 22, lineHeight: 32, textAlign: "center" }}>
                   {cardBackVisible ? cards[cardIndex].back : cards[cardIndex].front}
                 </Text>
                 {cardBackVisible && cards[cardIndex].memoryTip ? (
-                  <Text style={{ color: palette.colors.textSecondary, marginTop: 10 }}>
+                  <Text style={{ color: palette.colors.textSecondary, marginTop: 20, fontSize: 15, lineHeight: 22, textAlign: "center", fontStyle: "italic" }}>
                     Memory tip: {cards[cardIndex].memoryTip}
                   </Text>
                 ) : null}
                 {cards[cardIndex].generatedAt ? (
-                  <Text style={{ color: palette.colors.textSecondary, marginTop: 8, fontSize: 12 }}>
+                  <Text style={{ color: palette.colors.textMuted, marginTop: 16, fontSize: 11, textAlign: "center" }}>
                     AI generated {formatRelativeTime(cards[cardIndex].generatedAt as string)}
                   </Text>
                 ) : null}

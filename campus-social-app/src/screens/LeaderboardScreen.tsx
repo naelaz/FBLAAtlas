@@ -1,6 +1,8 @@
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
@@ -16,6 +18,7 @@ import { subscribeRecognitionPlacements } from "../services/recognitionService";
 import { fetchLeaderboardOnce, subscribeLeaderboard } from "../services/socialService";
 import { DuelLeaderboardRow, RecognitionPlacement } from "../types/features";
 import { UserProfile } from "../types/social";
+import { RootStackParamList } from "../navigation/types";
 import { formatCompactNumber } from "../utils/format";
 
 type PodiumTheme = {
@@ -26,6 +29,7 @@ type LeaderboardDisplayRow = {
   uid: string;
   displayName: string;
   avatarUrl: string;
+  avatarColor?: string;
   tier: UserProfile["tier"];
   grade: string;
   xp: number;
@@ -52,6 +56,7 @@ function toDisplayRow(user: UserProfile): LeaderboardDisplayRow {
     uid: user.uid,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
+    avatarColor: user.avatarColor,
     tier: user.tier,
     grade: user.grade,
     xp: user.xp,
@@ -66,39 +71,54 @@ function PodiumCard({
   textColor,
   mutedColor,
   surfaceColor,
+  onPress,
 }: {
   user: LeaderboardDisplayRow;
   theme: PodiumTheme;
   textColor: string;
   mutedColor: string;
   surfaceColor: string;
+  onPress?: () => void;
 }) {
   return (
-    <GlassSurface
-      style={{
-        padding: 12,
-        borderColor: mutedColor,
-        backgroundColor: surfaceColor,
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <AvatarWithStatus uri={user.avatarUrl} size={46} online tier={user.tier} />
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={{ fontWeight: "900", color: textColor }}>{user.displayName}</Text>
-            <TierBadge tier={user.tier} />
+    <Pressable onPress={onPress} disabled={!onPress || user.isPlaceholder}>
+      {({ pressed }) => (
+        <GlassSurface
+          pressed={pressed}
+          style={{
+            padding: 12,
+            borderColor: mutedColor,
+            backgroundColor: surfaceColor,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <AvatarWithStatus
+              uri={user.avatarUrl}
+              seed={user.displayName}
+              size={46}
+              online
+              tier={user.tier}
+              avatarColor={user.avatarColor || undefined}
+            />
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={{ fontWeight: "900", color: textColor }}>{user.displayName}</Text>
+                <TierBadge tier={user.tier} />
+              </View>
+              <Text style={{ color: mutedColor }}>
+                {formatCompactNumber(user.xp)} XP
+              </Text>
+            </View>
+            <Feather name={theme.icon} size={22} color={mutedColor} />
           </View>
-          <Text style={{ color: mutedColor }}>
-            {formatCompactNumber(user.xp)} XP
-          </Text>
-        </View>
-        <Feather name={theme.icon} size={22} color={mutedColor} />
-      </View>
-    </GlassSurface>
+        </GlassSurface>
+      )}
+    </Pressable>
   );
 }
 
 export function LeaderboardScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { profile } = useAuthContext();
   const { palette } = useThemeContext();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -236,39 +256,54 @@ export function LeaderboardScreen() {
                   textColor={palette.colors.text}
                   mutedColor={palette.colors.textSecondary}
                   surfaceColor={palette.colors.surface}
+                  onPress={!user.isPlaceholder ? () => navigation.navigate("StudentProfile", { userId: user.uid }) : undefined}
                 />
               </View>
             ))}
 
             {restRows.map((user, index) => (
-              <View key={user.uid}>
-                <GlassSurface
-                  style={{
-                    padding: 10,
-                    backgroundColor: palette.colors.glass,
-                    borderColor: palette.colors.glassBorder,
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Text style={{ width: 24, fontWeight: "900", color: palette.colors.textSecondary }}>
-                      {index + 4}
-                    </Text>
-                    <AvatarWithStatus uri={user.avatarUrl} size={38} online tier={user.tier} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
-                        {user.displayName}
+              <Pressable
+                key={user.uid}
+                onPress={!user.isPlaceholder ? () => navigation.navigate("StudentProfile", { userId: user.uid }) : undefined}
+                disabled={user.isPlaceholder}
+              >
+                {({ pressed }) => (
+                  <GlassSurface
+                    pressed={pressed}
+                    style={{
+                      padding: 10,
+                      backgroundColor: palette.colors.glass,
+                      borderColor: palette.colors.glassBorder,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <Text style={{ width: 24, fontWeight: "900", color: palette.colors.textSecondary }}>
+                        {index + 4}
                       </Text>
-                      <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
-                        {user.primaryEvent ? user.primaryEvent : `${user.grade}th grade`}
+                      <AvatarWithStatus
+                        uri={user.avatarUrl}
+                        seed={user.displayName}
+                        size={38}
+                        online
+                        tier={user.tier}
+                        avatarColor={user.avatarColor || undefined}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
+                          {user.displayName}
+                        </Text>
+                        <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                          {user.primaryEvent ? user.primaryEvent : `${user.grade}th grade`}
+                        </Text>
+                      </View>
+                      <TierBadge tier={user.tier} />
+                      <Text style={{ color: palette.colors.text, fontFamily: "monospace", fontWeight: "700" }}>
+                        {formatCompactNumber(user.xp)} XP
                       </Text>
                     </View>
-                    <TierBadge tier={user.tier} />
-                    <Text style={{ color: palette.colors.text, fontFamily: "monospace", fontWeight: "700" }}>
-                      {formatCompactNumber(user.xp)} XP
-                    </Text>
-                  </View>
-                </GlassSurface>
-              </View>
+                  </GlassSurface>
+                )}
+              </Pressable>
             ))}
 
             {myRank ? (
@@ -285,7 +320,14 @@ export function LeaderboardScreen() {
                 </Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <Text style={{ width: 24, fontWeight: "900", color: palette.colors.text }}>#{myRank.rank}</Text>
-                  <AvatarWithStatus uri={myRank.user.avatarUrl} size={40} online tier={myRank.user.tier} />
+                  <AvatarWithStatus
+                    uri={myRank.user.avatarUrl}
+                    seed={myRank.user.displayName}
+                    size={40}
+                    online
+                    tier={myRank.user.tier}
+                    avatarColor={myRank.user.avatarColor || undefined}
+                  />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
                       {myRank.user.displayName}

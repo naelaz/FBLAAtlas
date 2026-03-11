@@ -617,7 +617,7 @@ export function SettingsScreen() {
             <Slider
               value={fontScale}
               minimumValue={0.8}
-              maximumValue={1.4}
+              maximumValue={1.2}
               step={0.01}
               minimumTrackTintColor={palette.colors.primary}
               maximumTrackTintColor={palette.colors.inputMuted}
@@ -639,6 +639,8 @@ export function SettingsScreen() {
               accessibilityLabel="Text size slider"
               accessibilityHint={getAccessibilityHint("Adjusts text size across the entire app")}
             />
+            {/* Center tick at 1.00x */}
+            <View style={{ position: "absolute", left: "50%", top: 6, bottom: 6, width: 2, backgroundColor: palette.colors.border, borderRadius: 1, marginLeft: -1, pointerEvents: "none" }} />
           </GlassSurface>
         </View>
         <ToggleRow

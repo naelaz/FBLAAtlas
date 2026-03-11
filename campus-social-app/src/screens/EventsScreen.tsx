@@ -1,5 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, ScrollView, View } from "react-native";
@@ -36,8 +37,43 @@ import {
   subscribeEvents,
   toggleEventAttendance,
 } from "../services/socialService";
+import { DEFAULT_IMAGE_BLURHASH, getEventImageByCategory } from "../constants/media";
 import { ChapterEventItem, MeetingNote } from "../types/features";
 import { EventItem } from "../types/social";
+import { db } from "../config/firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+
+// Demo attendees shown as avatar clusters on fallback events
+const DEMO_ATTENDEE_AVATARS: Record<string, { name: string; color: string }> = {
+  demo_alex:     { name: "Alex M.",   color: "#FF8B94" },
+  demo_jordan_k: { name: "Jordan K.", color: "#6C63FF" },
+  demo_sam_r:    { name: "Sam R.",    color: "#4ECDC4" },
+  demo_taylor_b: { name: "Taylor B.", color: "#FFD93D" },
+  demo_riley_c:  { name: "Riley C.",  color: "#A8E6CF" },
+  demo_morgan_l: { name: "Morgan L.", color: "#FF6B6B" },
+  demo_avery_n:  { name: "Avery N.",  color: "#45B7D1" },
+  demo_piper_m:  { name: "Piper M.",  color: "#96CEB4" },
+  demo_reese_o:  { name: "Reese O.",  color: "#DDA0DD" },
+};
+
+async function ensureEventInFirestore(event: EventItem): Promise<void> {
+  const ref = doc(db, "events", event.id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      schoolId: event.schoolId,
+      title: event.title,
+      description: event.description ?? "",
+      location: event.location ?? "",
+      category: event.category ?? "FBLA",
+      startAt: event.startAt,
+      attendeeIds: event.attendeeIds ?? [],
+      attendeeCount: event.attendeeCount ?? 0,
+      capacity: event.capacity ?? 100,
+      createdAt: new Date().toISOString(),
+    });
+  }
+}
 
 const EVENT_FILTERS: Array<"All" | "Sports" | "Academic" | "Social" | "FBLA" | "Arts"> = [
   "All",
@@ -48,6 +84,94 @@ const EVENT_FILTERS: Array<"All" | "Sports" | "Academic" | "Social" | "FBLA" | "
   "Arts",
 ];
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+function buildFallbackEvents(schoolId: string): EventItem[] {
+  const now = Date.now();
+  const day = 1000 * 60 * 60 * 24;
+  const hour = 1000 * 60 * 60;
+  return [
+    {
+      id: "fb_1", schoolId, title: "Chapter Meeting", description: "Weekly chapter meeting. Competition updates, upcoming deadlines, and committee reports.", location: "Room 112", category: "FBLA",
+      startAt: new Date(now + hour * 3).toISOString(), attendeeIds: [], attendeeCount: 18, capacity: 60,
+    },
+    {
+      id: "fb_2", schoolId, title: "Public Speaking Practice", description: "Open mic session for members to practice speeches and get peer feedback. All skill levels welcome.", location: "Auditorium",
+      category: "Academic", startAt: new Date(now + day + hour * 4).toISOString(), attendeeIds: [], attendeeCount: 9, capacity: 25,
+    },
+    {
+      id: "fb_3", schoolId, title: "Business Plan Review Session", description: "Bring your draft business plans for peer review. Officers and returning competitors provide feedback based on FBLA judging criteria.", location: "Library Conference Room",
+      category: "FBLA", startAt: new Date(now + day * 2 + hour * 5).toISOString(), attendeeIds: [], attendeeCount: 7, capacity: 20,
+    },
+    {
+      id: "fb_4", schoolId, title: "Study Session: Objective Tests", description: "Group study for objective test events — Business Law, Economics, Accounting. Share study guides and quiz each other.", location: "Room 204",
+      category: "Academic", startAt: new Date(now + day * 3 + hour * 4).toISOString(), attendeeIds: [], attendeeCount: 12, capacity: 20,
+    },
+    {
+      id: "fb_5", schoolId, title: "Mock Interview Workshop", description: "Practice professional interviews with local business volunteers. Receive real-time feedback on your responses, body language, and presentation.", location: "Career Center, Building B",
+      category: "Academic", startAt: new Date(now + day * 4 + hour * 3).toISOString(), attendeeIds: [], attendeeCount: 14, capacity: 30,
+    },
+    {
+      id: "fb_6", schoolId, title: "FBLA Spirit Week Kickoff", description: "Celebrate FBLA Week! Wear your chapter shirts, participate in daily challenges, and earn extra XP all week.", location: "Main Hallway & Cafeteria",
+      category: "Social", startAt: new Date(now + day * 5).toISOString(), attendeeIds: [], attendeeCount: 35, capacity: 100,
+    },
+    {
+      id: "fb_7", schoolId, title: "Presentation Skills Bootcamp", description: "Intensive 3-hour workshop on building compelling presentations. Cover slide design, storytelling, and handling judge Q&A.", location: "Computer Lab, Room 310",
+      category: "Academic", startAt: new Date(now + day * 6 + hour * 2).toISOString(), attendeeIds: [], attendeeCount: 11, capacity: 25,
+    },
+    {
+      id: "fb_8", schoolId, title: "Fundraiser: Business Trivia Night", description: "Test your business knowledge in a fun team trivia format. Entry fee goes toward SLC travel costs. Pizza and drinks provided.", location: "School Cafeteria",
+      category: "Social", startAt: new Date(now + day * 8 + hour * 6).toISOString(), attendeeIds: [], attendeeCount: 22, capacity: 80,
+    },
+    {
+      id: "fb_9", schoolId, title: "Officer Elections", description: "Annual chapter officer elections. Candidates deliver 2-minute speeches followed by a vote. All members encouraged to attend.", location: "Room 112",
+      category: "FBLA", startAt: new Date(now + day * 10 + hour * 4).toISOString(), attendeeIds: [], attendeeCount: 40, capacity: 60,
+    },
+    {
+      id: "fb_10", schoolId, title: "Coding Sprint: App Dev Prep", description: "Timed coding challenge to simulate competition conditions. Build a small app feature in 60 minutes, then present your solution.", location: "Computer Lab, Room 310",
+      category: "Academic", startAt: new Date(now + day * 11 + hour * 3).toISOString(), attendeeIds: [], attendeeCount: 8, capacity: 20,
+    },
+    {
+      id: "fb_11", schoolId, title: "Guest Speaker: Young Entrepreneur Panel", description: "Three local entrepreneurs under 25 share their startup journeys and answer your questions. Excellent networking opportunity.", location: "Auditorium",
+      category: "FBLA", startAt: new Date(now + day * 14 + hour * 5).toISOString(), attendeeIds: [], attendeeCount: 28, capacity: 100,
+    },
+    {
+      id: "fb_12", schoolId, title: "Chapter Social: Game Night", description: "Unwind with your chapter! Board games, snacks, and team building. A great way to meet new members before competition season.", location: "Student Lounge",
+      category: "Social", startAt: new Date(now + day * 16 + hour * 6).toISOString(), attendeeIds: [], attendeeCount: 30, capacity: 50,
+    },
+    {
+      id: "fb_13", schoolId, title: "Resume Workshop", description: "Learn to build a professional resume for job applications and FBLA portfolios. Bring a laptop to create yours during the session.", location: "Career Center, Room 105",
+      category: "Academic", startAt: new Date(now + day * 18 + hour * 3).toISOString(), attendeeIds: [], attendeeCount: 16, capacity: 30,
+    },
+    {
+      id: "fb_14", schoolId, title: "Community Service: Financial Literacy Day", description: "Teach basic financial literacy to middle school students. Counts toward community service hours and FBLA portfolio.", location: "Jefferson Middle School",
+      category: "Social", startAt: new Date(now + day * 21 + hour * 2).toISOString(), attendeeIds: [], attendeeCount: 10, capacity: 15,
+    },
+    {
+      id: "fb_15", schoolId, title: "District Leadership Conference", description: "Compete at the district level in your registered events. Top placers advance to SLC. Dress code: professional business attire required.", location: "Convention Center",
+      category: "FBLA", startAt: new Date(now + day * 35 + hour * 8).toISOString(), attendeeIds: [], attendeeCount: 45, capacity: 120,
+    },
+    {
+      id: "fb_16", schoolId, title: "Networking Mixer", description: "Casual networking event with local business professionals and FBLA alumni. Practice your elevator pitch and make real connections.", location: "School Commons",
+      category: "Social", startAt: new Date(now + day * 25 + hour * 5).toISOString(), attendeeIds: [], attendeeCount: 19, capacity: 50,
+    },
+    {
+      id: "fb_17", schoolId, title: "Accounting Study Group", description: "Collaborative study session for Accounting event prep. Tutoring available from returning competitors.", location: "Library Study Room B",
+      category: "Academic", startAt: new Date(now + day * 1 + hour * 6).toISOString(), attendeeIds: [], attendeeCount: 6, capacity: 15,
+    },
+    {
+      id: "fb_18", schoolId, title: "State Leadership Conference", description: "State-level competition. Top placers in each event advance to NLC. Two-day event with networking sessions and workshops.", location: "State Convention Center",
+      category: "FBLA", startAt: new Date(now + day * 60 + hour * 8).toISOString(), attendeeIds: [], attendeeCount: 32, capacity: 150,
+    },
+    {
+      id: "fb_19", schoolId, title: "National Leadership Conference", description: "The national FBLA competition — the biggest stage in high school business. Network with 12,000+ members from across the country.", location: "Atlanta, GA",
+      category: "FBLA", startAt: new Date("2026-06-24T09:00:00.000Z").toISOString(), attendeeIds: [], attendeeCount: 12, capacity: 200,
+    },
+    {
+      id: "fb_20", schoolId, title: "Chapter Practice Night", description: "Group practice session for all members competing this season. Run timed presentations, take practice tests, and get peer feedback.", location: "School Library, Room 204",
+      category: "Academic", startAt: new Date(now + day * 4 + hour * 5).toISOString(), attendeeIds: [], attendeeCount: 15, capacity: 40,
+    },
+  ];
+}
 
 function toDayKey(date: Date): string {
   const y = date.getFullYear();
@@ -90,6 +214,7 @@ export function EventsScreen() {
   const [loading, setLoading] = useState(true);
   const [chapterLoading, setChapterLoading] = useState(false);
 
+  const [localRsvp, setLocalRsvp] = useState<Record<string, boolean>>({});
   const [eventsScope, setEventsScope] = useState<"official" | "chapter">("official");
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [filter, setFilter] = useState<(typeof EVENT_FILTERS)[number]>("All");
@@ -120,13 +245,31 @@ export function EventsScreen() {
     if (!profile) {
       return;
     }
-    const unsubscribe = subscribeEvents(profile.schoolId, setEvents, (error) => {
-      console.warn("Events subscription failed:", error);
-    });
+    const fallback = buildFallbackEvents(profile.schoolId);
+
+    const mergeWithFallback = (rows: EventItem[]) => {
+      if (rows.length > 0) {
+        const realIds = new Set(rows.map((r) => r.id));
+        return [...rows, ...fallback.filter((fb) => !realIds.has(fb.id))];
+      }
+      return fallback;
+    };
+
+    const unsubscribe = subscribeEvents(
+      profile.schoolId,
+      (rows) => setEvents(mergeWithFallback(rows)),
+      (error) => {
+        console.warn("Events subscription failed:", error);
+        setEvents(fallback);
+      },
+    );
 
     void fetchEventsOnce(profile.schoolId)
-      .then((rows) => setEvents(rows))
-      .catch((error) => console.warn("Events bootstrap failed:", error))
+      .then((rows) => setEvents(mergeWithFallback(rows)))
+      .catch((error) => {
+        console.warn("Events bootstrap failed:", error);
+        setEvents(fallback);
+      })
       .finally(() => setLoading(false));
 
     return unsubscribe;
@@ -162,10 +305,17 @@ export function EventsScreen() {
     setRefreshing(true);
     try {
       const rows = await fetchEventsOnce(profile.schoolId);
-      setEvents(rows);
+      const fb = buildFallbackEvents(profile.schoolId);
+      if (rows.length > 0) {
+        const realIds = new Set(rows.map((r) => r.id));
+        setEvents([...rows, ...fb.filter((f) => !realIds.has(f.id))]);
+      } else {
+        setEvents(fb);
+      }
       await loadChapterData();
     } catch (error) {
       console.warn("Events refresh failed:", error);
+      setEvents(buildFallbackEvents(profile.schoolId));
     } finally {
       setRefreshing(false);
     }
@@ -448,8 +598,8 @@ export function EventsScreen() {
         ListHeaderComponent={
           <View style={{ marginBottom: 10 }}>
             {header}
-            <View style={{ marginTop: 8, flexDirection: "row", justifyContent: "flex-start" }}>
-              <GlassButton variant="solid" size="sm" label="Open Practice Area" onPress={() => navigation.navigate("Practice")} />
+            <View style={{ marginTop: 8 }}>
+              <GlassButton variant="solid" size="sm" fullWidth={false} label="Open Practice Area" onPress={() => navigation.navigate("Practice")} />
             </View>
 
             <View style={{ marginTop: 10, gap: 10 }}>
@@ -522,27 +672,133 @@ export function EventsScreen() {
           </View>
         }
         renderItem={({ item }) => {
-          const attending = item.attendeeIds.includes(profile.uid);
+          const attendingFirestore = item.attendeeIds.includes(profile.uid);
+          const attending = localRsvp[item.id] !== undefined ? localRsvp[item.id] : attendingFirestore;
+          const coverUrl = (item as EventItem & { imageUrl?: string }).imageUrl
+            || getEventImageByCategory(item.category, item.id);
+
+          // Pick the right action label based on event category/title
+          const title = item.title.toLowerCase();
+          let primaryLabel = "RSVP";
+          if (title.includes("interview") || title.includes("mock interview")) primaryLabel = "Schedule";
+          else if (title.includes("workshop") || title.includes("bootcamp") || title.includes("session")) primaryLabel = "Register";
+          else if (title.includes("conference") || title.includes("nlc") || title.includes("slc") || title.includes("dlc")) primaryLabel = "Register";
+          else if (title.includes("social") || title.includes("game night") || title.includes("mixer") || title.includes("trivia")) primaryLabel = "Join";
+          else if (title.includes("meeting")) primaryLabel = "Attend";
+          const leaveLabel = title.includes("meeting") ? "Skip" : "Leave";
+
+          // Attendee avatar cluster — pick up to 4 demo attendees
+          const demoAttendeeIds = Object.keys(DEMO_ATTENDEE_AVATARS).slice(0, Math.min(4, (item.attendeeCount ?? 0)));
+          const shownAvatars = demoAttendeeIds.map((id) => DEMO_ATTENDEE_AVATARS[id]).filter(Boolean);
+          const overflowCount = Math.max(0, (item.attendeeCount ?? 0) - shownAvatars.length);
+
           return (
-            <GlassSurface style={{ padding: 12, marginBottom: 10 }}>
-              <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{item.title}</Text>
-              <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>{formatDateTime(item.startAt)} - {item.location}</Text>
-              {item.description ? <Text style={{ color: palette.colors.textSecondary, marginTop: 4 }}>{item.description}</Text> : null}
-              <Text style={{ color: palette.colors.textMuted, marginTop: 4, fontSize: 12 }}>Starts in {timeUntil(item.startAt)}</Text>
-              <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-                <GlassButton
-                  variant={attending ? "ghost" : "solid"}
-                  size="sm"
-                  label={attending ? "Leave" : "Join"}
-                  onPress={async () => {
-                    hapticTap();
-                    const result = await toggleEventAttendance(item, profile, {
-                      notifyEventReminder: settings.notifications.globalPush && settings.notifications.eventReminders,
-                    });
-                    handleAwardResult(result.award, { eventName: item.title });
-                  }}
+            <GlassSurface style={{ marginBottom: 12, overflow: "hidden", borderRadius: 16 }}>
+              {/* Cover image with gradient overlay */}
+              <View style={{ height: 150, borderRadius: 16, overflow: "hidden" }}>
+                <Image
+                  source={{ uri: coverUrl }}
+                  style={{ width: "100%", height: "100%" }}
+                  contentFit="cover"
+                  placeholder={DEFAULT_IMAGE_BLURHASH}
+                  transition={300}
                 />
-                <GlassButton variant="ghost" size="sm" label="Details" onPress={() => navigation.navigate("EventDetail", { eventId: item.id })} />
+                <LinearGradient
+                  colors={["transparent", "rgba(0,0,0,0.78)"]}
+                  style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 100 }}
+                />
+                {/* Category badge */}
+                <View style={{ position: "absolute", top: 10, left: 10, backgroundColor: palette.colors.primary, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 }}>
+                  <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>{item.category ?? "FBLA"}</Text>
+                </View>
+                {/* Countdown badge */}
+                <View style={{ position: "absolute", top: 10, right: 10, backgroundColor: "rgba(0,0,0,0.52)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
+                  <Text style={{ color: "#fff", fontSize: 11, fontWeight: "600" }}>in {timeUntil(item.startAt)}</Text>
+                </View>
+                {/* Attendee avatar cluster — bottom right corner of image */}
+                {shownAvatars.length > 0 ? (
+                  <View style={{ position: "absolute", bottom: 36, right: 10, flexDirection: "row" }}>
+                    {shownAvatars.map((av, i) => (
+                      <View
+                        key={av.name}
+                        style={{
+                          width: 26, height: 26, borderRadius: 13,
+                          backgroundColor: av.color,
+                          borderWidth: 2, borderColor: "rgba(0,0,0,0.6)",
+                          alignItems: "center", justifyContent: "center",
+                          marginLeft: i === 0 ? 0 : -8, zIndex: shownAvatars.length - i,
+                        }}
+                      >
+                        <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>{av.name.charAt(0)}</Text>
+                      </View>
+                    ))}
+                    {overflowCount > 0 ? (
+                      <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.25)", borderWidth: 2, borderColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", marginLeft: -8 }}>
+                        <Text style={{ color: "#fff", fontSize: 9, fontWeight: "800" }}>+{overflowCount}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+                {/* Title over image */}
+                <Text style={{ position: "absolute", bottom: 10, left: 12, right: 12, color: "#fff", fontWeight: "800", fontSize: 16 }} numberOfLines={2}>
+                  {item.title}
+                </Text>
+              </View>
+
+              {/* Details below image */}
+              <View style={{ padding: 12, gap: 4 }}>
+                <Text style={{ color: palette.colors.textSecondary, fontSize: 13 }}>
+                  {formatDateTime(item.startAt)}  ·  {item.location}
+                </Text>
+                {item.description ? (
+                  <Text style={{ color: palette.colors.textMuted, fontSize: 12, lineHeight: 18 }} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                ) : null}
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+                  {item.attendeeCount > 0 ? (
+                    <Text style={{ color: palette.colors.textMuted, fontSize: 12 }}>
+                      {item.attendeeCount} going{item.capacity ? ` · ${Math.max(0, item.capacity - item.attendeeCount)} spots left` : ""}
+                    </Text>
+                  ) : <View />}
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <GlassButton
+                      variant={attending ? "ghost" : "solid"}
+                      size="sm"
+                      fullWidth={false}
+                      label={attending ? leaveLabel : primaryLabel}
+                      onPress={async () => {
+                        hapticTap();
+                        // Optimistic update immediately
+                        setLocalRsvp((prev) => ({ ...prev, [item.id]: !attending }));
+                        setEvents((prev) => prev.map((e) =>
+                          e.id === item.id
+                            ? { ...e, attendeeIds: attending ? e.attendeeIds.filter((id) => id !== profile.uid) : [...e.attendeeIds, profile.uid], attendeeCount: attending ? Math.max(0, e.attendeeCount - 1) : e.attendeeCount + 1 }
+                            : e
+                        ));
+                        try {
+                          await ensureEventInFirestore(item);
+                          const result = await toggleEventAttendance(
+                            { ...item, attendeeIds: attending ? item.attendeeIds.filter((id) => id !== profile.uid) : [...item.attendeeIds, profile.uid] },
+                            profile,
+                            { notifyEventReminder: settings.notifications.globalPush && settings.notifications.eventReminders },
+                          );
+                          handleAwardResult(result.award, { eventName: item.title });
+                        } catch {
+                          // revert on failure
+                          setLocalRsvp((prev) => ({ ...prev, [item.id]: attending }));
+                        }
+                      }}
+                    />
+                    <GlassButton
+                      variant="ghost"
+                      size="sm"
+                      fullWidth={false}
+                      label="Details"
+                      onPress={() => navigation.navigate("EventDetail", { eventId: item.id })}
+                    />
+                  </View>
+                </View>
               </View>
             </GlassSurface>
           );

@@ -1,8 +1,12 @@
-import React, { useEffect, useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Search, UserCheck, UserPlus } from "lucide-react-native";
+import React, { useCallback, useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
+import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { GlassButton } from "../components/ui/GlassButton";
 import { GlassInput } from "../components/ui/GlassInput";
 import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
@@ -16,84 +20,93 @@ import {
   sendMentorRequest,
   updateMentorAvailability,
 } from "../services/mentorshipService";
-import { searchFblaAtlas } from "../services/socialService";
-import { PostItem, UserProfile } from "../types/social";
+import { hapticTap } from "../services/haptics";
+import {
+  fetchSchoolUsersOnce,
+  toggleFollowUser,
+} from "../services/socialService";
+import { RootStackParamList } from "../navigation/types";
+import { UserProfile } from "../types/social";
 
 export function SearchScreen() {
   const { profile } = useAuthContext();
   const { palette } = useThemeContext();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [tab, setTab] = useState<"all" | "alumni">("all");
   const [query, setQuery] = useState("");
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [mentors, setMentors] = useState<AlumniMentorProfile[]>([]);
-  const [searching, setSearching] = useState(false);
   const [mentorMessage, setMentorMessage] = useState("");
   const [mentorAreas, setMentorAreas] = useState("");
   const [availability, setAvailability] = useState(false);
   const [savingAvailability, setSavingAvailability] = useState(false);
   const [requestingUid, setRequestingUid] = useState<string | null>(null);
-
-  const runSearch = async () => {
-    if (!profile || !query.trim()) {
-      setUsers([]);
-      setPosts([]);
-      return;
-    }
-
-    setSearching(true);
-    try {
-      const result = await searchFblaAtlas(profile.schoolId, query);
-      setUsers(result.users);
-      setPosts(result.posts);
-    } catch (error) {
-      console.warn("Search failed:", error);
-      setUsers([]);
-      setPosts([]);
-    } finally {
-      setSearching(false);
-    }
-  };
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!profile || tab !== "alumni") {
-      return;
-    }
+    if (!profile) return;
+    void fetchSchoolUsersOnce(profile.schoolId)
+      .then((rows) => {
+        setAllUsers(rows.filter((u) => u.uid !== profile.uid));
+        setFollowingIds(new Set(profile.followingIds ?? []));
+      })
+      .catch(() => undefined);
+  }, [profile?.schoolId]);
+
+  useEffect(() => {
+    if (!profile || tab !== "alumni") return;
     let active = true;
     void fetchAlumniMentors(profile.schoolId)
-      .then((rows) => {
-        if (active) {
-          setMentors(rows);
-        }
-      })
-      .catch((error) => {
-        console.warn("Alumni mentor load failed:", error);
-        if (active) {
-          setMentors([]);
-        }
-      });
-    return () => {
-      active = false;
-    };
+      .then((rows) => { if (active) setMentors(rows); })
+      .catch(() => { if (active) setMentors([]); });
+    return () => { active = false; };
   }, [profile?.schoolId, tab]);
 
-  if (!profile) {
-    return null;
-  }
+  const filteredUsers = allUsers.filter((u) => {
+    if (!query.trim()) return true;
+    const q = query.toLowerCase();
+    return (
+      u.displayName.toLowerCase().includes(q) ||
+      (u.grade ? String(u.grade).includes(q) : false) ||
+      (u.officerPosition ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  const handleFollow = useCallback(async (user: UserProfile) => {
+    if (!profile) return;
+    hapticTap();
+    const wasFollowing = followingIds.has(user.uid);
+    setFollowingIds((prev) => {
+      const next = new Set(prev);
+      if (wasFollowing) next.delete(user.uid);
+      else next.add(user.uid);
+      return next;
+    });
+    try {
+      await toggleFollowUser(profile, user);
+    } catch {
+      setFollowingIds((prev) => {
+        const next = new Set(prev);
+        if (wasFollowing) next.add(user.uid);
+        else next.delete(user.uid);
+        return next;
+      });
+    }
+  }, [profile, followingIds]);
+
+  if (!profile) return null;
 
   return (
-    <ScreenShell title="Search" subtitle="Find members, posts, and alumni mentors.">
+    <ScreenShell title="Find Members" subtitle="Search students, follow members, and connect with alumni.">
       <View style={{ marginBottom: 12 }}>
         <GlassSegmentedControl
           value={tab}
           options={[
-            { value: "all", label: "All" },
+            { value: "all", label: "Members" },
             { value: "alumni", label: "Alumni" },
           ]}
           onValueChange={(value) => {
-            if (value === "all" || value === "alumni") {
-              setTab(value);
-            }
+            if (value === "all" || value === "alumni") setTab(value);
           }}
         />
       </View>
@@ -103,57 +116,95 @@ export function SearchScreen() {
           <GlassInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search names, grades, post keywords"
+            placeholder="Search by name or position..."
+            leftSlot={<Search size={15} color={palette.colors.textSecondary} />}
+            containerStyle={{ marginBottom: 10 }}
           />
 
-          <GlassButton
-            variant="solid"
-            size="sm"
-            label={searching ? "Searching..." : "Search FBLA Atlas"}
-            style={{ marginTop: 10 }}
-            disabled={searching}
-            onPress={() => void runSearch()}
-          />
+          <Text style={{ color: palette.colors.textMuted, fontWeight: "800", fontSize: 13, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 }}>
+            {query.trim() ? `Results (${filteredUsers.length})` : `All Members (${filteredUsers.length})`}
+          </Text>
 
-          <View style={{ marginTop: 14, gap: 8 }}>
-            <Text variant="titleMedium" style={{ fontWeight: "700", color: palette.colors.text }}>
-              Students
+          {filteredUsers.length === 0 ? (
+            <Text style={{ color: palette.colors.textSecondary }}>
+              {allUsers.length === 0 ? "Loading members..." : "No members found."}
             </Text>
-            {users.map((user) => (
-              <GlassSurface
-                key={user.uid}
-                style={{ backgroundColor: palette.colors.surface, padding: 12 }}
-              >
-                <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{user.displayName}</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
-                  <Text style={{ color: palette.colors.textSecondary }}>{user.grade}th grade</Text>
-                  <TierBadge tier={user.tier} />
-                </View>
-              </GlassSurface>
-            ))}
-            {users.length === 0 ? (
-              <Text style={{ color: palette.colors.textSecondary }}>No student results yet.</Text>
-            ) : null}
-          </View>
-
-          <View style={{ marginTop: 14, gap: 8 }}>
-            <Text variant="titleMedium" style={{ fontWeight: "700", color: palette.colors.text }}>
-              Posts
-            </Text>
-            {posts.map((post) => (
-              <GlassSurface
-                key={post.id}
-                style={{ backgroundColor: palette.colors.surface, padding: 12 }}
-              >
-                <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{post.authorName}</Text>
-                <Text style={{ color: palette.colors.textSecondary }}>{post.likeCount} likes</Text>
-                <Text style={{ color: palette.colors.text, marginTop: 6 }}>{post.content}</Text>
-              </GlassSurface>
-            ))}
-            {posts.length === 0 ? (
-              <Text style={{ color: palette.colors.textSecondary }}>No post results yet.</Text>
-            ) : null}
-          </View>
+          ) : (
+            <View style={{ gap: 8 }}>
+              {filteredUsers.map((user) => {
+                const isFollowing = followingIds.has(user.uid);
+                return (
+                  <Pressable
+                    key={user.uid}
+                    onPress={() => navigation.navigate("StudentProfile", { userId: user.uid })}
+                  >
+                    {({ pressed }) => (
+                      <GlassSurface
+                        pressed={pressed}
+                        style={{
+                          padding: 12,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 10,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: palette.colors.border,
+                        }}
+                      >
+                        <AvatarWithStatus
+                          uri={user.avatarUrl}
+                          seed={user.displayName}
+                          size={44}
+                          online={false}
+                          tier={user.tier}
+                          avatarColor={user.avatarColor || undefined}
+                          onPress={() => navigation.navigate("StudentProfile", { userId: user.uid })}
+                        />
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 14 }} numberOfLines={1}>
+                              {user.displayName}
+                            </Text>
+                            <TierBadge tier={user.tier} />
+                          </View>
+                          {user.officerPosition ? (
+                            <Text style={{ color: palette.colors.primary, fontSize: 12, fontWeight: "600" }}>
+                              {user.officerPosition}
+                            </Text>
+                          ) : (
+                            <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
+                              {user.grade ? `Grade ${user.grade}` : "FBLA Member"}
+                            </Text>
+                          )}
+                        </View>
+                        <Pressable
+                          onPress={() => void handleFollow(user)}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 4,
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: isFollowing ? palette.colors.border : palette.colors.primary,
+                            backgroundColor: isFollowing ? palette.colors.inputSurface : palette.colors.primary,
+                          }}
+                        >
+                          {isFollowing
+                            ? <UserCheck size={13} color={palette.colors.textSecondary} />
+                            : <UserPlus size={13} color="#fff" />}
+                          <Text style={{ color: isFollowing ? palette.colors.textSecondary : "#fff", fontSize: 12, fontWeight: "700" }}>
+                            {isFollowing ? "Following" : "Follow"}
+                          </Text>
+                        </Pressable>
+                      </GlassSurface>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
         </>
       ) : null}
 
@@ -211,15 +262,16 @@ export function SearchScreen() {
             value={mentorMessage}
             onChangeText={setMentorMessage}
             placeholder="Short message for mentor requests"
+            containerStyle={{ marginBottom: 10 }}
           />
 
-          <View style={{ marginTop: 10, gap: 8 }}>
+          <View style={{ gap: 8 }}>
             {mentors.length === 0 ? (
               <Text style={{ color: palette.colors.textSecondary }}>No alumni mentors available right now.</Text>
             ) : (
               mentors.map((mentor) => (
                 <GlassSurface key={mentor.uid} style={{ padding: 12 }}>
-                  <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{mentor.name}</Text>
+                  <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 14 }}>{mentor.name}</Text>
                   <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>
                     {mentor.chapterName || mentor.schoolName}
                   </Text>

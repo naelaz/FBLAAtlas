@@ -38,4 +38,5 @@ export type RootStackParamList = {
   OfficerTasks: undefined;
   RoommateFinder: { level: "DLC" | "SLC" | "NLC" };
   Search: undefined;
+  EventGuidelines: { url: string; title: string };
 };

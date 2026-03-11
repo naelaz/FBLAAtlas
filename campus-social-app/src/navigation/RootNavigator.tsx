@@ -26,6 +26,7 @@ import { GlossaryScreen } from "../screens/GlossaryScreen";
 import { OfficerTaskBoardScreen } from "../screens/OfficerTaskBoardScreen";
 import { RoommateFinderScreen } from "../screens/RoommateFinderScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
+import { EventGuidelinesScreen } from "../screens/EventGuidelinesScreen";
 import { MainTabs } from "./MainTabs";
 import { RootStackParamList } from "./types";
 
@@ -99,6 +100,9 @@ export function RootNavigator({ startInAdmin = false }: RootNavigatorProps) {
         screenOptions={{
           contentStyle: { backgroundColor: palette.colors.background },
           animation: "slide_from_right",
+          animationDuration: 180,
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
           headerStyle: { backgroundColor: palette.colors.surface },
           headerShadowVisible: false,
           headerTintColor: palette.colors.text,
@@ -222,6 +226,11 @@ export function RootNavigator({ startInAdmin = false }: RootNavigatorProps) {
         <Stack.Screen
           name="Search"
           component={SearchScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="EventGuidelines"
+          component={EventGuidelinesScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

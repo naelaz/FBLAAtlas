@@ -15,7 +15,7 @@ import Animated, {
 } from "react-native-reanimated";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
-import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
+import { AVATAR_COLORS, AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { Badge } from "../components/ui/badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassButton } from "../components/ui/GlassButton";
@@ -85,17 +85,11 @@ const PLACEMENT_OPTIONS: PlacementResult[] = [
 
 const LEVEL_OPTIONS: PlacementLevel[] = ["DLC", "SLC", "NLC"];
 
-function placementEmoji(place: PlacementResult): string {
-  if (place === "1st") {
-    return "🥇";
-  }
-  if (place === "2nd") {
-    return "🥈";
-  }
-  if (place === "3rd") {
-    return "🥉";
-  }
-  return "🏅";
+function placementBadgeColor(place: PlacementResult): string {
+  if (place === "1st") return "#F59E0B"; // gold
+  if (place === "2nd") return "#94A3B8"; // silver
+  if (place === "3rd") return "#C97C4A"; // bronze
+  return "#6366F1"; // indigo for others
 }
 
 function lightenHex(hex: string, amount = 0.15): string {
@@ -417,7 +411,7 @@ export function ProfileScreen() {
   const renderEditSection = (key: EditSectionKey, title: string, body: React.ReactNode) => {
     const expanded = expandedSections[key];
     return (
-      <GlassSurface style={{ padding: 10, marginTop: 10 }}>
+      <GlassSurface style={{ padding: 12, marginBottom: 10, borderRadius: 16 }}>
         <Pressable
           onPress={() => {
             hapticTap();
@@ -425,14 +419,21 @@ export function ProfileScreen() {
           }}
           style={{ minHeight: 44, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
         >
-          <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{title}</Text>
+          <Text style={{ color: palette.colors.textSecondary, fontWeight: "700", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>
+            {title}
+          </Text>
           <ChevronDown
             size={18}
             color={palette.colors.textSecondary}
             style={{ transform: [{ rotate: expanded ? "180deg" : "0deg" }] }}
           />
         </Pressable>
-        {expanded ? <View style={{ marginTop: 8, gap: 8 }}>{body}</View> : null}
+        {expanded ? (
+          <>
+            <View style={{ height: 1, backgroundColor: palette.colors.border, marginBottom: 12 }} />
+            <View style={{ gap: 10 }}>{body}</View>
+          </>
+        ) : null}
       </GlassSurface>
     );
   };
@@ -603,7 +604,34 @@ export function ProfileScreen() {
             size={88}
             online
             tier={profile.tier}
+            avatarColor={profile.avatarColor || undefined}
           />
+          {/* Color picker — only shown when no photo */}
+          {(!profile.avatarUrl || profile.avatarUrl.trim().length === 0) ? (
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
+              {AVATAR_COLORS.map((color) => (
+                <Pressable
+                  key={color}
+                  onPress={async () => {
+                    hapticTap();
+                    try {
+                      await updateUserProfileFields(profile.uid, { avatarColor: color });
+                    } catch (error) {
+                      console.warn("Avatar color update failed:", error);
+                    }
+                  }}
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 13,
+                    backgroundColor: color,
+                    borderWidth: profile.avatarColor === color ? 3 : 1,
+                    borderColor: profile.avatarColor === color ? palette.colors.text : "transparent",
+                  }}
+                />
+              ))}
+            </View>
+          ) : null}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 12, gap: 8 }}>
             <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 22 }}>{profile.displayName}</Text>
             <TierBadge tier={profile.tier} />
@@ -877,9 +905,12 @@ export function ProfileScreen() {
                 marginBottom: 8,
               }}
             >
-              <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
-                {placementEmoji(placement.place)} {placement.place} Place - {placement.eventName}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: placementBadgeColor(placement.place) }} />
+                <Text style={{ color: palette.colors.text, fontWeight: "700", flex: 1 }}>
+                  {placement.place} — {placement.eventName}
+                </Text>
+              </View>
               <Text style={{ color: palette.colors.textSecondary }}>
                 {placement.competitionLevel} {placement.year}
               </Text>
@@ -1014,39 +1045,84 @@ export function ProfileScreen() {
       <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => setEditOpen(false)}>
         <Pressable style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }} onPress={() => setEditOpen(false)}>
           <Pressable>
-            <View style={{ backgroundColor: palette.colors.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, gap: 10, maxHeight: "90%" }}>
-              <Text variant="titleLarge" style={{ fontWeight: "900" }}>Edit Profile</Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <GlassButton
-                  variant="ghost"
-                  label={uploadingAvatar ? "Uploading..." : "Camera Roll"}
-                  style={{ flex: 1 }}
-                  disabled={uploadingAvatar}
-                  onPress={() => {
-                    void pickFromLibrary();
-                  }}
-                />
-                <GlassButton
-                  variant="ghost"
-                  label="Take Photo"
-                  style={{ flex: 1 }}
-                  disabled={uploadingAvatar}
-                  onPress={() => {
-                    void takePhoto();
-                  }}
-                />
+            <View style={{ backgroundColor: palette.colors.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: "92%", flex: 0 }}>
+              {/* Fixed header — title only */}
+              <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+                <Text variant="titleLarge" style={{ fontWeight: "900" }}>Edit Profile</Text>
               </View>
-              <GlassButton
-                variant="ghost"
-                label="Use Initials Avatar"
-                disabled={uploadingAvatar}
-                onPress={() => {
-                  void resetToInitialsAvatar();
-                }}
-              />
-              <GlassInput label="Display Name" value={editName} onChangeText={setEditName} />
 
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
+              {/* All content scrolls */}
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 10 }}
+              >
+              {/* Avatar section */}
+              <GlassSurface style={{ padding: 12 }}>
+                <Text style={{ color: palette.colors.textSecondary, fontWeight: "700", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>
+                  Profile Photo
+                </Text>
+                <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+                  <GlassButton
+                    variant="ghost"
+                    label={uploadingAvatar ? "Uploading..." : "Camera Roll"}
+                    style={{ flex: 1 }}
+                    disabled={uploadingAvatar}
+                    onPress={() => { void pickFromLibrary(); }}
+                  />
+                  <GlassButton
+                    variant="ghost"
+                    label="Take Photo"
+                    style={{ flex: 1 }}
+                    disabled={uploadingAvatar}
+                    onPress={() => { void takePhoto(); }}
+                  />
+                </View>
+                <GlassButton
+                  variant="ghost"
+                  label="Use Initials Avatar"
+                  disabled={uploadingAvatar}
+                  onPress={() => { void resetToInitialsAvatar(); }}
+                />
+                {/* Color picker — always shown so users can customize */}
+                <View style={{ marginTop: 10 }}>
+                  <Text style={{ color: palette.colors.textSecondary, fontWeight: "700", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>
+                    Avatar Color
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                    {AVATAR_COLORS.map((color) => (
+                      <Pressable
+                        key={color}
+                        onPress={async () => {
+                          hapticTap();
+                          try {
+                            await updateUserProfileFields(profile.uid, { avatarColor: color });
+                          } catch (error) {
+                            console.warn("Avatar color update failed:", error);
+                          }
+                        }}
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 14,
+                          backgroundColor: color,
+                          borderWidth: profile.avatarColor === color ? 3 : 1.5,
+                          borderColor: profile.avatarColor === color ? palette.colors.text : "transparent",
+                        }}
+                      />
+                    ))}
+                  </View>
+                </View>
+              </GlassSurface>
+
+              {/* Display Name */}
+              <GlassSurface style={{ padding: 12 }}>
+                <Text style={{ color: palette.colors.textSecondary, fontWeight: "700", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>
+                  Display Name
+                </Text>
+                <GlassInput value={editName} onChangeText={setEditName} placeholder="Your name" />
+              </GlassSurface>
+
                 {renderEditSection(
                   "role",
                   "FBLA ROLE & POSITION",
@@ -1412,11 +1488,9 @@ export function ProfileScreen() {
                     </Text>
                   </>,
                 )}
-              </ScrollView>
-
               <GlassButton
                 variant="solid"
-                label={savingEdit ? "Saving..." : "Save"}
+                label={savingEdit ? "Saving..." : "Save Changes"}
                 loading={savingEdit}
                 disabled={!editName.trim() || savingEdit}
                 onPress={async () => {
@@ -1463,6 +1537,7 @@ export function ProfileScreen() {
                   }
                 }}
               />
+              </ScrollView>
             </View>
           </Pressable>
         </Pressable>
@@ -1480,6 +1555,7 @@ export function ProfileScreen() {
                 size={62}
                 online={false}
                 tier={profile.tier}
+                avatarColor={profile.avatarColor || undefined}
               />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: palette.colors.onImageText, fontWeight: "900", fontSize: 18 }}>{profile.displayName}</Text>

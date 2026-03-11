@@ -35,9 +35,10 @@ import { hapticTap } from "../services/haptics";
 WebBrowser.maybeCompleteAuthSession();
 
 type FormMode = "signin" | "signup";
-const ADMIN_EMAIL = "admin@fblaatlas.com";
-const ADMIN_PASSWORD = "Admin";
-const ADMIN_LEGACY_PASSWORD = "Admin2026";
+const ADMIN_EMAIL = "admin123@fblaatlas.app";
+const ADMIN_PASSWORD = "Admin123";
+const ADMIN_INPUT_EMAIL = "Admin123";
+const ADMIN_INPUT_PASSWORD = "Admin123";
 
 type ProfileSetupFields = {
   displayName: string;
@@ -144,6 +145,8 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [schoolName, setSchoolName] = useState("FBLA Atlas High School");
   const [state, setState] = useState("CA");
@@ -262,6 +265,10 @@ export function LoginScreen() {
   };
 
   const runAdminAuth = async () => {
+    if (adminEmail.trim() !== ADMIN_INPUT_EMAIL || adminPassword !== ADMIN_INPUT_PASSWORD) {
+      setError("Incorrect admin credentials.");
+      return;
+    }
     try {
       setBusy(true);
       setError(null);
@@ -270,23 +277,9 @@ export function LoginScreen() {
       if (methods.length === 0) {
         credential = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
       } else {
-        try {
-          credential = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
-        } catch (primaryAuthError) {
-          // Backward-compatible fallback for older seeded admin passwords.
-          console.warn("[AdminLogin] primary password sign-in failed; trying legacy password", primaryAuthError);
-          credential = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_LEGACY_PASSWORD);
-        }
+        credential = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
       }
       await ensureAdminProfile(credential.user.uid);
-      const existing = await getUserProfileOnce(credential.user.uid);
-      const role = existing?.role;
-      if (role !== "admin" && role !== "superadmin") {
-        await signOut(auth);
-        await setAdminMode(false);
-        setError("This account does not have administrator access");
-        return;
-      }
       await setAdminMode(true);
       await setOnboardingCompleted(true);
       setAdminOpen(false);
@@ -429,16 +422,13 @@ export function LoginScreen() {
               ) : null}
             </View>
 
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-              <Text style={{ color: palette.colors.textSecondary }}>
-                {mode === "signin" ? "Use the tabs above to create account." : "Fill all fields to create account."}
-              </Text>
-              {mode === "signin" ? (
+            {mode === "signin" ? (
+              <View style={{ alignItems: "flex-end", marginTop: 6 }}>
                 <Pressable onPress={() => void runPasswordReset()}>
-                  <Text style={{ color: palette.colors.textSecondary }}>Forgot password?</Text>
+                  <Text style={{ color: palette.colors.textSecondary, fontSize: 13 }}>Forgot password?</Text>
                 </Pressable>
-              ) : null}
-            </View>
+              </View>
+            ) : null}
 
             <View style={{ marginTop: 10 }}>
               <GlassButton
@@ -567,32 +557,51 @@ export function LoginScreen() {
 
       <Modal visible={adminOpen} animationType="slide" onRequestClose={() => setAdminOpen(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 }}>
-            <Pressable
-              onPress={() => setAdminOpen(false)}
-              style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center" }}
-            >
-              <Text style={{ color: palette.colors.text, fontSize: 22 }}>&lt;</Text>
-            </Pressable>
-            <Shield size={18} color={palette.colors.text} />
-            <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 20 }}>
-              Administrator Access
-            </Text>
-          </View>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 16 }} keyboardShouldPersistTaps="handled">
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 24 }}>
+                <Pressable
+                  onPress={() => setAdminOpen(false)}
+                  style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center" }}
+                >
+                  <Text style={{ color: palette.colors.text, fontSize: 22 }}>&lt;</Text>
+                </Pressable>
+                <Shield size={18} color={palette.colors.primary} />
+                <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 20 }}>
+                  Administrator Login
+                </Text>
+              </View>
 
-          <ScrollView contentContainerStyle={{ padding: 16 }}>
-            <GlassSurface style={{ padding: 14 }}>
-              <GlassButton
-                variant="solid"
-                label="Login as Administrator"
-                style={{ marginTop: 10 }}
-                loading={busy}
-                onPress={() => {
-                  void runAdminAuth();
-                }}
-              />
-            </GlassSurface>
-          </ScrollView>
+              <GlassSurface style={{ padding: 16, gap: 12 }}>
+                <GlassInput
+                  value={adminEmail}
+                  onChangeText={setAdminEmail}
+                  label="Admin Email"
+                  placeholder="Admin123"
+                  autoCapitalize="none"
+                  keyboardType="default"
+                />
+                <GlassInput
+                  value={adminPassword}
+                  onChangeText={setAdminPassword}
+                  label="Admin Password"
+                  placeholder="Admin123"
+                  secureTextEntry
+                />
+                {error ? (
+                  <GlassSurface style={{ padding: 10, borderColor: palette.colors.danger }}>
+                    <Text style={{ color: palette.colors.danger }}>{error}</Text>
+                  </GlassSurface>
+                ) : null}
+                <GlassButton
+                  variant="solid"
+                  label="Sign In as Administrator"
+                  loading={busy}
+                  onPress={() => void runAdminAuth()}
+                />
+              </GlassSurface>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>

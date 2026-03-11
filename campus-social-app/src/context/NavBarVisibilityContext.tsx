@@ -35,7 +35,7 @@ export function NavBarVisibilityProvider({ children }: { children: React.ReactNo
     }
 
     if (delta > 10) {
-      navTranslateY.value = withTiming(100, {
+      navTranslateY.value = withTiming(200, {
         duration: 200,
         easing: Easing.out(Easing.cubic),
       });
@@ -58,7 +58,7 @@ export function NavBarVisibilityProvider({ children }: { children: React.ReactNo
   };
 
   const hideNavBar = () => {
-    navTranslateY.value = withTiming(100, {
+    navTranslateY.value = withTiming(200, {
       duration: 200,
       easing: Easing.out(Easing.cubic),
     });

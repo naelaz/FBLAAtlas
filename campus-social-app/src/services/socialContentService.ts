@@ -70,11 +70,11 @@ const DEFAULT_FACTS: string[] = [
 ];
 
 const DEFAULT_SOCIAL_PREVIEWS: Record<SocialFeedPlatform, string> = {
-  x: "Follow for competition deadlines and national FBLA reminders.",
-  instagram: "Check the latest photos from chapter and conference activities.",
-  facebook: "Read official updates and policy or program announcements.",
-  youtube: "Watch highlights and training clips from national sessions.",
-  tiktok: "Quick FBLA tips, event recaps, and motivation posts.",
+  x: "🏆 NLC 2026 registration is now OPEN! Atlanta, GA — June 24–27. Don't miss your chance to compete on the national stage. Register through your state officer today. #FBLA #NLC2026",
+  instagram: "✨ Congratulations to all SLC qualifiers! The energy at state competitions this year has been incredible. Tag your chapter below — we want to celebrate YOU. See you at NLC! 🎉 #FBLAProud #SLC2026",
+  facebook: "📢 FBLA National is pleased to announce the 2025–2026 competitive event updates. Several events have revised guidelines this season — download the updated PDFs at fbla.org/compete/events before your next practice session.",
+  youtube: "🎬 NEW VIDEO: 'How to Ace Your FBLA Role Play Event' — Our national officers walk through the full 7-minute prep strategy, common judge questions, and how to structure your opening. Watch now on the FBLA National YouTube channel!",
+  tiktok: "POV: You just placed at your state conference 😭🏅 The grind was real — 3am study sessions, timed mock presentations, flashcard marathons. Worth every second. Share this with your chapter fam. #FBLA #CompetitionSzn #StateChamps",
 };
 
 export async function fetchSocialFeedCards(): Promise<SocialFeedItem[]> {

@@ -4,8 +4,10 @@ import { Feather } from "@expo/vector-icons";
 import { Search, Target } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Text } from "react-native-paper";
 
+import { GlossaryInline } from "./GlossaryInline";
 import { Badge } from "../components/ui/badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassButton } from "../components/ui/GlassButton";
@@ -37,7 +39,7 @@ import { ScreenShell } from "../components/ScreenShell";
 import { formatRelativeTime } from "../utils/format";
 import { StudySession } from "../types/features";
 
-type PracticeTab = "events" | "dashboard" | "leaderboard";
+type PracticeTab = "events" | "dashboard" | "leaderboard" | "glossary";
 
 function filterEvents(search: string, category: "All" | PracticeEventCategory) {
   const query = search.trim().toLowerCase();
@@ -177,9 +179,10 @@ export function PracticeScreen() {
   const recommended = useMemo(() => recommendationFromSummary(summary), [summary]);
   const tabOptions = useMemo(
     () => [
-      { value: "events", label: "Events Browser" },
-      { value: "dashboard", label: "My Dashboard" },
-      { value: "leaderboard", label: "Leaderboard" },
+      { value: "events", label: "Events" },
+      { value: "dashboard", label: "Dashboard" },
+      { value: "leaderboard", label: "Rank" },
+      { value: "glossary", label: "Glossary" },
     ],
     [],
   );
@@ -214,6 +217,27 @@ export function PracticeScreen() {
           <MessageLoading size="lg" />
         </View>
       </ScreenShell>
+    );
+  }
+
+  if (tab === "glossary") {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+          <GlassSegmentedControl
+            value={tab}
+            options={tabOptions}
+            onValueChange={(nextValue) => {
+              if (nextValue === "events" || nextValue === "dashboard" || nextValue === "leaderboard" || nextValue === "glossary") {
+                setTab(nextValue);
+              }
+            }}
+          />
+        </View>
+        <View style={{ flex: 1, paddingHorizontal: 16, paddingBottom: 80, minHeight: 0 }}>
+          <GlossaryInline />
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -265,21 +289,18 @@ export function PracticeScreen() {
             backgroundColor: palette.colors.surfaceSoft,
           }}
         >
-          <Text style={{ color: palette.colors.textSecondary }}>
-            Guest mode: practice is read-only. Sign in to save scores, history, and leaderboard progress.
+          <Text style={{ color: palette.colors.textSecondary, fontSize: 13 }}>
+            Sign in to save scores and progress.
           </Text>
         </GlassSurface>
       ) : null}
 
       <View style={{ marginBottom: 12 }}>
-        <Text style={{ color: palette.colors.textSecondary, marginBottom: 6, fontWeight: "700", fontSize: 12 }}>
-          Practice Section
-        </Text>
         <GlassSegmentedControl
           value={tab}
           options={tabOptions}
           onValueChange={(nextValue) => {
-            if (nextValue === "events" || nextValue === "dashboard" || nextValue === "leaderboard") {
+            if (nextValue === "events" || nextValue === "dashboard" || nextValue === "leaderboard" || nextValue === "glossary") {
               setTab(nextValue);
             }
           }}
@@ -480,71 +501,55 @@ export function PracticeScreen() {
       {tab === "dashboard" ? (
         <View style={{ gap: 10 }}>
           <MagicCardScore>
-            <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 16 }}>
-              Overall Readiness
-            </Text>
-            <Text style={{ color: palette.colors.primary, fontWeight: "900", fontSize: 28, marginTop: 4 }}>
+            <Text style={{ color: palette.colors.primary, fontWeight: "900", fontSize: 42, lineHeight: 46 }}>
               {summary.overallReadiness}%
             </Text>
-            <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>
-              {summary.totalSessions} sessions • {summary.streakDays} day practice streak
+            <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 14, marginTop: 2 }}>
+              Readiness
+            </Text>
+            <Text style={{ color: palette.colors.textMuted, fontSize: 12, marginTop: 2 }}>
+              {summary.totalSessions} sessions · {summary.streakDays}d streak
             </Text>
           </MagicCardScore>
 
-          <MagicCardRubric>
-            <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 6 }}>
-              Weak Areas
-            </Text>
-            {summary.weakAreas.length === 0 ? (
-              <Text style={{ color: palette.colors.textSecondary }}>
-                Complete your first test to unlock personalized weak area analysis.
+          {summary.weakAreas.length > 0 ? (
+            <MagicCardRubric>
+              <Text style={{ color: palette.colors.text, fontWeight: "700", marginBottom: 6, fontSize: 14 }}>
+                Needs Work
               </Text>
-            ) : (
-              summary.weakAreas.map((item) => (
-                <View key={item.eventId} style={{ marginBottom: 8 }}>
-                  <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
-                    {item.eventName}
-                  </Text>
-                  <Text style={{ color: palette.colors.textSecondary }}>
-                    Avg {item.averageScore}% • Best {item.bestScore}% • {item.attempts} attempts
-                  </Text>
+              {summary.weakAreas.map((item) => (
+                <View key={item.eventId} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 }}>
+                  <Text style={{ color: palette.colors.text, fontSize: 13 }}>{item.eventName}</Text>
+                  <Text style={{ color: palette.colors.textMuted, fontSize: 12 }}>{item.averageScore}% avg</Text>
                 </View>
-              ))
-            )}
-          </MagicCardRubric>
+              ))}
+            </MagicCardRubric>
+          ) : null}
 
           <MagicCardRubric>
-            <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 6 }}>
-              Recommended Focus This Week
+            <Text style={{ color: palette.colors.text, fontWeight: "700", marginBottom: 6, fontSize: 14 }}>
+              Focus This Week
             </Text>
             {recommended.map((line) => (
-              <Text key={line} style={{ color: palette.colors.textSecondary, marginBottom: 4 }}>
-                • {line}
+              <Text key={line} style={{ color: palette.colors.textSecondary, fontSize: 13, marginBottom: 3 }}>
+                · {line}
               </Text>
             ))}
           </MagicCardRubric>
 
-          <MagicCardRubric>
-            <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 6 }}>
-              Event Progress
-            </Text>
-            {summary.eventStats.length === 0 ? (
-              <Text style={{ color: palette.colors.textSecondary }}>
-                No attempts yet.
+          {summary.eventStats.length > 0 ? (
+            <MagicCardRubric>
+              <Text style={{ color: palette.colors.text, fontWeight: "700", marginBottom: 6, fontSize: 14 }}>
+                Event Progress
               </Text>
-            ) : (
-              summary.eventStats.map((item) => (
-                <View key={item.eventId} style={{ marginBottom: 8 }}>
-                  <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
-                    {item.eventName}
-                  </Text>
-                  <Text style={{ color: palette.colors.textSecondary }}>
-                    Best {item.bestScore}% • Avg {item.averageScore}% • Last {formatRelativeTime(item.lastPracticedAt)}
-                  </Text>
+              {summary.eventStats.map((item) => (
+                <View key={item.eventId} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 }}>
+                  <Text style={{ color: palette.colors.text, fontSize: 13 }}>{item.eventName}</Text>
+                  <Text style={{ color: palette.colors.textMuted, fontSize: 12 }}>Best {item.bestScore}%</Text>
                 </View>
-              ))
-            )}
-          </MagicCardRubric>
+              ))}
+            </MagicCardRubric>
+          ) : null}
         </View>
       ) : null}
 
@@ -584,6 +589,7 @@ export function PracticeScreen() {
           )}
         </View>
       ) : null}
+
     </ScreenShell>
   );
 }

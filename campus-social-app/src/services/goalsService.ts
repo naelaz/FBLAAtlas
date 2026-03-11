@@ -57,11 +57,13 @@ export function subscribeChapterGoals(chapterId: string, onChange: (rows: Chapte
   const q = query(
     collection(db, "chapterGoals"),
     where("chapterId", "==", chapterId),
-    orderBy("createdAt", "desc"),
     limit(30),
   );
   return onSnapshot(q, (snap) => {
-    onChange(snap.docs.map((row) => parseGoal(row.id, row.data() as Record<string, unknown>)));
+    const rows = snap.docs
+      .map((row) => parseGoal(row.id, row.data() as Record<string, unknown>))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    onChange(rows);
   });
 }
 

@@ -122,3 +122,10 @@ export async function dismissNotification(uid: string, notificationId: string): 
   const ref = doc(db, "users", uid, "notifications", notificationId);
   await deleteDoc(ref);
 }
+
+export async function dismissAllNotifications(uid: string): Promise<void> {
+  const snap = await getDocs(collection(db, "users", uid, "notifications"));
+  const batch = writeBatch(db);
+  snap.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+}

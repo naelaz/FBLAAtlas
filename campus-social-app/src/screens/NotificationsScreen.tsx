@@ -50,24 +50,35 @@ function avatarForNotification(item: AppNotification): string {
 export function NotificationsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { palette } = useThemeContext();
-  const { notifications, unreadCount, refreshing, refreshNotifications, markAllRead, markRead, dismiss } =
+  const { notifications, unreadCount, refreshing, refreshNotifications, markAllRead, markRead, dismiss, dismissAll } =
     useNotifications();
 
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <GlassButton
-          variant="pill-sm"
-          label="Mark all as read"
-          fullWidth={false}
-          onPress={() => {
-            hapticTap();
-            void markAllRead();
-          }}
-        />
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <GlassButton
+            variant="pill-sm"
+            label="Mark read"
+            fullWidth={false}
+            onPress={() => {
+              hapticTap();
+              void markAllRead();
+            }}
+          />
+          <GlassButton
+            variant="pill-sm"
+            label="Clear all"
+            fullWidth={false}
+            onPress={() => {
+              hapticTap();
+              void dismissAll();
+            }}
+          />
+        </View>
       ),
     });
-  }, [markAllRead, navigation]);
+  }, [markAllRead, dismissAll, navigation]);
 
   const rows = useMemo<NotificationRow[]>(() => {
     const grouped: Record<SectionTitle, AppNotification[]> = {

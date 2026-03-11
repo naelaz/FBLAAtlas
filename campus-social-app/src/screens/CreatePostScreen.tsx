@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
-import { Camera, Check, ChevronDown, ChevronLeft, X } from "lucide-react-native";
+import { Camera, Check, ChevronDown, ChevronLeft, Shield, X } from "lucide-react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import React, { useMemo, useState } from "react";
@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { Text } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { GlassButton } from "../components/ui/GlassButton";
 import { GlassSurface } from "../components/ui/GlassSurface";
@@ -93,9 +92,31 @@ async function uploadPostImage(
 }
 
 export function CreatePostScreen({ navigation }: Props) {
-  const { profile } = useAuthContext();
+  const { profile, isGuest } = useAuthContext();
   const { handleAwardResult } = useGamification();
   const { palette } = useThemeContext();
+
+  if (isGuest) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
+          <Shield size={48} color={palette.colors.primary} />
+          <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 22, textAlign: "center" }}>
+            Admin Access Required
+          </Text>
+          <Text style={{ color: palette.colors.textSecondary, textAlign: "center", fontSize: 15, lineHeight: 22 }}>
+            Only chapter admins can post to the feed. Contact your chapter administrator for access.
+          </Text>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={{ backgroundColor: palette.colors.primary, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 12, marginTop: 8 }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Go Back</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const [text, setText] = useState("");
   const [inputHeight, setInputHeight] = useState(140);

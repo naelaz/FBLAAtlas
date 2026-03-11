@@ -2,6 +2,7 @@
 
 import { AppNotification } from "../types/social";
 import {
+  dismissAllNotifications,
   dismissNotification,
   fetchNotificationsOnce,
   markNotificationRead,
@@ -18,6 +19,7 @@ type NotificationsContextValue = {
   markAllRead: () => Promise<void>;
   markRead: (notificationId: string) => Promise<void>;
   dismiss: (notificationId: string) => Promise<void>;
+  dismissAll: () => Promise<void>;
 };
 
 const NotificationsContext = createContext<NotificationsContextValue | undefined>(
@@ -93,6 +95,18 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     }
   };
 
+  const dismissAll = async () => {
+    if (!uid) {
+      return;
+    }
+    try {
+      setNotifications([]);
+      await dismissAllNotifications(uid);
+    } catch (error) {
+      console.warn("Dismiss all notifications failed:", error);
+    }
+  };
+
   const unreadCount = notifications.filter((item) => !item.read).length;
 
   const value = useMemo(
@@ -104,8 +118,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       markAllRead,
       markRead,
       dismiss,
+      dismissAll,
     }),
-    [dismiss, markAllRead, markRead, notifications, refreshNotifications, refreshing, unreadCount],
+    [dismiss, dismissAll, markAllRead, markRead, notifications, refreshNotifications, refreshing, unreadCount],
   );
 
   return (

@@ -22,6 +22,8 @@ type ScreenShellProps = {
   breadcrumbItems?: string[];
   showBackButton?: boolean;
   onBackPress?: () => void;
+  /** Renders after the ScrollView, takes remaining flex space. Use for VirtualizedLists to avoid nesting. */
+  fillContent?: ReactNode;
 };
 
 export function ScreenShell({
@@ -34,6 +36,7 @@ export function ScreenShell({
   breadcrumbItems,
   showBackButton,
   onBackPress,
+  fillContent,
 }: ScreenShellProps) {
   const { onScroll, onScrollBeginDrag, scrollEventThrottle } = useNavBarScroll();
   const { palette } = useThemeContext();
@@ -72,6 +75,7 @@ export function ScreenShell({
   };
 
   return (
+    <View style={{ flex: 1, backgroundColor: palette.colors.background }}>
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }}>
       <LinearGradient
         pointerEvents="none"
@@ -85,7 +89,7 @@ export function ScreenShell({
         style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
       />
       <ScrollView
-        className="flex-1"
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }}
         scrollEventThrottle={scrollEventThrottle}
         keyboardShouldPersistTaps="handled"
@@ -231,5 +235,6 @@ export function ScreenShell({
         {children}
       </ScrollView>
     </SafeAreaView>
+    </View>
   );
 }

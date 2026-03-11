@@ -149,9 +149,11 @@ function PostCardInner({
           >
             <AvatarWithStatus
               uri={resolveAvatarUrl(author?.avatarUrl, post.authorId)}
+              seed={post.authorName}
               size={36}
               online
               tier={author?.tier}
+              avatarColor={author?.avatarColor || undefined}
             />
             <View style={{ flex: 1 }}>
               <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{post.authorName}</Text>

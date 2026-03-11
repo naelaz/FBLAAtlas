@@ -8,6 +8,34 @@ import { useSettings } from "../../context/SettingsContext";
 import { useThemeContext } from "../../context/ThemeContext";
 import { TierName } from "../../types/social";
 
+// Vivid palette used for seeded avatar colors
+const AVATAR_COLORS = [
+  "#5B6AF7", // indigo
+  "#A855F7", // purple
+  "#EC4899", // pink
+  "#F43F5E", // rose
+  "#F97316", // orange
+  "#EAB308", // amber
+  "#22C55E", // green
+  "#14B8A6", // teal
+  "#06B6D4", // cyan
+  "#3B82F6", // blue
+  "#8B5CF6", // violet
+  "#10B981", // emerald
+];
+
+/** Returns a deterministic vivid color from a seed string */
+export function getSeededAvatarColor(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+/** All available avatar accent colors (for the picker) */
+export { AVATAR_COLORS };
+
 type AvatarWithStatusProps = {
   uri?: string | null;
   seed?: string;
@@ -15,6 +43,8 @@ type AvatarWithStatusProps = {
   online?: boolean;
   onPress?: () => void;
   tier?: TierName;
+  /** Explicit background color for the initials circle. Overrides seeded color. */
+  avatarColor?: string;
 };
 
 export function AvatarWithStatus({
@@ -23,6 +53,7 @@ export function AvatarWithStatus({
   size = 40,
   online = false,
   onPress,
+  avatarColor,
 }: AvatarWithStatusProps) {
   const { palette } = useThemeContext();
   const { settings } = useSettings();
@@ -33,13 +64,16 @@ export function AvatarWithStatus({
     !uri || uri.trim().length === 0 || /api\.dicebear\.com\/7\.x\/initials/i.test(sourceUri);
   const dotSize = Math.max(12, Math.round(size * 0.205));
   const dotBorder = Math.max(2, Math.min(3, Math.round(size * 0.04)));
-  const initialsSize = size >= 80 ? 32 : size >= 40 ? 18 : 14;
+  const initialsSize = size >= 80 ? 30 : size >= 40 ? 16 : 13;
   const initials = resolvedSeed
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("") || "U";
+
+  // Use explicit color prop, then fall back to seeded color
+  const bgColor = avatarColor || getSeededAvatarColor(resolvedSeed);
 
   const image = (
     <View
@@ -73,18 +107,16 @@ export function AvatarWithStatus({
             borderRadius: size / 2,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: palette.colors.surfaceAlt,
-            borderWidth: 1,
-            borderColor: palette.colors.border,
+            backgroundColor: bgColor,
           }}
         >
           <Text
             style={{
-              color: palette.colors.textMuted,
+              color: "#ffffff",
               fontSize: initialsSize,
               fontFamily: "System",
-              fontWeight: "300",
-              letterSpacing: 0.4,
+              fontWeight: "700",
+              letterSpacing: 0.5,
               textTransform: "uppercase",
             }}
           >

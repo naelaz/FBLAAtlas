@@ -171,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [guestPrefReady]);
 
   useEffect(() => {
-    if (!uid || isGuest) {
+    if (!uid) {
       return;
     }
 
@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     return unsubscribe;
-  }, [uid, isGuest]);
+  }, [uid]);
 
   useEffect(() => {
     if (!profile || isGuest) {

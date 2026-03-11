@@ -2,12 +2,13 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { X } from "lucide-react-native";
-import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Heart, MessageCircle as MessageCircleIcon, Send, X } from "lucide-react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Text } from "react-native-paper";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NotificationBell } from "../components/NotificationBell";
 import { FblaSocialSection } from "../components/social/FblaSocialSection";
@@ -31,12 +32,12 @@ import { respondToChallenge, subscribeIncomingChallenges } from "../services/cha
 import { createChapterGoal, submitGoalContribution, subscribeChapterGoals } from "../services/goalsService";
 import { subscribeOfficerTasks } from "../services/officerTaskService";
 import { subscribeRecognitionPlacements } from "../services/recognitionService";
-import { fetchEventsOnce, fetchPostsOnce } from "../services/socialService";
+import { addCommentToPost, fetchEventsOnce, fetchPostsOnce, subscribePostComments, toggleLikeOnPost } from "../services/socialService";
 import { joinStudySession, subscribeStudySessions } from "../services/studySessionService";
 import { formatRelativeDateTime } from "../services/firestoreUtils";
 import { hapticTap } from "../services/haptics";
 import { sendLocalPush } from "../services/pushService";
-import { EventItem, PostItem } from "../types/social";
+import { CommentItem, EventItem, PostItem } from "../types/social";
 import { ChapterGoal, MeetingActionItem, OfficerTask, PracticeChallenge, RecognitionPlacement, StudySession } from "../types/features";
 
 const QUICK_ACTIONS: Array<{ id: string; label: string; route: keyof RootStackParamList }> = [
@@ -45,6 +46,153 @@ const QUICK_ACTIONS: Array<{ id: string; label: string; route: keyof RootStackPa
   { id: "leaderboard", label: "Leaderboard", route: "Leaderboard" },
   { id: "create_post", label: "New Post", route: "CreatePost" },
 ];
+function buildFallbackPosts(schoolId: string): PostItem[] {
+  const now = Date.now();
+  const hour = 1000 * 60 * 60;
+  return [
+    {
+      id: "fp_1", schoolId,
+      authorId: "demo_morgan_l", authorName: "Morgan L.", authorAvatarColor: "#6C63FF",
+      imageUrl: "https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=1600&auto=format&fit=crop",
+      tags: ["Business Plan", "Competition Prep"],
+      content: "Just submitted my Business Plan project — 18 pages, 3 months of work. Super proud of where it landed. Fingers crossed for SLC! Who else is competing in Business Plan this season?",
+      createdAt: new Date(now - hour * 1).toISOString(),
+      likeCount: 34, commentCount: 8, likedBy: [], reactionCounts: {}, userReactions: {},
+    },
+    {
+      id: "fp_2", schoolId,
+      authorId: "seed_fbla_atlas", authorName: "FBLA Atlas", authorAvatarColor: "#FFD700",
+      imageUrl: "https://images.unsplash.com/photo-1556761175-4b46a572b786?w=1600&auto=format&fit=crop",
+      tags: ["Tips", "NLC"],
+      content: "🏆 NLC 2026 is in Atlanta, GA — June 24–27. Registration opens soon. Start preparing NOW. Top tip: judges remember your first 30 seconds and your closing. Build those first.",
+      createdAt: new Date(now - hour * 3).toISOString(),
+      likeCount: 61, commentCount: 14, likedBy: [], reactionCounts: {}, userReactions: {},
+    },
+    {
+      id: "fp_3", schoolId,
+      authorId: "demo_avery_n", authorName: "Avery N.", authorAvatarColor: "#FF6B6B",
+      imageUrl: "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=1600&auto=format&fit=crop",
+      tags: ["Public Speaking", "SLC"],
+      content: "3rd year qualifying for SLC in Public Speaking. The secret? Record yourself every single practice session. Watching yourself back is brutal but it works. DM me if you want feedback on your speech.",
+      createdAt: new Date(now - hour * 6).toISOString(),
+      likeCount: 47, commentCount: 11, likedBy: [], reactionCounts: {}, userReactions: {},
+    },
+    {
+      id: "fp_4", schoolId,
+      authorId: "demo_reese_o", authorName: "Reese O.", authorAvatarColor: "#4ECDC4",
+      imageUrl: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=1600&auto=format&fit=crop",
+      tags: ["Accounting", "Study Group"],
+      content: "Hosting a study session for Accounting and Advanced Accounting this Thursday at 4pm in the library. Bring your practice tests. We'll do timed rounds and review together. All skill levels welcome.",
+      createdAt: new Date(now - hour * 12).toISOString(),
+      likeCount: 28, commentCount: 6, likedBy: [], reactionCounts: {}, userReactions: {},
+    },
+    {
+      id: "fp_5", schoolId,
+      authorId: "demo_piper_m", authorName: "Piper M.", authorAvatarColor: "#A8E6CF",
+      imageUrl: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=1600&auto=format&fit=crop",
+      tags: ["Entrepreneurship", "Chapter News"],
+      content: "Our chapter's entrepreneurship team just finished our first full pitch rehearsal! We've got the product, the market research, and the financials locked. Judges, we're coming for you. 💪",
+      createdAt: new Date(now - hour * 20).toISOString(),
+      likeCount: 52, commentCount: 9, likedBy: [], reactionCounts: {}, userReactions: {},
+    },
+    {
+      id: "fp_6", schoolId,
+      authorId: "demo_alex", authorName: "Alex M.", authorAvatarColor: "#FF8B94",
+      imageUrl: "https://images.unsplash.com/photo-1507537297725-24a1c029d3ca?w=1600&auto=format&fit=crop",
+      tags: ["Business Law", "Officer Update"],
+      content: "Chapter update: our DLC registration deadline is coming up. Make sure you've confirmed your events with the advisor. Business Law, Public Speaking, and Entrepreneurship are almost at capacity for our chapter slots.",
+      createdAt: new Date(now - hour * 28).toISOString(),
+      likeCount: 39, commentCount: 7, likedBy: [], reactionCounts: {}, userReactions: {},
+    },
+  ];
+}
+
+function buildHomeFallbackEvents(schoolId: string): EventItem[] {
+  const now = Date.now();
+  const day = 1000 * 60 * 60 * 24;
+  const hour = 1000 * 60 * 60;
+  return [
+    { id: "hf_1", schoolId, title: "Chapter Meeting", description: "Weekly chapter meeting.", location: "Room 112", category: "FBLA", startAt: new Date(now + hour * 3).toISOString(), attendeeIds: [], attendeeCount: 18, capacity: 60 },
+    { id: "hf_2", schoolId, title: "Public Speaking Practice", description: "Open mic session for speech practice.", location: "Auditorium", category: "Academic", startAt: new Date(now + day + hour * 4).toISOString(), attendeeIds: [], attendeeCount: 9, capacity: 25 },
+    { id: "hf_3", schoolId, title: "Business Plan Review", description: "Peer review of draft business plans.", location: "Library Conference Room", category: "FBLA", startAt: new Date(now + day * 2 + hour * 5).toISOString(), attendeeIds: [], attendeeCount: 7, capacity: 20 },
+    { id: "hf_4", schoolId, title: "Study Session: Objective Tests", description: "Group study for Business Law, Economics, Accounting.", location: "Room 204", category: "Academic", startAt: new Date(now + day * 3 + hour * 4).toISOString(), attendeeIds: [], attendeeCount: 12, capacity: 20 },
+    { id: "hf_5", schoolId, title: "Mock Interview Workshop", description: "Practice interviews with business volunteers.", location: "Career Center", category: "Academic", startAt: new Date(now + day * 4 + hour * 3).toISOString(), attendeeIds: [], attendeeCount: 14, capacity: 30 },
+    { id: "hf_6", schoolId, title: "FBLA Spirit Week Kickoff", description: "Daily challenges and extra XP all week.", location: "Main Hallway", category: "Social", startAt: new Date(now + day * 5).toISOString(), attendeeIds: [], attendeeCount: 35, capacity: 100 },
+    { id: "hf_7", schoolId, title: "District Leadership Conference", description: "District-level competition. Top placers advance to SLC.", location: "Convention Center", category: "FBLA", startAt: new Date(now + day * 35 + hour * 8).toISOString(), attendeeIds: [], attendeeCount: 45, capacity: 120 },
+    { id: "hf_8", schoolId, title: "Networking Mixer", description: "Meet local business professionals and FBLA alumni.", location: "School Commons", category: "Social", startAt: new Date(now + day * 25 + hour * 5).toISOString(), attendeeIds: [], attendeeCount: 19, capacity: 50 },
+  ];
+}
+
+const DEMO_COMMENTS: Record<string, CommentItem[]> = {
+  fp_1: [
+    { id: "dc_fp1_1", postId: "fp_1", authorId: "demo_jordan_k", authorName: "Jordan K.", authorAvatarColor: "#6C63FF", content: "That's huge! 18 pages is no joke. What section gave you the most trouble?", createdAt: new Date(Date.now() - 1000 * 60 * 42).toISOString() },
+    { id: "dc_fp1_2", postId: "fp_1", authorId: "demo_taylor_b", authorName: "Taylor B.", authorAvatarColor: "#FFD93D", content: "Business Plan is my event too! Good luck at SLC, would love to compare strategies sometime.", createdAt: new Date(Date.now() - 1000 * 60 * 38).toISOString() },
+    { id: "dc_fp1_3", postId: "fp_1", authorId: "demo_sam_r", authorName: "Sam R.", authorAvatarColor: "#4ECDC4", content: "18 pages and 3 months — that kind of commitment shows. Judges will notice.", createdAt: new Date(Date.now() - 1000 * 60 * 31).toISOString() },
+    { id: "dc_fp1_4", postId: "fp_1", authorId: "demo_riley_c", authorName: "Riley C.", authorAvatarColor: "#A8E6CF", content: "I'm also in Business Plan! Let's do a peer review session this week?", createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString() },
+    { id: "dc_fp1_5", postId: "fp_1", authorId: "demo_avery_n", authorName: "Avery N.", authorAvatarColor: "#45B7D1", content: "The executive summary is always the hardest part. Did you nail yours?", createdAt: new Date(Date.now() - 1000 * 60 * 18).toISOString() },
+    { id: "dc_fp1_6", postId: "fp_1", authorId: "demo_morgan_l", authorName: "Morgan L.", authorAvatarColor: "#6C63FF", content: "Fingers crossed for you! Post an update when results come out!", createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString() },
+    { id: "dc_fp1_7", postId: "fp_1", authorId: "demo_piper_m", authorName: "Piper M.", authorAvatarColor: "#96CEB4", content: "What industry did you choose? Ours was sustainable fashion.", createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString() },
+    { id: "dc_fp1_8", postId: "fp_1", authorId: "demo_reese_o", authorName: "Reese O.", authorAvatarColor: "#DDA0DD", content: "This is so inspiring. Motivating me to finish my own draft tonight.", createdAt: new Date(Date.now() - 1000 * 60 * 2).toISOString() },
+  ],
+  fp_2: [
+    { id: "dc_fp2_1", postId: "fp_2", authorId: "demo_alex", authorName: "Alex M.", authorAvatarColor: "#FF8B94", content: "Already have my hotel booked for Atlanta! Can't wait.", createdAt: new Date(Date.now() - 1000 * 60 * 140).toISOString() },
+    { id: "dc_fp2_2", postId: "fp_2", authorId: "demo_sam_r", authorName: "Sam R.", authorAvatarColor: "#4ECDC4", content: "That 30-second tip is gold. First impressions with judges are everything.", createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString() },
+    { id: "dc_fp2_3", postId: "fp_2", authorId: "demo_riley_c", authorName: "Riley C.", authorAvatarColor: "#A8E6CF", content: "NLC is literally my dream. Two more qualifications to go!", createdAt: new Date(Date.now() - 1000 * 60 * 100).toISOString() },
+    { id: "dc_fp2_4", postId: "fp_2", authorId: "demo_jordan_k", authorName: "Jordan K.", authorAvatarColor: "#6C63FF", content: "Does anyone know if Atlanta has good FBLA-friendly hotels near the convention center?", createdAt: new Date(Date.now() - 1000 * 60 * 85).toISOString() },
+    { id: "dc_fp2_5", postId: "fp_2", authorId: "demo_taylor_b", authorName: "Taylor B.", authorAvatarColor: "#FFD93D", content: "The closing tip is so true. End strong, leave something memorable.", createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString() },
+    { id: "dc_fp2_6", postId: "fp_2", authorId: "demo_piper_m", authorName: "Piper M.", authorAvatarColor: "#96CEB4", content: "Started prepping for NLC last month. Stress levels: maximum.", createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString() },
+    { id: "dc_fp2_7", postId: "fp_2", authorId: "demo_morgan_l", authorName: "Morgan L.", authorAvatarColor: "#FF6B6B", content: "Register NOW — spots fill up. Don't wait.", createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString() },
+    { id: "dc_fp2_8", postId: "fp_2", authorId: "demo_avery_n", authorName: "Avery N.", authorAvatarColor: "#45B7D1", content: "Atlanta 2026 let's go! Who else is competing in Digital Video Production?", createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString() },
+    { id: "dc_fp2_9", postId: "fp_2", authorId: "demo_reese_o", authorName: "Reese O.", authorAvatarColor: "#DDA0DD", content: "The whole chapter is rallying. We're sending 12 members this year.", createdAt: new Date(Date.now() - 1000 * 60 * 8).toISOString() },
+    { id: "dc_fp2_10", postId: "fp_2", authorId: "demo_sam_r", authorName: "Sam R.", authorAvatarColor: "#4ECDC4", content: "Bookmark this post. Best NLC advice I've seen all season.", createdAt: new Date(Date.now() - 1000 * 60 * 3).toISOString() },
+    { id: "dc_fp2_11", postId: "fp_2", authorId: "demo_riley_c", authorName: "Riley C.", authorAvatarColor: "#A8E6CF", content: "I hope the networking events are bigger this year. Met my best FBLA friends at NLC.", createdAt: new Date(Date.now() - 1000 * 60 * 1).toISOString() },
+    { id: "dc_fp2_12", postId: "fp_2", authorId: "demo_jordan_k", authorName: "Jordan K.", authorAvatarColor: "#6C63FF", content: "Countdown: 106 days. Prep starts now.", createdAt: new Date(Date.now() - 1000 * 30).toISOString() },
+    { id: "dc_fp2_13", postId: "fp_2", authorId: "demo_taylor_b", authorName: "Taylor B.", authorAvatarColor: "#FFD93D", content: "The FBLA Atlas practice tests are actually helping me prep for NLC.", createdAt: new Date(Date.now() - 1000 * 10).toISOString() },
+    { id: "dc_fp2_14", postId: "fp_2", authorId: "demo_piper_m", authorName: "Piper M.", authorAvatarColor: "#96CEB4", content: "See everyone in Atlanta! 🏆", createdAt: new Date(Date.now() - 1000 * 5).toISOString() },
+  ],
+  fp_3: [
+    { id: "dc_fp3_1", postId: "fp_3", authorId: "demo_morgan_l", authorName: "Morgan L.", authorAvatarColor: "#FF6B6B", content: "Recording yourself is brutal but literally the only way to catch filler words.", createdAt: new Date(Date.now() - 1000 * 60 * 280).toISOString() },
+    { id: "dc_fp3_2", postId: "fp_3", authorId: "demo_alex", authorName: "Alex M.", authorAvatarColor: "#FF8B94", content: "3rd year qualifying — you're a legend. Any tips for first-timers?", createdAt: new Date(Date.now() - 1000 * 60 * 250).toISOString() },
+    { id: "dc_fp3_3", postId: "fp_3", authorId: "demo_taylor_b", authorName: "Taylor B.", authorAvatarColor: "#FFD93D", content: "I used to hate watching myself back. Now it's the most useful thing I do.", createdAt: new Date(Date.now() - 1000 * 60 * 220).toISOString() },
+    { id: "dc_fp3_4", postId: "fp_3", authorId: "demo_sam_r", authorName: "Sam R.", authorAvatarColor: "#4ECDC4", content: "I'd love feedback on my persuasive speech if the offer still stands!", createdAt: new Date(Date.now() - 1000 * 60 * 190).toISOString() },
+    { id: "dc_fp3_5", postId: "fp_3", authorId: "demo_riley_c", authorName: "Riley C.", authorAvatarColor: "#A8E6CF", content: "The eye contact thing is so underrated. Judges want you to connect.", createdAt: new Date(Date.now() - 1000 * 60 * 160).toISOString() },
+    { id: "dc_fp3_6", postId: "fp_3", authorId: "demo_jordan_k", authorName: "Jordan K.", authorAvatarColor: "#6C63FF", content: "DM'd you! Would love your feedback before regionals.", createdAt: new Date(Date.now() - 1000 * 60 * 130).toISOString() },
+    { id: "dc_fp3_7", postId: "fp_3", authorId: "demo_avery_n", authorName: "Avery N.", authorAvatarColor: "#45B7D1", content: "Three years is serious dedication. Keep inspiring us!", createdAt: new Date(Date.now() - 1000 * 60 * 100).toISOString() },
+    { id: "dc_fp3_8", postId: "fp_3", authorId: "demo_reese_o", authorName: "Reese O.", authorAvatarColor: "#DDA0DD", content: "Starting my recording sessions tonight because of this post.", createdAt: new Date(Date.now() - 1000 * 60 * 70).toISOString() },
+    { id: "dc_fp3_9", postId: "fp_3", authorId: "demo_piper_m", authorName: "Piper M.", authorAvatarColor: "#96CEB4", content: "When can we schedule that feedback session? Let's set it up.", createdAt: new Date(Date.now() - 1000 * 60 * 40).toISOString() },
+    { id: "dc_fp3_10", postId: "fp_3", authorId: "demo_morgan_l", authorName: "Morgan L.", authorAvatarColor: "#FF6B6B", content: "Congrats on 3 years! You're going to crush it again.", createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString() },
+    { id: "dc_fp3_11", postId: "fp_3", authorId: "demo_alex", authorName: "Alex M.", authorAvatarColor: "#FF8B94", content: "Record + review = the fastest way to level up. Confirmed.", createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString() },
+  ],
+  fp_4: [
+    { id: "dc_fp4_1", postId: "fp_4", authorId: "demo_avery_n", authorName: "Avery N.", authorAvatarColor: "#45B7D1", content: "I'll be there! Advanced Accounting is kicking my butt this season.", createdAt: new Date(Date.now() - 1000 * 60 * 660).toISOString() },
+    { id: "dc_fp4_2", postId: "fp_4", authorId: "demo_piper_m", authorName: "Piper M.", authorAvatarColor: "#96CEB4", content: "Yes! Finally someone organizing a group session. Accounting notes incoming.", createdAt: new Date(Date.now() - 1000 * 60 * 600).toISOString() },
+    { id: "dc_fp4_3", postId: "fp_4", authorId: "demo_morgan_l", authorName: "Morgan L.", authorAvatarColor: "#FF6B6B", content: "What study materials are you using? Beechy and Conrod or something else?", createdAt: new Date(Date.now() - 1000 * 60 * 540).toISOString() },
+    { id: "dc_fp4_4", postId: "fp_4", authorId: "demo_jordan_k", authorName: "Jordan K.", authorAvatarColor: "#6C63FF", content: "Timed rounds are the move. Simulates real test pressure perfectly.", createdAt: new Date(Date.now() - 1000 * 60 * 480).toISOString() },
+    { id: "dc_fp4_5", postId: "fp_4", authorId: "demo_riley_c", authorName: "Riley C.", authorAvatarColor: "#A8E6CF", content: "Is this for Business Law too? I signed up for that one.", createdAt: new Date(Date.now() - 1000 * 60 * 420).toISOString() },
+    { id: "dc_fp4_6", postId: "fp_4", authorId: "demo_sam_r", authorName: "Sam R.", authorAvatarColor: "#4ECDC4", content: "Count me in for Economics. See you Thursday!", createdAt: new Date(Date.now() - 1000 * 60 * 360).toISOString() },
+  ],
+  fp_5: [
+    { id: "dc_fp5_1", postId: "fp_5", authorId: "demo_sam_r", authorName: "Sam R.", authorAvatarColor: "#4ECDC4", content: "Entrepreneurship teams are always the most creative. Can't wait to see your pitch!", createdAt: new Date(Date.now() - 1000 * 60 * 1100).toISOString() },
+    { id: "dc_fp5_2", postId: "fp_5", authorId: "demo_taylor_b", authorName: "Taylor B.", authorAvatarColor: "#FFD93D", content: "The financials are always the hardest part. Nice work locking those in!", createdAt: new Date(Date.now() - 1000 * 60 * 1000).toISOString() },
+    { id: "dc_fp5_3", postId: "fp_5", authorId: "demo_riley_c", authorName: "Riley C.", authorAvatarColor: "#A8E6CF", content: "What's the product? I'm dying to know!", createdAt: new Date(Date.now() - 1000 * 60 * 900).toISOString() },
+    { id: "dc_fp5_4", postId: "fp_5", authorId: "demo_jordan_k", authorName: "Jordan K.", authorAvatarColor: "#6C63FF", content: "Love the energy! Market research done right is what separates good from great.", createdAt: new Date(Date.now() - 1000 * 60 * 800).toISOString() },
+    { id: "dc_fp5_5", postId: "fp_5", authorId: "demo_avery_n", authorName: "Avery N.", authorAvatarColor: "#45B7D1", content: "\"Judges, we're coming for you\" 😂 This is the energy we all need!", createdAt: new Date(Date.now() - 1000 * 60 * 700).toISOString() },
+    { id: "dc_fp5_6", postId: "fp_5", authorId: "demo_morgan_l", authorName: "Morgan L.", authorAvatarColor: "#FF6B6B", content: "Good luck! Your confidence alone is a competitive advantage.", createdAt: new Date(Date.now() - 1000 * 60 * 600).toISOString() },
+    { id: "dc_fp5_7", postId: "fp_5", authorId: "demo_reese_o", authorName: "Reese O.", authorAvatarColor: "#DDA0DD", content: "The whole chapter is rooting for your team!", createdAt: new Date(Date.now() - 1000 * 60 * 500).toISOString() },
+    { id: "dc_fp5_8", postId: "fp_5", authorId: "demo_piper_m", authorName: "Piper M.", authorAvatarColor: "#96CEB4", content: "Tag us when you find out results! We want to celebrate.", createdAt: new Date(Date.now() - 1000 * 60 * 400).toISOString() },
+    { id: "dc_fp5_9", postId: "fp_5", authorId: "demo_alex", authorName: "Alex M.", authorAvatarColor: "#FF8B94", content: "Did you use any specific frameworks for the business model?", createdAt: new Date(Date.now() - 1000 * 60 * 300).toISOString() },
+  ],
+  fp_6: [
+    { id: "dc_fp6_1", postId: "fp_6", authorId: "demo_piper_m", authorName: "Piper M.", authorAvatarColor: "#96CEB4", content: "Thanks for the heads up! Just confirmed my events with Mrs. Rodriguez.", createdAt: new Date(Date.now() - 1000 * 60 * 1600).toISOString() },
+    { id: "dc_fp6_2", postId: "fp_6", authorId: "demo_morgan_l", authorName: "Morgan L.", authorAvatarColor: "#FF6B6B", content: "I almost missed the deadline last year. Always pinning these reminders!", createdAt: new Date(Date.now() - 1000 * 60 * 1400).toISOString() },
+    { id: "dc_fp6_3", postId: "fp_6", authorId: "demo_reese_o", authorName: "Reese O.", authorAvatarColor: "#DDA0DD", content: "How do I know if my event slot is confirmed? Is there a list?", createdAt: new Date(Date.now() - 1000 * 60 * 1200).toISOString() },
+    { id: "dc_fp6_4", postId: "fp_6", authorId: "demo_avery_n", authorName: "Avery N.", authorAvatarColor: "#45B7D1", content: "Public Speaking is almost at capacity? I need to move fast.", createdAt: new Date(Date.now() - 1000 * 60 * 1000).toISOString() },
+    { id: "dc_fp6_5", postId: "fp_6", authorId: "demo_taylor_b", authorName: "Taylor B.", authorAvatarColor: "#FFD93D", content: "Appreciate these updates! Chapter communication is so much better this year.", createdAt: new Date(Date.now() - 1000 * 60 * 800).toISOString() },
+    { id: "dc_fp6_6", postId: "fp_6", authorId: "demo_sam_r", authorName: "Sam R.", authorAvatarColor: "#4ECDC4", content: "Who's in Business Law? Let's form a study group before DLC.", createdAt: new Date(Date.now() - 1000 * 60 * 600).toISOString() },
+    { id: "dc_fp6_7", postId: "fp_6", authorId: "demo_jordan_k", authorName: "Jordan K.", authorAvatarColor: "#6C63FF", content: "Got it. Confirming with the advisor today. Thanks for the reminder!", createdAt: new Date(Date.now() - 1000 * 60 * 400).toISOString() },
+  ],
+};
+
 const DISMISSED_ANNOUNCEMENT_KEY = "fbla_atlas_dismissed_announcement_v1";
 const LAST_PUSHED_ANNOUNCEMENT_KEY = "fbla_atlas_last_pushed_announcement_v1";
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -102,9 +250,16 @@ export function HomeScreen() {
   const { onScroll, onScrollBeginDrag, scrollEventThrottle } = useNavBarScroll();
   const permissions = usePermissions();
   const canManageTasks = permissions.canManageTasks();
+  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<PostItem[]>([]);
+  const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set());
+  const [commentModalPost, setCommentModalPost] = useState<PostItem | null>(null);
+  const [expandedComments, setExpandedComments] = useState<CommentItem[]>([]);
+  const [commentInput, setCommentInput] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const commentSubRef = useRef<(() => void) | null>(null);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [announcement, setAnnouncement] = useState<AnnouncementItem | null>(null);
   const [dismissedAnnouncementId, setDismissedAnnouncementId] = useState("");
@@ -152,9 +307,12 @@ export function HomeScreen() {
         if (cancelled) {
           return;
         }
-        setPosts(schoolPosts.slice(0, 6));
+        const resolvedPosts = schoolPosts.length > 0 ? schoolPosts.slice(0, 6) : buildFallbackPosts(profile.schoolId);
+        setPosts(resolvedPosts);
+        setLikedPostIds(new Set(resolvedPosts.filter((p) => p.likedBy.includes(profile.uid)).map((p) => p.id)));
+        const resolvedEvents = schoolEvents.length > 0 ? schoolEvents : buildHomeFallbackEvents(profile.schoolId);
         setEvents(
-          [...schoolEvents].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()),
+          [...resolvedEvents].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()),
         );
 
         const latestAnnouncement = await fetchLatestAnnouncement();
@@ -275,6 +433,62 @@ export function HomeScreen() {
     settings.notifications.chapterUpdates,
     settings.notifications.globalPush,
   ]);
+
+  // Cleanup comment subscription on unmount
+  useEffect(() => () => { commentSubRef.current?.(); }, []);
+
+  const openCommentModal = (post: PostItem) => {
+    commentSubRef.current?.();
+    setCommentModalPost(post);
+    setCommentInput("");
+    const isDemo = post.authorId.startsWith("demo_") || post.authorId === "seed_fbla_atlas";
+    if (isDemo && DEMO_COMMENTS[post.id]) {
+      setExpandedComments(DEMO_COMMENTS[post.id]);
+      commentSubRef.current = null;
+    } else {
+      setExpandedComments([]);
+      commentSubRef.current = subscribePostComments(post.id, (items) => setExpandedComments(items));
+    }
+  };
+
+  const closeCommentModal = () => {
+    commentSubRef.current?.();
+    commentSubRef.current = null;
+    setCommentModalPost(null);
+    setExpandedComments([]);
+    setCommentInput("");
+  };
+
+  const handleLikePost = async (post: PostItem) => {
+    if (!profile) return;
+    hapticTap();
+    const wasLiked = likedPostIds.has(post.id);
+    setLikedPostIds((prev) => { const n = new Set(prev); wasLiked ? n.delete(post.id) : n.add(post.id); return n; });
+    setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, likeCount: wasLiked ? p.likeCount - 1 : p.likeCount + 1 } : p));
+    try {
+      await toggleLikeOnPost(post, profile);
+    } catch {
+      setLikedPostIds((prev) => { const n = new Set(prev); wasLiked ? n.add(post.id) : n.delete(post.id); return n; });
+      setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, likeCount: wasLiked ? p.likeCount + 1 : p.likeCount - 1 } : p));
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!profile || !commentInput.trim() || submittingComment || !commentModalPost) return;
+    const post = commentModalPost;
+    const text = commentInput.trim();
+    setCommentInput("");
+    setSubmittingComment(true);
+    try {
+      await addCommentToPost(post, profile, text);
+      setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, commentCount: p.commentCount + 1 } : p));
+      setCommentModalPost((prev) => prev ? { ...prev, commentCount: prev.commentCount + 1 } : prev);
+    } catch {
+      setCommentInput(text);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
 
   const visibleQuickActions = useMemo(
     () =>
@@ -427,8 +641,8 @@ export function HomeScreen() {
             marginBottom: 12,
             borderRadius: 16,
             overflow: "hidden",
-            paddingHorizontal: 10,
-            paddingVertical: 8,
+            paddingHorizontal: 14,
+            paddingVertical: 14,
           }}
         >
           <LinearGradient
@@ -460,30 +674,18 @@ export function HomeScreen() {
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <NotificationBell />
-            {profile.avatarUrl ? (
-              <AvatarWithStatus
-                uri={profile.avatarUrl}
-                seed={profile.displayName}
-                size={32}
-                online={false}
-                tier={profile.tier}
-                onPress={() => {
-                  hapticTap();
-                  navigation.navigate("Profile", { openEdit: true });
-                }}
-              />
-            ) : (
-              <GlassIconButton
-                accessibilityLabel="Open Edit Profile"
-                size={38}
-                onPress={() => {
-                  hapticTap();
-                  navigation.navigate("Profile", { openEdit: true });
-                }}
-              >
-                <Feather name="user" size={24} color={palette.colors.text} />
-              </GlassIconButton>
-            )}
+            <AvatarWithStatus
+              uri={profile.avatarUrl}
+              seed={profile.displayName}
+              size={34}
+              online={false}
+              tier={profile.tier}
+              avatarColor={profile.avatarColor || undefined}
+              onPress={() => {
+                hapticTap();
+                navigation.navigate("Profile");
+              }}
+            />
           </View>
         </View>
 
@@ -494,14 +696,14 @@ export function HomeScreen() {
               onPress={() => {
                 navigation.navigate(action.route as never);
               }}
-              style={{ width: "48%", minHeight: 40 }}
+              style={{ width: "48%", minHeight: 50 }}
             >
               {({ pressed }) => (
                 <GlassSurface
                   pressed={pressed}
                   style={{
                     flex: 1,
-                    minHeight: 40,
+                    minHeight: 50,
                     alignItems: "center",
                     justifyContent: "center",
                     backgroundColor: palette.colors.surface,
@@ -535,9 +737,18 @@ export function HomeScreen() {
               }}
             >
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 15 }}>
-                  Events
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 15 }}>
+                    Events
+                  </Text>
+                  {events.length > 0 ? (
+                    <View style={{ backgroundColor: palette.colors.primary, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                      <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
+                        +{events.length}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
                 <Text style={{ color: palette.colors.primary, fontWeight: "700", fontSize: 12 }}>
                   See All →
                 </Text>
@@ -630,11 +841,11 @@ export function HomeScreen() {
           <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
             <Text
               style={{
-                color: palette.colors.textMuted,
-                fontWeight: "600",
+                color: palette.colors.text,
+                fontWeight: "800",
                 marginBottom: 8,
                 letterSpacing: 0.8,
-                fontSize: 13,
+                fontSize: 15,
                 textTransform: "uppercase",
               }}
             >
@@ -682,11 +893,11 @@ export function HomeScreen() {
           <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
             <Text
               style={{
-                color: palette.colors.textMuted,
-                fontWeight: "600",
+                color: palette.colors.text,
+                fontWeight: "800",
                 marginBottom: 8,
                 letterSpacing: 0.8,
-                fontSize: 13,
+                fontSize: 15,
                 textTransform: "uppercase",
               }}
             >
@@ -709,11 +920,11 @@ export function HomeScreen() {
           <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
             <Text
               style={{
-                color: palette.colors.textMuted,
-                fontWeight: "600",
+                color: palette.colors.text,
+                fontWeight: "800",
                 marginBottom: 8,
                 letterSpacing: 0.8,
-                fontSize: 13,
+                fontSize: 15,
                 textTransform: "uppercase",
               }}
             >
@@ -753,6 +964,7 @@ export function HomeScreen() {
                       });
                       setNewGoalTitle("");
                       setNewGoalTarget("10");
+                      Keyboard.dismiss();
                     } catch (error) {
                       console.warn("Create goal failed:", error);
                     }
@@ -797,11 +1009,11 @@ export function HomeScreen() {
           <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
             <Text
               style={{
-                color: palette.colors.textMuted,
-                fontWeight: "600",
+                color: palette.colors.text,
+                fontWeight: "800",
                 marginBottom: 8,
                 letterSpacing: 0.8,
-                fontSize: 13,
+                fontSize: 15,
                 textTransform: "uppercase",
               }}
             >
@@ -838,11 +1050,11 @@ export function HomeScreen() {
           <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
             <Text
               style={{
-                color: palette.colors.textMuted,
-                fontWeight: "600",
+                color: palette.colors.text,
+                fontWeight: "800",
                 marginBottom: 8,
                 letterSpacing: 0.8,
-                fontSize: 13,
+                fontSize: 15,
                 textTransform: "uppercase",
               }}
             >
@@ -859,11 +1071,11 @@ export function HomeScreen() {
           <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
             <Text
               style={{
-                color: palette.colors.textMuted,
-                fontWeight: "600",
+                color: palette.colors.text,
+                fontWeight: "800",
                 marginBottom: 8,
                 letterSpacing: 0.8,
-                fontSize: 13,
+                fontSize: 15,
                 textTransform: "uppercase",
               }}
             >
@@ -911,28 +1123,221 @@ export function HomeScreen() {
             ) : posts.length === 0 ? (
               <EmptyState title="No Posts Yet" message="Your chapter feed is empty right now." />
             ) : (
-              posts.map((post, index) => (
+              posts.map((post, index) => {
+                const isLiked = likedPostIds.has(post.id);
+                return (
                 <View
                   key={post.id}
                   style={{
-                    paddingVertical: 10,
+                    paddingTop: index === 0 ? 0 : 12,
+                    marginTop: index === 0 ? 0 : 12,
                     borderTopWidth: index === 0 ? 0 : 1,
                     borderTopColor: palette.colors.divider,
                   }}
                 >
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <Text style={{ color: palette.colors.text, fontWeight: "600", fontSize: 14 }}>{post.authorName}</Text>
-                    <Text style={{ color: palette.colors.textMuted, fontSize: 12 }}>
-                      {formatRelativeDateTime(post.createdAt)}
-                    </Text>
+                  {/* Header row */}
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <Pressable
+                      style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}
+                      onPress={() => {
+                        if (!post.authorId.startsWith("demo_") && post.authorId !== "seed_fbla_atlas") {
+                          navigation.navigate("StudentProfile", { userId: post.authorId });
+                        }
+                      }}
+                    >
+                      <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: post.authorAvatarColor, alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>
+                          {post.authorName.charAt(0)}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 13 }}>{post.authorName}</Text>
+                        <Text style={{ color: palette.colors.textMuted, fontSize: 11 }}>
+                          {formatRelativeDateTime(post.createdAt)}
+                        </Text>
+                      </View>
+                    </Pressable>
+                    {post.tags && post.tags.length > 0 ? (
+                      <View style={{ backgroundColor: palette.colors.primarySoft, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                        <Text style={{ color: palette.colors.primary, fontSize: 11, fontWeight: "600" }}>{post.tags[0]}</Text>
+                      </View>
+                    ) : null}
                   </View>
-                  <Text style={{ color: palette.colors.text, fontSize: 14 }}>{post.content}</Text>
+
+                  {/* Post image */}
+                  {post.imageUrl ? (
+                    <Image
+                      source={{ uri: post.imageUrl }}
+                      style={{ width: "100%", height: 180, borderRadius: 12, marginBottom: 8 }}
+                      contentFit="cover"
+                      transition={300}
+                    />
+                  ) : null}
+
+                  {/* Content */}
+                  <Text style={{ color: palette.colors.text, fontSize: 14, lineHeight: 20 }}>{post.content}</Text>
+
+                  {/* Like / comment action row */}
+                  <View style={{ flexDirection: "row", gap: 16, marginTop: 10, alignItems: "center" }}>
+                    <Pressable
+                      onPress={() => void handleLikePost(post)}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
+                    >
+                      <Heart
+                        size={17}
+                        color={isLiked ? "#ef4444" : palette.colors.textMuted}
+                        fill={isLiked ? "#ef4444" : "transparent"}
+                      />
+                      <Text style={{ color: isLiked ? "#ef4444" : palette.colors.textMuted, fontSize: 13, fontWeight: "600" }}>
+                        {post.likeCount}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => openCommentModal(post)}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
+                    >
+                      <MessageCircleIcon size={17} color={palette.colors.textMuted} />
+                      <Text style={{ color: palette.colors.textMuted, fontSize: 13, fontWeight: "600" }}>
+                        {post.commentCount}
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
-              ))
+              );
+              })
             )}
           </GlassSurface>
         ) : null}
       </ScrollView>
+
+      {/* Comments Modal */}
+      <Modal
+        visible={commentModalPost !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closeCommentModal}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }} edges={["bottom"]}>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          >
+            {/* Drag handle indicator */}
+            <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 4 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: palette.colors.border }} />
+            </View>
+
+            {/* Header */}
+            <View style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: palette.colors.border,
+              backgroundColor: palette.colors.surface,
+            }}>
+              <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 17 }}>Comments</Text>
+              <Pressable onPress={closeCommentModal} style={{ padding: 6 }}>
+                <X size={22} color={palette.colors.text} />
+              </Pressable>
+            </View>
+
+            {/* Post preview */}
+            {commentModalPost ? (
+              <View style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: palette.colors.border }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Pressable
+                    onPress={() => {
+                      if (!commentModalPost.authorId.startsWith("demo_") && commentModalPost.authorId !== "seed_fbla_atlas") {
+                        closeCommentModal();
+                        navigation.navigate("StudentProfile", { userId: commentModalPost.authorId });
+                      }
+                    }}
+                  >
+                    <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: commentModalPost.authorAvatarColor, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ color: "#fff", fontWeight: "800", fontSize: 12 }}>{commentModalPost.authorName.charAt(0)}</Text>
+                    </View>
+                  </Pressable>
+                  <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 13 }}>{commentModalPost.authorName}</Text>
+                </View>
+                <Text style={{ color: palette.colors.textSecondary, fontSize: 13, marginTop: 6, lineHeight: 18 }} numberOfLines={2}>{commentModalPost.content}</Text>
+              </View>
+            ) : null}
+
+            {/* Comments list */}
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 20 }}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
+              {expandedComments.length === 0 ? (
+                <Text style={{ color: palette.colors.textMuted, textAlign: "center", marginTop: 40, fontSize: 14 }}>
+                  No comments yet. Be the first!
+                </Text>
+              ) : (
+                expandedComments.map((comment) => (
+                  <View key={comment.id} style={{ marginBottom: 16, flexDirection: "row", gap: 10 }}>
+                    <Pressable onPress={() => {
+                      if (!comment.authorId.startsWith("demo_") && comment.authorId !== "seed_fbla_atlas") {
+                        closeCommentModal();
+                        navigation.navigate("StudentProfile", { userId: comment.authorId });
+                      }
+                    }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: comment.authorAvatarColor, alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>{comment.authorName.charAt(0)}</Text>
+                      </View>
+                    </Pressable>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                        <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 13 }}>{comment.authorName}</Text>
+                        <Text style={{ color: palette.colors.textMuted, fontSize: 11 }}>{formatRelativeDateTime(comment.createdAt)}</Text>
+                      </View>
+                      <Text style={{ color: palette.colors.textSecondary, fontSize: 14, lineHeight: 20 }}>{comment.content}</Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            {/* Comment input — sits above keyboard */}
+            <View style={{
+              flexDirection: "row",
+              gap: 10,
+              alignItems: "center",
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              paddingBottom: Math.max(10, insets.bottom > 0 ? 4 : 10),
+              borderTopWidth: 1,
+              borderTopColor: palette.colors.border,
+              backgroundColor: palette.colors.surface,
+            }}>
+              <GlassInput
+                value={commentInput}
+                onChangeText={setCommentInput}
+                placeholder="Add a comment..."
+                containerStyle={{ flex: 1 }}
+              />
+              <Pressable
+                onPress={() => void handleAddComment()}
+                disabled={submittingComment || !commentInput.trim()}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 999,
+                  backgroundColor: commentInput.trim() ? palette.colors.primary : palette.colors.inputSurface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Send size={18} color={commentInput.trim() ? "#fff" : palette.colors.textMuted} />
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }

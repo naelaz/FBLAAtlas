@@ -1,5 +1,5 @@
 ﻿import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated, {
   Easing,
   cancelAnimation,
@@ -8,6 +8,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAccessibility } from "../context/AccessibilityContext";
@@ -50,6 +51,7 @@ const GamificationContext = createContext<GamificationContextValue | undefined>(
 const TOAST_COOLDOWN_MS = 3000;
 const meaningfulXpActions: ReadonlySet<PointAction> = new Set([
   "daily_login",
+  "attending_event",
   "complete_practice_test",
   "score_90_bonus",
   "complete_flashcard_deck",
@@ -226,6 +228,34 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     };
   }, [tierBannerTranslateY, tierEnterDuration, tierExitDuration, tierUpgrade]);
 
+  const swipeUpGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .maxPointers(1)
+        .onUpdate((e) => {
+          if (e.translationY < 0) {
+            toastTranslateY.value = e.translationY;
+          }
+        })
+        .onEnd((e) => {
+          if (e.translationY < -30 || e.velocityY < -300) {
+            toastTranslateY.value = withTiming(
+              -150,
+              { duration: 200, easing: Easing.in(Easing.cubic) },
+              (finished) => {
+                if (finished) runOnJS(setActiveToast)(null);
+              },
+            );
+          } else {
+            toastTranslateY.value = withTiming(0, {
+              duration: 200,
+              easing: Easing.out(Easing.back(1.2)),
+            });
+          }
+        }),
+    [toastTranslateY],
+  );
+
   const toastDayMatch = activeToast?.message.match(/Day\s+\d+/i)?.[0] ?? null;
   const toastStreakText = toastDayMatch ? `${toastDayMatch}` : "Progress update";
   const toastXpText = `+${activeToast?.points ?? 0} XP`;
@@ -318,59 +348,65 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       {children}
 
       {activeToast ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            {
-              position: "absolute",
-              left: 16,
-              right: 16,
-              top: insets.top + 8,
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: activeToast.color,
-              backgroundColor: palette.colors.surface,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              shadowColor: palette.colors.background,
-              shadowOpacity: 0.25,
-              shadowRadius: 18,
-              shadowOffset: { width: 0, height: 8 },
-              elevation: 10,
-            },
-            animatedToastStyle,
-          ]}
-        >
-          <Text
-            style={{
-              color: palette.colors.text,
-              fontWeight: getFontWeight("700"),
-              marginBottom: 2,
-              fontSize: scaleFont(15),
-            }}
+        <GestureDetector gesture={swipeUpGesture}>
+          <Animated.View
+            style={[
+              {
+                position: "absolute",
+                left: 16,
+                right: 16,
+                top: insets.top + 8,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: activeToast.color,
+                backgroundColor: palette.colors.surface,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                shadowColor: palette.colors.background,
+                shadowOpacity: 0.25,
+                shadowRadius: 18,
+                shadowOffset: { width: 0, height: 8 },
+                elevation: 10,
+                zIndex: 9999,
+              },
+              animatedToastStyle,
+            ]}
           >
-            {toastStreakText}
-          </Text>
-          <Text
-            style={{
-              color: palette.colors.warning,
-              fontWeight: getFontWeight("700"),
-              marginBottom: 2,
-              fontSize: scaleFont(15),
-            }}
-          >
-            {toastXpText}
-          </Text>
-          <Text
-            style={{
-              color: palette.colors.textSecondary,
-              fontSize: scaleFont(13),
-              fontWeight: getFontWeight("500"),
-            }}
-          >
-            {toastSubtitle}
-          </Text>
-        </Animated.View>
+            {/* Drag indicator */}
+            <View style={{ alignItems: "center", marginBottom: 6 }}>
+              <View style={{ width: 32, height: 3, borderRadius: 2, backgroundColor: palette.colors.border }} />
+            </View>
+            <Text
+              style={{
+                color: palette.colors.text,
+                fontWeight: getFontWeight("700"),
+                marginBottom: 2,
+                fontSize: scaleFont(15),
+              }}
+            >
+              {toastStreakText}
+            </Text>
+            <Text
+              style={{
+                color: palette.colors.warning,
+                fontWeight: getFontWeight("700"),
+                marginBottom: 2,
+                fontSize: scaleFont(15),
+              }}
+            >
+              {toastXpText}
+            </Text>
+            <Text
+              style={{
+                color: palette.colors.textSecondary,
+                fontSize: scaleFont(13),
+                fontWeight: getFontWeight("500"),
+              }}
+            >
+              {toastSubtitle}
+            </Text>
+          </Animated.View>
+        </GestureDetector>
       ) : null}
 
       {tierUpgrade ? (

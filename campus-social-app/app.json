@@ -39,12 +39,7 @@
     "plugins": [
       "expo-font",
       "expo-notifications",
-      "expo-image",
-      "expo-sharing",
-      "expo-image-picker",
-      "expo-web-browser",
-      "expo-audio",
-      "expo-asset"
+      "expo-image-picker"
     ]
   }
 }

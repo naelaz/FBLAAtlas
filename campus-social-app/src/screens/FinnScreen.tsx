@@ -75,47 +75,24 @@ export function FinnScreen() {
   };
 
   useEffect(() => {
+    // Load previous messages from storage but don't inject any pre-canned messages
     let active = true;
-    const hydrateWelcome = async () => {
-      const firstName = profile?.displayName.split(" ")[0] ?? "there";
-      const perUserKey = `${FINN_WELCOME_SEEN_KEY}:${profile?.uid ?? "guest"}`;
+    const loadHistory = async () => {
       try {
-        const seen = await AsyncStorage.getItem(perUserKey);
-        if (!active) {
-          return;
+        const perUserKey = `finn_chat_history_v1:${profile?.uid ?? "guest"}`;
+        const raw = await AsyncStorage.getItem(perUserKey);
+        if (!active || !raw) return;
+        const parsed = JSON.parse(raw) as FinnChatMessage[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed.slice(-40));
         }
-        if (!seen) {
-          setMessages([
-            createMessage("assistant", `Hey ${firstName}! I'm Finn, your FBLA coach.`),
-            createMessage(
-              "assistant",
-              "I can help you prep for any event, explain judging rubrics, build a study plan, or answer FBLA questions.",
-            ),
-            createMessage("assistant", "What event are you competing in this year?"),
-          ]);
-          await AsyncStorage.setItem(perUserKey, "1");
-          return;
-        }
-      } catch (error) {
-        console.warn("Finn welcome hydrate failed:", error);
+      } catch {
+        // ignore
       }
-
-      if (!active) {
-        return;
-      }
-      setMessages([
-        createMessage(
-          "assistant",
-          "Hey! I am Finn, your AI FBLA coach. Ask me about events, prep strategy, and how to climb the leaderboard.",
-        ),
-      ]);
     };
-
-    void hydrateWelcome();
-    return () => {
-      active = false;
-    };
-  }, [profile?.displayName, profile?.uid]);
+    void loadHistory();
+    return () => { active = false; };
+  }, [profile?.uid]);
 
   useEffect(() => {
     scrollToLatest();
@@ -198,6 +175,14 @@ export function FinnScreen() {
     } finally {
       setSending(false);
       scrollToLatest();
+      // Persist chat history
+      try {
+        const perUserKey = `finn_chat_history_v1:${profile?.uid ?? "guest"}`;
+        setMessages((prev) => {
+          void AsyncStorage.setItem(perUserKey, JSON.stringify(prev.slice(-40)));
+          return prev;
+        });
+      } catch { /* ignore */ }
     }
   };
 
@@ -325,8 +310,8 @@ export function FinnScreen() {
                   <Text variant="titleMedium" style={{ color: palette.colors.text, fontWeight: "600", fontSize: 16 }}>
                     Finn AI Agent
                   </Text>
-                  <Text style={{ color: palette.colors.textMuted, fontSize: 14 }}>
-                    {hasBackend ? "Live AI mode enabled" : "Local fallback mode active"}
+                  <Text style={{ color: palette.colors.textMuted, fontSize: 13 }}>
+                    Your AI FBLA coach
                   </Text>
                 </View>
               <Badge size="sm" variant="blue-subtle" capitalize={false}>

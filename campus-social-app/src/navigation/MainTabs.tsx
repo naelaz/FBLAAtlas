@@ -20,7 +20,7 @@ export function MainTabs() {
     <Tab.Navigator
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={() => ({
-        animation: "shift",
+        animation: "fade",
         headerShown: false,
         sceneStyle: {
           backgroundColor: palette.colors.background,

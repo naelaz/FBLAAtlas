@@ -1,6 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Search, UserCheck, UserPlus } from "lucide-react-native";
+import { MessageCircle, Search, UserCheck, UserPlus } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { Text } from "react-native-paper";
@@ -21,6 +21,7 @@ import {
   updateMentorAvailability,
 } from "../services/mentorshipService";
 import { hapticTap } from "../services/haptics";
+import { createOrGetConversation } from "../services/messagingService";
 import {
   fetchSchoolUsersOnce,
   toggleFollowUser,
@@ -42,6 +43,7 @@ export function SearchScreen() {
   const [savingAvailability, setSavingAvailability] = useState(false);
   const [requestingUid, setRequestingUid] = useState<string | null>(null);
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [messagingUid, setMessagingUid] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -93,6 +95,23 @@ export function SearchScreen() {
       });
     }
   }, [profile, followingIds]);
+
+  const handleMessage = useCallback(async (user: UserProfile) => {
+    if (!profile) return;
+    hapticTap();
+    setMessagingUid(user.uid);
+    try {
+      const conversation = await createOrGetConversation(profile, user);
+      navigation.navigate("Chat", {
+        conversationId: conversation.conversationId,
+        targetUserId: user.uid,
+      });
+    } catch (error) {
+      console.warn("Start conversation failed:", error);
+    } finally {
+      setMessagingUid(null);
+    }
+  }, [profile, navigation]);
 
   if (!profile) return null;
 
@@ -177,27 +196,49 @@ export function SearchScreen() {
                             </Text>
                           )}
                         </View>
-                        <Pressable
-                          onPress={() => void handleFollow(user)}
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 4,
-                            paddingHorizontal: 10,
-                            paddingVertical: 6,
-                            borderRadius: 999,
-                            borderWidth: 1,
-                            borderColor: isFollowing ? palette.colors.border : palette.colors.primary,
-                            backgroundColor: isFollowing ? palette.colors.inputSurface : palette.colors.primary,
-                          }}
-                        >
-                          {isFollowing
-                            ? <UserCheck size={13} color={palette.colors.textSecondary} />
-                            : <UserPlus size={13} color="#fff" />}
-                          <Text style={{ color: isFollowing ? palette.colors.textSecondary : "#fff", fontSize: 12, fontWeight: "700" }}>
-                            {isFollowing ? "Following" : "Follow"}
-                          </Text>
-                        </Pressable>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Pressable
+                            onPress={() => void handleMessage(user)}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 4,
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 999,
+                              borderWidth: 1,
+                              borderColor: palette.colors.border,
+                              backgroundColor: palette.colors.inputSurface,
+                              opacity: messagingUid === user.uid ? 0.6 : 1,
+                            }}
+                          >
+                            <MessageCircle size={13} color={palette.colors.textSecondary} />
+                            <Text style={{ color: palette.colors.textSecondary, fontSize: 12, fontWeight: "700" }}>
+                              Message
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => void handleFollow(user)}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 4,
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 999,
+                              borderWidth: 1,
+                              borderColor: isFollowing ? palette.colors.border : palette.colors.primary,
+                              backgroundColor: isFollowing ? palette.colors.inputSurface : palette.colors.primary,
+                            }}
+                          >
+                            {isFollowing
+                              ? <UserCheck size={13} color={palette.colors.textSecondary} />
+                              : <UserPlus size={13} color="#fff" />}
+                            <Text style={{ color: isFollowing ? palette.colors.textSecondary : "#fff", fontSize: 12, fontWeight: "700" }}>
+                              {isFollowing ? "Following" : "Follow"}
+                            </Text>
+                          </Pressable>
+                        </View>
                       </GlassSurface>
                     )}
                   </Pressable>

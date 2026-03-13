@@ -333,7 +333,7 @@ export function MessagesScreen() {
                       }}
                     >
                       <MessageCircle size={12} color={palette.colors.text} />
-                      <Text style={{ color: palette.colors.text, fontSize: 11, fontWeight: "700" }}>Msg</Text>
+                      <Text style={{ color: palette.colors.text, fontSize: 11, fontWeight: "700" }}>Message</Text>
                     </Pressable>
                   </View>
                 </GlassSurface>

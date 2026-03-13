@@ -50,15 +50,17 @@ export const DESIGN_TOKENS = {
     lg: 0,
   },
   typography: {
-    display: { fontSize: 22, lineHeight: 30, fontWeight: "700" as const },
-    heading: { fontSize: 16, lineHeight: 22, fontWeight: "600" as const },
-    subheading: { fontSize: 13, lineHeight: 18, fontWeight: "600" as const },
-    body: { fontSize: 14, lineHeight: 20, fontWeight: "400" as const },
-    caption: { fontSize: 12, lineHeight: 16, fontWeight: "400" as const },
+    fontFamily: "System" as const,
+    display: { fontSize: 22, lineHeight: 30, fontWeight: "600" as const, fontFamily: "System" as const, letterSpacing: 0.15 },
+    heading: { fontSize: 16, lineHeight: 22, fontWeight: "500" as const, fontFamily: "System" as const, letterSpacing: 0.1 },
+    subheading: { fontSize: 13, lineHeight: 18, fontWeight: "500" as const, fontFamily: "System" as const, letterSpacing: 0.1 },
+    body: { fontSize: 14, lineHeight: 20, fontWeight: "400" as const, fontFamily: "System" as const, letterSpacing: 0.1 },
+    caption: { fontSize: 12, lineHeight: 16, fontWeight: "400" as const, fontFamily: "System" as const, letterSpacing: 0.1 },
     label: {
       fontSize: 13,
       lineHeight: 16,
-      fontWeight: "600" as const,
+      fontWeight: "500" as const,
+      fontFamily: "System" as const,
       letterSpacing: 0.8,
       textTransform: "uppercase" as const,
     },
@@ -462,6 +464,8 @@ type PaperThemeOptions = {
   boldText?: boolean;
 };
 
+export const SF_FONT_FAMILY = "System";
+
 export function createPaperTheme(palette: ThemePalette, options?: PaperThemeOptions): MD3Theme {
   const base = palette.isDark ? MD3DarkTheme : MD3LightTheme;
   const fontScale = options?.fontScale ?? 1;
@@ -481,6 +485,7 @@ export function createPaperTheme(palette: ThemePalette, options?: PaperThemeOpti
         variant,
         {
           ...config,
+          fontFamily: SF_FONT_FAMILY,
           fontSize,
           lineHeight,
           fontWeight: boldText ? "700" : config.fontWeight,

@@ -14,7 +14,10 @@ export type AppThemeName =
   | "cream"
   | "sage"
   | "dusk"
-  | "mocha";
+  | "mocha"
+  | "oled"
+  | "rose"
+  | "ocean";
 
 export type ThemeGroup = "dark" | "light";
 
@@ -439,15 +442,60 @@ const THEMES: Record<AppThemeName, ThemePalette> = {
     error: "#a84040",
     warning: "#c09030",
   }),
+  oled: makeTheme("oled", "OLED Black", "dark", {
+    background: "#000000",
+    surface: "#050505",
+    surfaceAlt: "#090909",
+    border: "#111111",
+    text: "#ffffff",
+    textMuted: "#808080",
+    textFaint: "#282828",
+    accent: "#4f7ef7",
+    accentMuted: "#0a1840",
+    success: "#3d9e6e",
+    error: "#c0392b",
+    warning: "#d4871a",
+  }),
+  rose: makeTheme("rose", "Rose Dark", "dark", {
+    background: "#0e080b",
+    surface: "#1a0f14",
+    surfaceAlt: "#221318",
+    border: "#2e1820",
+    text: "#f5e8ee",
+    textMuted: "#9a6878",
+    textFaint: "#3d1e28",
+    accent: "#e05585",
+    accentMuted: "#3d1228",
+    success: "#5a9e72",
+    error: "#c04060",
+    warning: "#c07830",
+  }),
+  ocean: makeTheme("ocean", "Ocean Dark", "dark", {
+    background: "#060c12",
+    surface: "#0c1620",
+    surfaceAlt: "#101e2a",
+    border: "#162636",
+    text: "#ddf0f8",
+    textMuted: "#6090a8",
+    textFaint: "#1a3044",
+    accent: "#28b4d8",
+    accentMuted: "#082840",
+    success: "#38a88a",
+    error: "#c04848",
+    warning: "#c08830",
+  }),
 };
 
 export const APP_THEMES: ThemePalette[] = [
+  THEMES.oled,
   THEMES.midnight,
   THEMES.charcoal,
   THEMES.navy,
   THEMES.slate,
   THEMES.dusk,
   THEMES.mocha,
+  THEMES.rose,
+  THEMES.ocean,
   THEMES.light,
   THEMES.cream,
   THEMES.sage,

@@ -84,7 +84,7 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
         styles.wrapper,
         animatedStyle,
         {
-          bottom: Math.max(insets.bottom, 10) + (oneHandedMode ? 4 : 8),
+          bottom: Math.max(insets.bottom - 8, 0),
         },
       ]}
     >
@@ -94,8 +94,8 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
           width: "94%",
           borderRadius: 20,
           backgroundColor: palette.colors.surface,
-          paddingHorizontal: 8,
-          paddingVertical: 8,
+          paddingHorizontal: 10,
+          paddingVertical: 6,
         }}
       >
         <View
@@ -186,6 +186,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    minHeight: 66,
+    minHeight: 54,
   },
 });

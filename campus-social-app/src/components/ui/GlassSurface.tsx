@@ -1,5 +1,6 @@
-import React from "react";
-import { StyleProp, View, ViewStyle } from "react-native";
+import React, { useEffect } from "react";
+import { StyleProp, ViewStyle } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
 import { useAccessibility } from "../../context/AccessibilityContext";
 import { useThemeContext } from "../../context/ThemeContext";
@@ -36,7 +37,7 @@ export function GlassSurface({
   accentColor,
 }: GlassSurfaceProps) {
   const { palette } = useThemeContext();
-  const { highContrastMode } = useAccessibility();
+  const { highContrastMode, reduceAnimations } = useAccessibility();
   const baseColor =
     backgroundColor ??
     (tone === "accent"
@@ -47,8 +48,34 @@ export function GlassSurface({
           ? palette.colors.successGlass
           : palette.colors.surface);
 
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (reduceAnimations) {
+      scale.value = pressed ? 0.97 : 1;
+      opacity.value = pressed ? 0.92 : 1;
+      return;
+    }
+    scale.value = withSpring(pressed ? 0.97 : 1, {
+      stiffness: 400,
+      damping: 28,
+      mass: 0.6,
+    });
+    opacity.value = withSpring(pressed ? 0.92 : 1, {
+      stiffness: 400,
+      damping: 28,
+      mass: 0.6,
+    });
+  }, [pressed, reduceAnimations, scale, opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
   return (
-    <View
+    <Animated.View
       style={[
         {
           borderRadius,
@@ -61,9 +88,10 @@ export function GlassSurface({
           elevation: palette.isDark ? 0 : 2,
         },
         style,
+        animatedStyle,
       ]}
     >
       {children}
-    </View>
+    </Animated.View>
   );
 }

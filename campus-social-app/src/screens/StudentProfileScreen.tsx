@@ -170,8 +170,9 @@ export function StudentProfileScreen({ route, navigation }: Props) {
             </Text>
           </View>
 
+          <TierBadge tier={user.tier} />
+
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-            <TierBadge tier={user.tier} />
             <Badge variant="blue-subtle" size="sm" capitalize={false}>
               {formatCompactNumber(user.xp)} XP
             </Badge>
@@ -191,7 +192,7 @@ export function StudentProfileScreen({ route, navigation }: Props) {
 
           {/* Action buttons — only for other users */}
           {!isOwnProfile ? (
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
               <GlassButton
                 variant={isFollowing ? "ghost" : "solid"}
                 size="sm"

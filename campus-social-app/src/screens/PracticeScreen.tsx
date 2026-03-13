@@ -180,7 +180,7 @@ export function PracticeScreen() {
   const tabOptions = useMemo(
     () => [
       { value: "events", label: "Events" },
-      { value: "dashboard", label: "Dashboard" },
+      { value: "dashboard", label: "Stats" },
       { value: "leaderboard", label: "Rank" },
       { value: "glossary", label: "Glossary" },
     ],
@@ -517,12 +517,17 @@ export function PracticeScreen() {
               <Text style={{ color: palette.colors.text, fontWeight: "700", marginBottom: 6, fontSize: 14 }}>
                 Needs Work
               </Text>
-              {summary.weakAreas.map((item) => (
-                <View key={item.eventId} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 }}>
-                  <Text style={{ color: palette.colors.text, fontSize: 13 }}>{item.eventName}</Text>
-                  <Text style={{ color: palette.colors.textMuted, fontSize: 12 }}>{item.averageScore}% avg</Text>
-                </View>
-              ))}
+              {summary.weakAreas.map((item) => {
+                const c = item.averageScore >= 80 ? "#27AE60" : item.averageScore >= 60 ? "#F39C12" : "#E74C3C";
+                return (
+                  <View key={item.eventId} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 5 }}>
+                    <Text style={{ color: palette.colors.text, fontSize: 13, flex: 1 }}>{item.eventName}</Text>
+                    <View style={{ borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: c + "22", borderWidth: 1, borderColor: c + "55" }}>
+                      <Text style={{ color: c, fontWeight: "700", fontSize: 11 }}>{item.averageScore}%</Text>
+                    </View>
+                  </View>
+                );
+              })}
             </MagicCardRubric>
           ) : null}
 
@@ -542,12 +547,17 @@ export function PracticeScreen() {
               <Text style={{ color: palette.colors.text, fontWeight: "700", marginBottom: 6, fontSize: 14 }}>
                 Event Progress
               </Text>
-              {summary.eventStats.map((item) => (
-                <View key={item.eventId} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 }}>
-                  <Text style={{ color: palette.colors.text, fontSize: 13 }}>{item.eventName}</Text>
-                  <Text style={{ color: palette.colors.textMuted, fontSize: 12 }}>Best {item.bestScore}%</Text>
-                </View>
-              ))}
+              {summary.eventStats.map((item) => {
+                const c = item.bestScore >= 80 ? "#27AE60" : item.bestScore >= 60 ? "#F39C12" : "#E74C3C";
+                return (
+                  <View key={item.eventId} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 5 }}>
+                    <Text style={{ color: palette.colors.text, fontSize: 13, flex: 1 }}>{item.eventName}</Text>
+                    <View style={{ borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: c + "22", borderWidth: 1, borderColor: c + "55" }}>
+                      <Text style={{ color: c, fontWeight: "700", fontSize: 11 }}>{item.bestScore}%</Text>
+                    </View>
+                  </View>
+                );
+              })}
             </MagicCardRubric>
           ) : null}
         </View>
@@ -561,31 +571,36 @@ export function PracticeScreen() {
               message="Take a few tests and scores will appear for your chapter."
             />
           ) : (
-            leaderboard.map((row, index) => (
-              <MagicCard
-                key={row.uid}
-                style={{
-                  borderLeftWidth: 3,
-                  borderLeftColor: row.uid === profile.uid ? palette.colors.primary : palette.colors.border,
-                }}
-              >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
-                      #{index + 1} {row.displayName}
-                    </Text>
-                    <Text style={{ color: palette.colors.textSecondary }}>
-                      Avg {row.averageScore}% • {row.totalSessions} sessions • Improvement {row.improvementScore >= 0 ? "+" : ""}{row.improvementScore}
-                    </Text>
+            leaderboard.map((row, index) => {
+              const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : null;
+              const accentColor = index === 0 ? "#F39C12" : index === 1 ? "#95A5A6" : index === 2 ? "#CD7F32" : palette.colors.border;
+              const scoreColor = row.averageScore >= 80 ? "#27AE60" : row.averageScore >= 60 ? "#F39C12" : "#E74C3C";
+              return (
+                <MagicCard
+                  key={row.uid}
+                  style={{ borderLeftWidth: 3, borderLeftColor: row.uid === profile.uid ? palette.colors.primary : accentColor }}
+                >
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: palette.colors.text, fontWeight: "800" }}>
+                        {medal ?? `#${index + 1}`}{"  "}{row.displayName}
+                      </Text>
+                      <Text style={{ color: palette.colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                        {row.totalSessions} sessions · {row.improvementScore >= 0 ? "+" : ""}{row.improvementScore} improvement
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: "flex-end", gap: 4 }}>
+                      <View style={{ borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: scoreColor + "22", borderWidth: 1, borderColor: scoreColor + "55" }}>
+                        <Text style={{ color: scoreColor, fontWeight: "800", fontSize: 12 }}>{row.averageScore}%</Text>
+                      </View>
+                      {row.uid === profile.uid ? (
+                        <Badge size="sm" variant="blue-subtle" capitalize={false}>You</Badge>
+                      ) : null}
+                    </View>
                   </View>
-                  {row.uid === profile.uid ? (
-                    <Badge size="sm" variant="blue-subtle" capitalize={false}>
-                      You
-                    </Badge>
-                  ) : null}
-                </View>
-              </MagicCard>
-            ))
+                </MagicCard>
+              );
+            })
           )}
         </View>
       ) : null}

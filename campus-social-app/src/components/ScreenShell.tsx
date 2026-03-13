@@ -76,7 +76,7 @@ export function ScreenShell({
 
   return (
     <View style={{ flex: 1, backgroundColor: palette.colors.background }}>
-    <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }}>
+    <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.colors.background }}>
       <LinearGradient
         pointerEvents="none"
         colors={
@@ -89,8 +89,8 @@ export function ScreenShell({
         style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
       />
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }}
+        style={{ flex: fillContent ? 0 : 1 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: fillContent ? 8 : 40 }}
         scrollEventThrottle={scrollEventThrottle}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -111,7 +111,7 @@ export function ScreenShell({
         <GlassSurface
           style={{
             paddingHorizontal: 16,
-            paddingVertical: 14,
+            paddingVertical: 16,
             marginBottom: 12,
             backgroundColor: palette.colors.surface,
             borderColor: palette.colors.border,
@@ -234,6 +234,7 @@ export function ScreenShell({
 
         {children}
       </ScrollView>
+      {fillContent ? <View style={{ flex: 1 }}>{fillContent}</View> : null}
     </SafeAreaView>
     </View>
   );

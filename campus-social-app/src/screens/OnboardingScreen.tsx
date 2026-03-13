@@ -190,7 +190,7 @@ export function OnboardingScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        <AppLogo subtitle="Set up your FBLA dashboard" />
+        <AppLogo size={36} subtitle="Set up your FBLA dashboard" />
         <Text style={{ color: palette.colors.textSecondary, marginTop: 8 }}>
           Step {step + 1} of 5
         </Text>

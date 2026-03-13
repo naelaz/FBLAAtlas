@@ -4,6 +4,7 @@ import {
   RecordingPresets,
   useAudioRecorder,
 } from "expo-audio";
+import { ChevronDown, ChevronUp, ClipboardList, Layers, Mic2, Scale } from "lucide-react-native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "react-native-paper";
@@ -196,6 +197,35 @@ function isStaleCache(generatedAt?: string): boolean {
     return false;
   }
   return Date.now() - timestamp > 7 * 24 * 60 * 60 * 1000;
+}
+
+function CollapsibleSection({
+  title,
+  children,
+  style,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: React.ReactNode;
+  style?: object;
+  defaultOpen?: boolean;
+}) {
+  const { palette } = useThemeContext();
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <MagicCardRubric style={style}>
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+      >
+        <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 14 }}>{title}</Text>
+        {open
+          ? <ChevronUp size={16} color={palette.colors.textMuted} />
+          : <ChevronDown size={16} color={palette.colors.textMuted} />}
+      </Pressable>
+      {open ? children : null}
+    </MagicCardRubric>
+  );
 }
 
 export function PracticeEventHubScreen({ route, navigation }: Props) {
@@ -920,39 +950,112 @@ export function PracticeEventHubScreen({ route, navigation }: Props) {
       </MagicCardRubric>
 
       <View style={{ marginBottom: 10 }}>
-        <Text style={{ color: palette.colors.textSecondary, marginBottom: 6, fontWeight: "700", fontSize: 12 }}>
+        <Text style={{ color: palette.colors.textSecondary, marginBottom: 8, fontWeight: "700", fontSize: 12 }}>
           Practice Mode
         </Text>
-        <GlassSegmentedControl
-          value={mode}
-          options={modeOptions}
-          onValueChange={(nextValue) => {
-            if (event.allowedPracticeModes.includes(nextValue as HubMode)) {
-              setMode(nextValue as HubMode);
-            }
-          }}
-        />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {(["objective_test", "presentation", "flashcards", "mock_judge"] as const)
+            .filter((m) => event.allowedPracticeModes.includes(m))
+            .map((m) => {
+              const isSelected = mode === m;
+              const modeConfig = {
+                objective_test: { label: "Test", icon: ClipboardList, color: "#4A90D9" },
+                presentation: { label: "Coach", icon: Mic2, color: "#9B59B6" },
+                flashcards: { label: "Cards", icon: Layers, color: "#27AE60" },
+                mock_judge: { label: "Judge", icon: Scale, color: "#E67E22" },
+              }[m];
+              const Icon = modeConfig.icon;
+              return (
+                <Pressable
+                  key={m}
+                  onPress={() => setMode(m)}
+                  style={{
+                    flex: 1,
+                    minWidth: 70,
+                    alignItems: "center",
+                    paddingVertical: 10,
+                    paddingHorizontal: 6,
+                    borderRadius: 14,
+                    borderWidth: 1.5,
+                    borderColor: isSelected ? modeConfig.color : palette.colors.border,
+                    backgroundColor: isSelected ? modeConfig.color + "22" : palette.colors.surface,
+                  }}
+                >
+                  <Icon size={20} color={isSelected ? modeConfig.color : palette.colors.textMuted} strokeWidth={2} />
+                  <Text style={{
+                    fontSize: 10,
+                    fontWeight: isSelected ? "700" : "500",
+                    color: isSelected ? modeConfig.color : palette.colors.textMuted,
+                    marginTop: 5,
+                    textAlign: "center",
+                  }}>
+                    {modeConfig.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+        </View>
       </View>
 
       <View style={{ marginBottom: 12 }}>
-        <Text style={{ color: palette.colors.textSecondary, marginBottom: 6, fontWeight: "700", fontSize: 12 }}>
+        <Text style={{ color: palette.colors.textSecondary, marginBottom: 8, fontWeight: "700", fontSize: 12 }}>
           Difficulty
         </Text>
-        <GlassSegmentedControl
-          value={difficulty}
-          options={difficultyLabel.map((entry) => ({ value: entry.value, label: entry.label }))}
-          onValueChange={(nextValue) => {
-            if (
-              nextValue === "beginner" ||
-              nextValue === "intermediate" ||
-              nextValue === "advanced" ||
-              nextValue === "competition_ready"
-            ) {
-              setDifficulty(nextValue);
-            }
-          }}
-          size="sm"
-        />
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {(["beginner", "intermediate", "advanced", "competition_ready"] as const).map((level, idx) => {
+            const isSelected = difficulty === level;
+            const barCount = idx + 1;
+            const labels = ["Beginner", "Medium", "Advanced", "Comp Ready"];
+            const colors = [
+              palette.colors.success ?? "#4CAF50",
+              "#FFB300",
+              "#FF7043",
+              palette.colors.primary,
+            ];
+            const activeColor = colors[idx];
+            return (
+              <Pressable
+                key={level}
+                onPress={() => setDifficulty(level)}
+                style={{
+                  flex: 1,
+                  alignItems: "center",
+                  paddingVertical: 10,
+                  paddingHorizontal: 4,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: isSelected ? activeColor : palette.colors.border,
+                  backgroundColor: isSelected ? activeColor + "22" : palette.colors.surface,
+                }}
+              >
+                {/* Bar chart icon */}
+                <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2, height: 18, marginBottom: 6 }}>
+                  {[1, 2, 3, 4].map((bar) => (
+                    <View
+                      key={bar}
+                      style={{
+                        width: 5,
+                        height: 4 + bar * 3.5,
+                        borderRadius: 2,
+                        backgroundColor: bar <= barCount
+                          ? (isSelected ? activeColor : palette.colors.textMuted)
+                          : palette.colors.border,
+                      }}
+                    />
+                  ))}
+                </View>
+                <Text style={{
+                  fontSize: 10,
+                  fontWeight: isSelected ? "700" : "500",
+                  color: isSelected ? activeColor : palette.colors.textMuted,
+                  textAlign: "center",
+                }}>
+                  {labels[idx]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       {error ? (
@@ -1467,52 +1570,63 @@ export function PracticeEventHubScreen({ route, navigation }: Props) {
         </View>
       ) : null}
 
-      <MagicCardRubric style={{ marginTop: 14 }}>
-        <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 6 }}>
-          Judging Criteria Snapshot
-        </Text>
-        {event.judgingCriteria.map((criterion) => (
-          <Text key={criterion} style={{ color: palette.colors.textSecondary, marginBottom: 4 }}>
-             {criterion}
-          </Text>
-        ))}
-      </MagicCardRubric>
+      <CollapsibleSection title="Judging Criteria" style={{ marginTop: 14 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+          {event.judgingCriteria.map((criterion, i) => {
+            const chipColors = ["#4A90D9", "#9B59B6", "#27AE60", "#E67E22", "#E74C3C", "#16A085"];
+            const color = chipColors[i % chipColors.length];
+            return (
+              <View key={criterion} style={{ borderRadius: 20, borderWidth: 1, borderColor: color + "55", backgroundColor: color + "18", paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ color, fontSize: 12, fontWeight: "600" }}>{criterion}</Text>
+              </View>
+            );
+          })}
+        </View>
+      </CollapsibleSection>
 
-      <MagicCardRubric style={{ marginTop: 10 }}>
-        <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 6 }}>
-          Topic Areas
-        </Text>
-        {event.topicAreas.map((topic) => (
-          <Text key={topic} style={{ color: palette.colors.textSecondary, marginBottom: 4 }}>
-             {topic}
-          </Text>
-        ))}
-      </MagicCardRubric>
+      <CollapsibleSection title="Topic Areas" style={{ marginTop: 10 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+          {event.topicAreas.map((topic, i) => {
+            const chipColors = ["#1ABC9C", "#3498DB", "#8E44AD", "#F39C12", "#2ECC71", "#E74C3C"];
+            const color = chipColors[i % chipColors.length];
+            return (
+              <View key={topic} style={{ borderRadius: 20, borderWidth: 1, borderColor: color + "55", backgroundColor: color + "18", paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ color, fontSize: 12, fontWeight: "600" }}>{topic}</Text>
+              </View>
+            );
+          })}
+        </View>
+      </CollapsibleSection>
 
-      <MagicCardRubric style={{ marginTop: 10 }}>
-        <Text style={{ color: palette.colors.text, fontWeight: "800", marginBottom: 6 }}>
-          Score History
-        </Text>
+      <CollapsibleSection title={`Score History${history.length > 0 ? ` (${history.length})` : ""}`} style={{ marginTop: 10 }} defaultOpen={false}>
         {history.length === 0 ? (
-          <Text style={{ color: palette.colors.textSecondary }}>
+          <Text style={{ color: palette.colors.textSecondary, marginTop: 6 }}>
             No saved attempts yet for this event.
           </Text>
         ) : (
-          history.map((item) => {
-            const pct = item.maxScore > 0 ? Math.round((item.score / item.maxScore) * 100) : 0;
-            return (
-              <View key={item.id} style={{ marginBottom: 8 }}>
-                <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
-                  {item.mode.replaceAll("_", " ")}  {pct}%
-                </Text>
-                <Text style={{ color: palette.colors.textSecondary }}>
-                  {formatRelativeTime(item.createdAt)}
-                </Text>
-              </View>
-            );
-          })
+          <View style={{ marginTop: 6, gap: 6 }}>
+            {history.map((item) => {
+              const pct = item.maxScore > 0 ? Math.round((item.score / item.maxScore) * 100) : 0;
+              const barColor = pct >= 80 ? "#27AE60" : pct >= 60 ? "#F39C12" : "#E74C3C";
+              return (
+                <View key={item.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: palette.colors.border }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: palette.colors.text, fontWeight: "600", fontSize: 13 }}>
+                      {item.mode.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                    </Text>
+                    <Text style={{ color: palette.colors.textMuted, fontSize: 11, marginTop: 1 }}>
+                      {formatRelativeTime(item.createdAt)}
+                    </Text>
+                  </View>
+                  <View style={{ borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: barColor + "22", borderWidth: 1, borderColor: barColor + "55" }}>
+                    <Text style={{ color: barColor, fontWeight: "800", fontSize: 13 }}>{pct}%</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
         )}
-      </MagicCardRubric>
+      </CollapsibleSection>
 
       {FBLA_EVENT_DEFINITIONS.length === 0 ? (
         <EmptyState title="No event data" message="Event catalog is unavailable." />

@@ -303,10 +303,7 @@ export function LoginScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 36 }} keyboardShouldPersistTaps="handled">
           <View style={{ marginTop: 14, alignItems: "center" }}>
-            <AppLogo subtitle="FBLA Atlas" />
-            <Text style={{ color: palette.colors.textSecondary, marginTop: 10 }}>
-              Your FBLA journey starts here
-            </Text>
+            <AppLogo size={52} layout="stack" subtitle="Your FBLA journey starts here" />
           </View>
 
           <GlassSurface style={{ marginTop: 14, padding: 12 }}>

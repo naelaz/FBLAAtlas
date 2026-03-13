@@ -1012,6 +1012,10 @@ export function ProfileScreen() {
         <Pressable style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }} onPress={() => setStatSheet(null)}>
           <Pressable>
             <View style={{ backgroundColor: palette.colors.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, maxHeight: "70%" }}>
+              {/* Drag handle */}
+              <View style={{ alignItems: "center", marginBottom: 12, marginTop: -4 }}>
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: palette.colors.border }} />
+              </View>
               <Text variant="titleLarge" style={{ fontWeight: "900", marginBottom: 10 }}>
                 {statSheet === "posts" ? "Posts" : statSheet === "followers" ? "Followers" : "Following"}
               </Text>
@@ -1046,8 +1050,12 @@ export function ProfileScreen() {
         <Pressable style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }} onPress={() => setEditOpen(false)}>
           <Pressable>
             <View style={{ backgroundColor: palette.colors.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: "92%", flex: 0 }}>
+              {/* Drag handle */}
+              <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 2 }}>
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: palette.colors.border }} />
+              </View>
               {/* Fixed header — title only */}
-              <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+              <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }}>
                 <Text variant="titleLarge" style={{ fontWeight: "900" }}>Edit Profile</Text>
               </View>
 

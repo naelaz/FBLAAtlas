@@ -162,50 +162,54 @@ export function SearchScreen() {
                         pressed={pressed}
                         style={{
                           padding: 12,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 10,
                           borderRadius: 14,
                           borderWidth: 1,
                           borderColor: palette.colors.border,
+                          gap: 10,
                         }}
                       >
-                        <AvatarWithStatus
-                          uri={user.avatarUrl}
-                          seed={user.displayName}
-                          size={44}
-                          online={false}
-                          tier={user.tier}
-                          avatarColor={user.avatarColor || undefined}
-                          onPress={() => navigation.navigate("StudentProfile", { userId: user.uid })}
-                        />
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        {/* Top row: avatar + name/tier/role */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                          <AvatarWithStatus
+                            uri={user.avatarUrl}
+                            seed={user.displayName}
+                            size={44}
+                            online={false}
+                            tier={user.tier}
+                            avatarColor={user.avatarColor || undefined}
+                            onPress={() => navigation.navigate("StudentProfile", { userId: user.uid })}
+                          />
+                          <View style={{ flex: 1, gap: 3 }}>
                             <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 14 }} numberOfLines={1}>
                               {user.displayName}
                             </Text>
-                            <TierBadge tier={user.tier} />
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                              <TierBadge tier={user.tier} />
+                              {user.officerPosition ? (
+                                <Text style={{ color: palette.colors.primary, fontSize: 11, fontWeight: "600" }} numberOfLines={1}>
+                                  {user.officerPosition}
+                                </Text>
+                              ) : (
+                                <Text style={{ color: palette.colors.textSecondary, fontSize: 11 }}>
+                                  {user.grade ? `Grade ${user.grade}` : "FBLA Member"}
+                                </Text>
+                              )}
+                            </View>
                           </View>
-                          {user.officerPosition ? (
-                            <Text style={{ color: palette.colors.primary, fontSize: 12, fontWeight: "600" }}>
-                              {user.officerPosition}
-                            </Text>
-                          ) : (
-                            <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
-                              {user.grade ? `Grade ${user.grade}` : "FBLA Member"}
-                            </Text>
-                          )}
                         </View>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+
+                        {/* Bottom row: action buttons */}
+                        <View style={{ flexDirection: "row", gap: 8 }}>
                           <Pressable
                             onPress={() => void handleMessage(user)}
                             style={{
+                              flex: 1,
                               flexDirection: "row",
                               alignItems: "center",
-                              gap: 4,
-                              paddingHorizontal: 10,
-                              paddingVertical: 6,
-                              borderRadius: 999,
+                              justifyContent: "center",
+                              gap: 5,
+                              paddingVertical: 7,
+                              borderRadius: 10,
                               borderWidth: 1,
                               borderColor: palette.colors.border,
                               backgroundColor: palette.colors.inputSurface,
@@ -220,12 +224,13 @@ export function SearchScreen() {
                           <Pressable
                             onPress={() => void handleFollow(user)}
                             style={{
+                              flex: 1,
                               flexDirection: "row",
                               alignItems: "center",
-                              gap: 4,
-                              paddingHorizontal: 10,
-                              paddingVertical: 6,
-                              borderRadius: 999,
+                              justifyContent: "center",
+                              gap: 5,
+                              paddingVertical: 7,
+                              borderRadius: 10,
                               borderWidth: 1,
                               borderColor: isFollowing ? palette.colors.border : palette.colors.primary,
                               backgroundColor: isFollowing ? palette.colors.inputSurface : palette.colors.primary,

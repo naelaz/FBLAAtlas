@@ -242,101 +242,109 @@ export function MessagesScreen() {
             ).map((user) => {
               const isFollowing = followingIds.has(user.uid);
               return (
-                <GlassSurface
+                <Pressable
                   key={user.uid}
-                  elevation={2}
-                  borderRadius={12}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: palette.colors.border,
-                    borderRadius: 12,
-                    padding: 10,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
+                  onPress={() => navigation.navigate("StudentProfile", { userId: user.uid })}
                 >
-                  <AvatarWithStatus
-                    uri={user.avatarUrl}
-                    seed={user.displayName}
-                    size={40}
-                    online={false}
-                    tier={user.tier}
-                    avatarColor={user.avatarColor || undefined}
-                    onPress={() => navigation.navigate("StudentProfile", { userId: user.uid })}
-                  />
-                  <Pressable
-                    style={{ flex: 1 }}
-                    onPress={() => navigation.navigate("StudentProfile", { userId: user.uid })}
-                  >
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Text style={{ fontWeight: "700", color: palette.colors.text }} numberOfLines={1}>
-                        {user.displayName}
-                      </Text>
-                      <TierBadge tier={user.tier} />
-                    </View>
-                    <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>
-                      {user.primaryEvent ?? "FBLA Member"}
-                    </Text>
-                  </Pressable>
-                  <View style={{ flexDirection: "row", gap: 6 }}>
-                    <Pressable
-                      onPress={async () => {
-                        hapticTap();
-                        setFollowingIds((prev) => {
-                          const next = new Set(prev);
-                          if (isFollowing) next.delete(user.uid); else next.add(user.uid);
-                          return next;
-                        });
-                        try { await toggleFollowUser(profile, user); } catch { /* revert */ }
-                      }}
+                  {({ pressed }) => (
+                    <GlassSurface
+                      pressed={pressed}
+                      elevation={2}
+                      borderRadius={14}
                       style={{
-                        paddingHorizontal: 8,
-                        paddingVertical: 5,
-                        borderRadius: 999,
-                        borderWidth: 1,
-                        borderColor: isFollowing ? palette.colors.border : palette.colors.primary,
-                        backgroundColor: isFollowing ? palette.colors.inputSurface : palette.colors.primary,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 3,
-                      }}
-                    >
-                      {isFollowing
-                        ? <UserCheck size={12} color={palette.colors.textSecondary} />
-                        : <UserPlus size={12} color="#fff" />}
-                      <Text style={{ color: isFollowing ? palette.colors.textSecondary : "#fff", fontSize: 11, fontWeight: "700" }}>
-                        {isFollowing ? "Following" : "Follow"}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={async () => {
-                        hapticTap();
-                        try {
-                          const conversation = await createOrGetConversation(profile, user);
-                          setShowFindStudents(false);
-                          navigation.navigate("Chat", { conversationId: conversation.conversationId, targetUserId: user.uid });
-                        } catch (error) {
-                          console.warn("Create conversation failed:", error);
-                        }
-                      }}
-                      style={{
-                        paddingHorizontal: 8,
-                        paddingVertical: 5,
-                        borderRadius: 999,
                         borderWidth: 1,
                         borderColor: palette.colors.border,
-                        backgroundColor: palette.colors.inputSurface,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 3,
+                        padding: 12,
+                        gap: 10,
                       }}
                     >
-                      <MessageCircle size={12} color={palette.colors.text} />
-                      <Text style={{ color: palette.colors.text, fontSize: 11, fontWeight: "700" }}>Message</Text>
-                    </Pressable>
-                  </View>
-                </GlassSurface>
+                      {/* Top row: avatar + name/tier/subtitle */}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                        <AvatarWithStatus
+                          uri={user.avatarUrl}
+                          seed={user.displayName}
+                          size={44}
+                          online={false}
+                          tier={user.tier}
+                          avatarColor={user.avatarColor || undefined}
+                          onPress={() => navigation.navigate("StudentProfile", { userId: user.uid })}
+                        />
+                        <View style={{ flex: 1, gap: 3 }}>
+                          <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 14 }} numberOfLines={1}>
+                            {user.displayName}
+                          </Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <TierBadge tier={user.tier} />
+                            <Text style={{ color: palette.colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
+                              {user.primaryEvent ?? "FBLA Member"}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Bottom row: action buttons */}
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Pressable
+                          onPress={async () => {
+                            hapticTap();
+                            try {
+                              const conversation = await createOrGetConversation(profile, user);
+                              setShowFindStudents(false);
+                              navigation.navigate("Chat", { conversationId: conversation.conversationId, targetUserId: user.uid });
+                            } catch (error) {
+                              console.warn("Create conversation failed:", error);
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 5,
+                            paddingVertical: 7,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: palette.colors.border,
+                            backgroundColor: palette.colors.inputSurface,
+                          }}
+                        >
+                          <MessageCircle size={13} color={palette.colors.textSecondary} />
+                          <Text style={{ color: palette.colors.textSecondary, fontSize: 12, fontWeight: "700" }}>Message</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={async () => {
+                            hapticTap();
+                            setFollowingIds((prev) => {
+                              const next = new Set(prev);
+                              if (isFollowing) next.delete(user.uid); else next.add(user.uid);
+                              return next;
+                            });
+                            try { await toggleFollowUser(profile, user); } catch { /* revert */ }
+                          }}
+                          style={{
+                            flex: 1,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 5,
+                            paddingVertical: 7,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: isFollowing ? palette.colors.border : palette.colors.primary,
+                            backgroundColor: isFollowing ? palette.colors.inputSurface : palette.colors.primary,
+                          }}
+                        >
+                          {isFollowing
+                            ? <UserCheck size={13} color={palette.colors.textSecondary} />
+                            : <UserPlus size={13} color="#fff" />}
+                          <Text style={{ color: isFollowing ? palette.colors.textSecondary : "#fff", fontSize: 12, fontWeight: "700" }}>
+                            {isFollowing ? "Following" : "Follow"}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </GlassSurface>
+                  )}
+                </Pressable>
               );
             })
           )}

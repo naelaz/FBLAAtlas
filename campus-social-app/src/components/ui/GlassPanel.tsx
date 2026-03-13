@@ -1,5 +1,5 @@
 import React from "react";
-import { DimensionValue, StyleProp, ViewStyle } from "react-native";
+import { DimensionValue, StyleProp, View, ViewStyle } from "react-native";
 
 import { useThemeContext } from "../../context/ThemeContext";
 import { GlassSurface } from "./GlassSurface";
@@ -11,6 +11,7 @@ type GlassPanelProps = {
   borderRadius?: number;
   size?: "sm" | "md" | "lg";
   accentColor?: string;
+  showDragHandle?: boolean;
 };
 
 export function GlassPanel({
@@ -20,6 +21,7 @@ export function GlassPanel({
   borderRadius = 20,
   size = "md",
   accentColor,
+  showDragHandle = true,
 }: GlassPanelProps) {
   const { palette } = useThemeContext();
   const radius = borderRadius ?? (size === "sm" ? 16 : size === "lg" ? 24 : 20);
@@ -44,6 +46,11 @@ export function GlassPanel({
         style,
       ]}
     >
+      {showDragHandle ? (
+        <View style={{ alignItems: "center", marginBottom: 10, marginTop: -4 }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: palette.colors.border }} />
+        </View>
+      ) : null}
       {children}
     </GlassSurface>
   );

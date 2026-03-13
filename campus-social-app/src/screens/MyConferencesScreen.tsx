@@ -150,7 +150,8 @@ export function MyConferencesScreen() {
       </Pressable>
 
       <Modal visible={sheetOpen} transparent animationType="slide" onRequestClose={() => setSheetOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }}>
+        <Pressable style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }} onPress={() => setSheetOpen(false)}>
+          <Pressable>
           <GlassPanel>
             <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 18 }}>
               Add Conference Event
@@ -288,7 +289,8 @@ export function MyConferencesScreen() {
               </View>
             </ScrollView>
           </GlassPanel>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </ScreenShell>
   );

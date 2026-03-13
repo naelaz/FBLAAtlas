@@ -54,7 +54,7 @@ function AppGate() {
             gap: 18,
           }}
         >
-          <AppLogo subtitle="Loading your campus network" />
+          <AppLogo size={48} layout="stack" subtitle="Loading your campus network" />
           <ActivityIndicator animating size="large" color={palette.colors.primary} />
         </View>
       </PaperProvider>
@@ -172,7 +172,7 @@ function AuthGateContent() {
         }}
       >
         <ActivityIndicator animating size="large" color={palette.colors.primary} />
-        <AppLogo subtitle="Checking your account" />
+        <AppLogo size={44} layout="stack" subtitle="Checking your account" />
       </View>
     );
   }
@@ -193,7 +193,7 @@ function AuthGateContent() {
           gap: 12,
         }}
       >
-        <AppLogo subtitle="Account suspended" />
+        <AppLogo size={44} layout="stack" subtitle="Account suspended" />
         <Text style={{ color: palette.colors.text, fontSize: 20, fontWeight: "700", textAlign: "center" }}>
           Your account has been suspended
         </Text>

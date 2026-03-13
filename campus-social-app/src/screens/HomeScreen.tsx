@@ -1,22 +1,22 @@
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { Heart, MessageCircle as MessageCircleIcon, Send, X } from "lucide-react-native";
+import { CornerDownRight, Heart, MessageCircle as MessageCircleIcon, PenSquare, Search as SearchIcon, Send, Trophy, Users, X } from "lucide-react-native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { Text } from "react-native-paper";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AppLogo } from "../components/branding/AppLogo";
 import { NotificationBell } from "../components/NotificationBell";
 import { FblaSocialSection } from "../components/social/FblaSocialSection";
 import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassButton } from "../components/ui/GlassButton";
 import { GlassInput } from "../components/ui/GlassInput";
-import { GlassIconButton } from "../components/ui/GlassIconButton";
 import { SkeletonCard } from "../components/ui/SkeletonCard";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { useAccessibility } from "../context/AccessibilityContext";
@@ -40,11 +40,11 @@ import { sendLocalPush } from "../services/pushService";
 import { CommentItem, EventItem, PostItem } from "../types/social";
 import { ChapterGoal, MeetingActionItem, OfficerTask, PracticeChallenge, RecognitionPlacement, StudySession } from "../types/features";
 
-const QUICK_ACTIONS: Array<{ id: string; label: string; route: keyof RootStackParamList }> = [
-  { id: "find_members", label: "Find Members", route: "Search" },
-  { id: "conferences", label: "Conferences", route: "MyConferences" },
-  { id: "leaderboard", label: "Leaderboard", route: "Leaderboard" },
-  { id: "create_post", label: "New Post", route: "CreatePost" },
+const QUICK_ACTIONS: Array<{ id: string; label: string; route: keyof RootStackParamList; color: string }> = [
+  { id: "find_members", label: "Find Members", route: "Search", color: "#4A90D9" },
+  { id: "conferences", label: "Conferences", route: "MyConferences", color: "#9B59B6" },
+  { id: "leaderboard", label: "Leaderboard", route: "Leaderboard", color: "#F39C12" },
+  { id: "create_post", label: "New Post", route: "CreatePost", color: "#27AE60" },
 ];
 function buildFallbackPosts(schoolId: string): PostItem[] {
   const now = Date.now();
@@ -108,18 +108,35 @@ function buildFallbackPosts(schoolId: string): PostItem[] {
 }
 
 function buildHomeFallbackEvents(schoolId: string): EventItem[] {
-  const now = Date.now();
-  const day = 1000 * 60 * 60 * 24;
-  const hour = 1000 * 60 * 60;
+  // Pin events to real upcoming dates so the calendar widget is always accurate.
+  // We compute dates relative to the current Monday so dots appear on the right days.
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Sun
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + daysToMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  function weekday(offsetFromMonday: number, hour: number): string {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + offsetFromMonday);
+    d.setHours(hour, 0, 0, 0);
+    return d.toISOString();
+  }
+
   return [
-    { id: "hf_1", schoolId, title: "Chapter Meeting", description: "Weekly chapter meeting.", location: "Room 112", category: "FBLA", startAt: new Date(now + hour * 3).toISOString(), attendeeIds: [], attendeeCount: 18, capacity: 60 },
-    { id: "hf_2", schoolId, title: "Public Speaking Practice", description: "Open mic session for speech practice.", location: "Auditorium", category: "Academic", startAt: new Date(now + day + hour * 4).toISOString(), attendeeIds: [], attendeeCount: 9, capacity: 25 },
-    { id: "hf_3", schoolId, title: "Business Plan Review", description: "Peer review of draft business plans.", location: "Library Conference Room", category: "FBLA", startAt: new Date(now + day * 2 + hour * 5).toISOString(), attendeeIds: [], attendeeCount: 7, capacity: 20 },
-    { id: "hf_4", schoolId, title: "Study Session: Objective Tests", description: "Group study for Business Law, Economics, Accounting.", location: "Room 204", category: "Academic", startAt: new Date(now + day * 3 + hour * 4).toISOString(), attendeeIds: [], attendeeCount: 12, capacity: 20 },
-    { id: "hf_5", schoolId, title: "Mock Interview Workshop", description: "Practice interviews with business volunteers.", location: "Career Center", category: "Academic", startAt: new Date(now + day * 4 + hour * 3).toISOString(), attendeeIds: [], attendeeCount: 14, capacity: 30 },
-    { id: "hf_6", schoolId, title: "FBLA Spirit Week Kickoff", description: "Daily challenges and extra XP all week.", location: "Main Hallway", category: "Social", startAt: new Date(now + day * 5).toISOString(), attendeeIds: [], attendeeCount: 35, capacity: 100 },
-    { id: "hf_7", schoolId, title: "District Leadership Conference", description: "District-level competition. Top placers advance to SLC.", location: "Convention Center", category: "FBLA", startAt: new Date(now + day * 35 + hour * 8).toISOString(), attendeeIds: [], attendeeCount: 45, capacity: 120 },
-    { id: "hf_8", schoolId, title: "Networking Mixer", description: "Meet local business professionals and FBLA alumni.", location: "School Commons", category: "Social", startAt: new Date(now + day * 25 + hour * 5).toISOString(), attendeeIds: [], attendeeCount: 19, capacity: 50 },
+    // This week — calendar dots will appear on these days
+    { id: "hf_1", schoolId, title: "Chapter Meeting", description: "Weekly chapter meeting — agenda: DLC registration and event assignments.", location: "Room 112", category: "FBLA", startAt: weekday(0, 16), attendeeIds: [], attendeeCount: 18, capacity: 60 },
+    { id: "hf_2", schoolId, title: "Public Speaking Practice", description: "Open mic session for speech practice. All levels welcome.", location: "Auditorium", category: "Academic", startAt: weekday(1, 15), attendeeIds: [], attendeeCount: 9, capacity: 25 },
+    { id: "hf_3", schoolId, title: "Business Plan Review", description: "Peer review of draft business plans before submission.", location: "Library Conference Room", category: "FBLA", startAt: weekday(2, 16), attendeeIds: [], attendeeCount: 7, capacity: 20 },
+    { id: "hf_4", schoolId, title: "Study Session: Objective Tests", description: "Group study for Business Law, Economics, Accounting.", location: "Room 204", category: "Academic", startAt: weekday(3, 15), attendeeIds: [], attendeeCount: 12, capacity: 20 },
+    { id: "hf_5", schoolId, title: "Mock Interview Workshop", description: "Practice interviews with local business volunteers.", location: "Career Center", category: "Academic", startAt: weekday(4, 14), attendeeIds: [], attendeeCount: 14, capacity: 30 },
+    // Next week and beyond
+    { id: "hf_6", schoolId, title: "FBLA Spirit Week Kickoff", description: "Daily challenges and extra XP awarded all week. Don't miss it!", location: "Main Hallway", category: "Social", startAt: weekday(7, 8), attendeeIds: [], attendeeCount: 35, capacity: 100 },
+    { id: "hf_9", schoolId, title: "Entrepreneurship Pitch Night", description: "Final rehearsal pitches before the district event. Judges attending.", location: "Media Center", category: "FBLA", startAt: weekday(9, 17), attendeeIds: [], attendeeCount: 20, capacity: 40 },
+    { id: "hf_10", schoolId, title: "Leadership Workshop", description: "Parliamentary procedure and running effective meetings.", location: "Room 301", category: "FBLA", startAt: weekday(11, 15), attendeeIds: [], attendeeCount: 22, capacity: 35 },
+    { id: "hf_11", schoolId, title: "Networking Mixer", description: "Meet local business professionals and FBLA alumni.", location: "School Commons", category: "Social", startAt: weekday(14, 17), attendeeIds: [], attendeeCount: 19, capacity: 50 },
+    { id: "hf_8", schoolId, title: "District Leadership Conference", description: "District-level competition. Top placers advance to SLC.", location: "Convention Center", category: "FBLA", startAt: weekday(28, 8), attendeeIds: [], attendeeCount: 45, capacity: 120 },
   ];
 }
 
@@ -259,7 +276,16 @@ export function HomeScreen() {
   const [expandedComments, setExpandedComments] = useState<CommentItem[]>([]);
   const [commentInput, setCommentInput] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; name: string } | null>(null);
   const commentSubRef = useRef<(() => void) | null>(null);
+  // 0 = fully visible, 1 = fully hidden (collapsed)
+  const commentInputVisible = useSharedValue(0);
+  const lastCommentScrollY = useRef(0);
+  const animatedCommentInputStyle = useAnimatedStyle(() => ({
+    maxHeight: interpolate(commentInputVisible.value, [0, 1], [200, 0]),
+    opacity: interpolate(commentInputVisible.value, [0, 0.5, 1], [1, 0.4, 0]),
+    overflow: "hidden",
+  }));
   const [events, setEvents] = useState<EventItem[]>([]);
   const [announcement, setAnnouncement] = useState<AnnouncementItem | null>(null);
   const [dismissedAnnouncementId, setDismissedAnnouncementId] = useState("");
@@ -310,7 +336,10 @@ export function HomeScreen() {
         const resolvedPosts = schoolPosts.length > 0 ? schoolPosts.slice(0, 6) : buildFallbackPosts(profile.schoolId);
         setPosts(resolvedPosts);
         setLikedPostIds(new Set(resolvedPosts.filter((p) => p.likedBy.includes(profile.uid)).map((p) => p.id)));
-        const resolvedEvents = schoolEvents.length > 0 ? schoolEvents : buildHomeFallbackEvents(profile.schoolId);
+        // Only use real events if there are upcoming ones; otherwise show fallbacks
+        const nowMs = Date.now();
+        const futureReal = schoolEvents.filter((e) => new Date(e.startAt).getTime() >= nowMs);
+        const resolvedEvents = futureReal.length > 0 ? schoolEvents : buildHomeFallbackEvents(profile.schoolId);
         setEvents(
           [...resolvedEvents].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()),
         );
@@ -439,6 +468,8 @@ export function HomeScreen() {
 
   const openCommentModal = (post: PostItem) => {
     commentSubRef.current?.();
+    commentInputVisible.value = 0;
+    lastCommentScrollY.current = 0;
     setCommentModalPost(post);
     setCommentInput("");
     const isDemo = post.authorId.startsWith("demo_") || post.authorId === "seed_fbla_atlas";
@@ -457,6 +488,7 @@ export function HomeScreen() {
     setCommentModalPost(null);
     setExpandedComments([]);
     setCommentInput("");
+    setReplyingTo(null);
   };
 
   const handleLikePost = async (post: PostItem) => {
@@ -476,8 +508,11 @@ export function HomeScreen() {
   const handleAddComment = async () => {
     if (!profile || !commentInput.trim() || submittingComment || !commentModalPost) return;
     const post = commentModalPost;
-    const text = commentInput.trim();
+    const text = replyingTo
+      ? `@${replyingTo.name} ${commentInput.trim()}`
+      : commentInput.trim();
     setCommentInput("");
+    setReplyingTo(null);
     setSubmittingComment(true);
     try {
       await addCommentToPost(post, profile, text);
@@ -494,9 +529,9 @@ export function HomeScreen() {
     () =>
       focusMode
         ? [
-            { id: "practice", label: "Practice", route: "Practice" as keyof RootStackParamList },
-            { id: "events", label: "Events", route: "Events" as keyof RootStackParamList },
-            { id: "finn", label: "Finn", route: "Finn" as keyof RootStackParamList },
+            { id: "practice", label: "Practice", route: "Practice" as keyof RootStackParamList, color: "#4A90D9" },
+            { id: "events", label: "Events", route: "Events" as keyof RootStackParamList, color: "#27AE60" },
+            { id: "finn", label: "Finn", route: "Finn" as keyof RootStackParamList, color: "#9B59B6" },
           ]
         : QUICK_ACTIONS,
     [focusMode],
@@ -505,7 +540,7 @@ export function HomeScreen() {
     const now = Date.now();
     return events
       .filter((event) => new Date(event.startAt).getTime() >= now)
-      .slice(0, 3);
+      .slice(0, 2);
   }, [events]);
   const weekDays = useMemo(() => {
     const start = startOfWeekMonday(new Date());
@@ -540,7 +575,8 @@ export function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }}>
+    <View style={{ flex: 1, backgroundColor: palette.colors.background }}>
+    <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: palette.colors.background }}>
       <LinearGradient
         pointerEvents="none"
         colors={
@@ -553,7 +589,7 @@ export function HomeScreen() {
         style={StyleSheet.absoluteFillObject}
       />
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 28, paddingBottom: 28 }}
         keyboardShouldPersistTaps="handled"
         scrollEventThrottle={scrollEventThrottle}
         onScroll={onScroll}
@@ -562,8 +598,8 @@ export function HomeScreen() {
         {announcement && announcement.id !== dismissedAnnouncementId ? (
           <GlassSurface
             style={{
-              padding: 12,
-              marginBottom: 12,
+              padding: 16,
+              marginBottom: 20,
               backgroundColor: palette.colors.surface,
               borderRadius: 16,
             }}
@@ -604,8 +640,8 @@ export function HomeScreen() {
         {focusMode ? (
           <GlassSurface
             style={{
-              padding: 10,
-              marginBottom: 12,
+              padding: 14,
+              marginBottom: 20,
               borderRadius: 12,
               borderWidth: 1,
               borderColor: palette.colors.border,
@@ -638,37 +674,29 @@ export function HomeScreen() {
             flexDirection: "row",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: 12,
+            marginBottom: 24,
             borderRadius: 16,
             overflow: "hidden",
-            paddingHorizontal: 14,
-            paddingVertical: 14,
+            paddingHorizontal: 16,
+            paddingVertical: 18,
           }}
         >
-          <LinearGradient
-            pointerEvents="none"
-            colors={[palette.colors.surface, palette.colors.transparent]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={{ position: "absolute", left: 0, right: 0, top: 0, height: 80 }}
-          />
+          {palette.isDark ? (
+            <LinearGradient
+              pointerEvents="none"
+              colors={[palette.colors.surface, palette.colors.transparent]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={{ position: "absolute", left: 0, right: 0, top: 0, height: 80 }}
+            />
+          ) : null}
           <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                color: palette.colors.textMuted,
-                fontSize: 13,
-                fontWeight: "600",
-                marginBottom: 2,
-                letterSpacing: 0.8,
-                textTransform: "uppercase",
-              }}
-            >
-              Home
-            </Text>
+            <AppLogo size={22} />
+            <View style={{ height: 14 }} />
             <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 22 }}>
               {dayGreeting(profile.displayName.split(" ")[0])}
             </Text>
-            <Text style={{ color: palette.colors.textMuted, marginTop: 4, fontSize: 14 }}>
+            <Text style={{ color: palette.colors.textMuted, marginTop: 6, fontSize: 14 }}>
               FBLA updates and chapter activity
             </Text>
           </View>
@@ -689,39 +717,57 @@ export function HomeScreen() {
           </View>
         </View>
 
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 12 }}>
-          {visibleQuickActions.map((action) => (
-            <Pressable
-              key={action.id}
-              onPress={() => {
-                navigation.navigate(action.route as never);
-              }}
-              style={{ width: "48%", minHeight: 50 }}
-            >
-              {({ pressed }) => (
-                <GlassSurface
-                  pressed={pressed}
-                  style={{
-                    flex: 1,
-                    minHeight: 50,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: palette.colors.surface,
-                    borderRadius: 16,
-                  }}
-                >
-                  <Text style={{ color: palette.colors.text, fontWeight: "600", fontSize: 14 }}>
-                    {action.label}
-                  </Text>
-                </GlassSurface>
-              )}
-            </Pressable>
+        <View style={{ gap: 12, marginBottom: 24 }}>
+          {[visibleQuickActions.slice(0, 2), visibleQuickActions.slice(2, 4)].map((row, rowIdx) => (
+            <View key={rowIdx} style={{ flexDirection: "row", gap: 12 }}>
+              {row.map((action) => {
+                const iconMap = {
+                  find_members: Users,
+                  conferences: SearchIcon,
+                  leaderboard: Trophy,
+                  create_post: PenSquare,
+                } as Record<string, React.ComponentType<{ size: number; color: string; strokeWidth: number }>>;
+                const Icon = iconMap[action.id];
+                return (
+                  <Pressable
+                    key={action.id}
+                    onPress={() => navigation.navigate(action.route as never)}
+                    style={{ flex: 1, minHeight: 68 }}
+                  >
+                    {({ pressed }) => (
+                      <GlassSurface
+                        pressed={pressed}
+                        style={{
+                          flex: 1,
+                          minHeight: 68,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexDirection: "row",
+                          gap: 8,
+                          backgroundColor: palette.colors.surface,
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: action.color + "44",
+                          borderTopWidth: 2,
+                          borderTopColor: action.color + "99",
+                        }}
+                      >
+                        {Icon ? <Icon size={15} color={action.color} strokeWidth={2.2} /> : null}
+                        <Text style={{ color: palette.colors.text, fontWeight: "600", fontSize: 13 }}>
+                          {action.label}
+                        </Text>
+                      </GlassSurface>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
           ))}
         </View>
 
         <Pressable
           onPress={() => navigation.navigate("Events")}
-          style={{ marginBottom: 12 }}
+          style={{ marginBottom: 24 }}
           accessibilityRole="button"
           accessibilityLabel="Open full events page"
         >
@@ -729,7 +775,7 @@ export function HomeScreen() {
             <GlassSurface
               pressed={pressed}
               style={{
-                padding: 12,
+                padding: 20,
                 borderRadius: 16,
                 borderWidth: 1,
                 borderColor: palette.colors.border,
@@ -753,7 +799,7 @@ export function HomeScreen() {
                   See All →
                 </Text>
               </View>
-              <View style={{ flexDirection: "row", gap: 12, marginTop: 10 }}>
+              <View style={{ flexDirection: "row", gap: 16, marginTop: 20 }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ color: palette.colors.textMuted, fontSize: 12, marginBottom: 6 }}>
                     {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
@@ -838,12 +884,12 @@ export function HomeScreen() {
         </Pressable>
 
         {incomingChallenges.length > 0 ? (
-          <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
+          <GlassSurface style={{ padding: 16, marginBottom: 24 }}>
             <Text
               style={{
                 color: palette.colors.text,
                 fontWeight: "800",
-                marginBottom: 8,
+                marginBottom: 12,
                 letterSpacing: 0.8,
                 fontSize: 15,
                 textTransform: "uppercase",
@@ -852,7 +898,7 @@ export function HomeScreen() {
               Practice Challenges
             </Text>
             {incomingChallenges.slice(0, 3).map((challenge) => (
-              <GlassSurface key={challenge.id} style={{ padding: 10, marginBottom: 8 }}>
+              <GlassSurface key={challenge.id} style={{ padding: 14, marginBottom: 10 }}>
                 <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
                   {challenge.challengerName} challenged you
                 </Text>
@@ -890,12 +936,12 @@ export function HomeScreen() {
         ) : null}
 
         {recognitionRows.length > 0 ? (
-          <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
+          <GlassSurface style={{ padding: 16, marginBottom: 24 }}>
             <Text
               style={{
                 color: palette.colors.text,
                 fontWeight: "800",
-                marginBottom: 8,
+                marginBottom: 12,
                 letterSpacing: 0.8,
                 fontSize: 15,
                 textTransform: "uppercase",
@@ -904,7 +950,7 @@ export function HomeScreen() {
               Chapter Wins
             </Text>
             {recognitionRows.slice(0, 3).map((item) => (
-              <View key={item.id} style={{ paddingVertical: 8, borderTopWidth: 1, borderTopColor: palette.colors.divider }}>
+              <View key={item.id} style={{ paddingVertical: 16, borderTopWidth: 1, borderTopColor: palette.colors.divider }}>
                 <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
                   {item.userName} placed {item.place}
                 </Text>
@@ -917,12 +963,12 @@ export function HomeScreen() {
         ) : null}
 
         {chapterGoals.length > 0 || permissions.canManageTasks() ? (
-          <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
+          <GlassSurface style={{ padding: 16, marginBottom: 24 }}>
             <Text
               style={{
                 color: palette.colors.text,
                 fontWeight: "800",
-                marginBottom: 8,
+                marginBottom: 12,
                 letterSpacing: 0.8,
                 fontSize: 15,
                 textTransform: "uppercase",
@@ -931,7 +977,7 @@ export function HomeScreen() {
               Chapter Goals
             </Text>
             {permissions.canManageTasks() && profile.chapterId ? (
-              <GlassSurface style={{ padding: 10, marginBottom: 8 }}>
+              <GlassSurface style={{ padding: 14, marginBottom: 10 }}>
                 <GlassInput
                   value={newGoalTitle}
                   onChangeText={setNewGoalTitle}
@@ -975,7 +1021,7 @@ export function HomeScreen() {
             {chapterGoals.slice(0, 3).map((goal) => {
               const progress = goal.target > 0 ? Math.min(1, goal.progress / goal.target) : 0;
               return (
-                <GlassSurface key={goal.id} style={{ padding: 10, marginBottom: 8 }}>
+                <GlassSurface key={goal.id} style={{ padding: 14, marginBottom: 10 }}>
                   <Text style={{ color: palette.colors.text, fontWeight: "700" }}>{goal.title}</Text>
                   <Text style={{ color: palette.colors.textSecondary, marginTop: 2 }}>
                     {goal.progress}/{goal.target} {goal.unit} • due {goal.deadline}
@@ -1006,12 +1052,12 @@ export function HomeScreen() {
         ) : null}
 
         {studySessions.length > 0 ? (
-          <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
+          <GlassSurface style={{ padding: 16, marginBottom: 24 }}>
             <Text
               style={{
                 color: palette.colors.text,
                 fontWeight: "800",
-                marginBottom: 8,
+                marginBottom: 12,
                 letterSpacing: 0.8,
                 fontSize: 15,
                 textTransform: "uppercase",
@@ -1020,7 +1066,7 @@ export function HomeScreen() {
               Group Study Live
             </Text>
             {studySessions.slice(0, 3).map((session) => (
-              <GlassSurface key={session.id} style={{ padding: 10, marginBottom: 8 }}>
+              <GlassSurface key={session.id} style={{ padding: 14, marginBottom: 10 }}>
                 <Text style={{ color: palette.colors.text, fontWeight: "700" }}>
                   {session.createdByName} is studying {session.eventNames.join(", ") || "FBLA"}
                 </Text>
@@ -1047,12 +1093,12 @@ export function HomeScreen() {
         ) : null}
 
         {permissions.canManageTasks() && officerTasks.length > 0 ? (
-          <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
+          <GlassSurface style={{ padding: 16, marginBottom: 24 }}>
             <Text
               style={{
                 color: palette.colors.text,
                 fontWeight: "800",
-                marginBottom: 8,
+                marginBottom: 12,
                 letterSpacing: 0.8,
                 fontSize: 15,
                 textTransform: "uppercase",
@@ -1068,12 +1114,12 @@ export function HomeScreen() {
         ) : null}
 
         {assignedActions.length > 0 ? (
-          <GlassSurface style={{ padding: 12, marginBottom: 12 }}>
+          <GlassSurface style={{ padding: 16, marginBottom: 24 }}>
             <Text
               style={{
                 color: palette.colors.text,
                 fontWeight: "800",
-                marginBottom: 8,
+                marginBottom: 12,
                 letterSpacing: 0.8,
                 fontSize: 15,
                 textTransform: "uppercase",
@@ -1164,18 +1210,25 @@ export function HomeScreen() {
                     ) : null}
                   </View>
 
-                  {/* Post image */}
+                  {/* Post image — tappable */}
                   {post.imageUrl ? (
-                    <Image
-                      source={{ uri: post.imageUrl }}
-                      style={{ width: "100%", height: 180, borderRadius: 12, marginBottom: 8 }}
-                      contentFit="cover"
-                      transition={300}
-                    />
+                    <Pressable onPress={() => openCommentModal(post)}>
+                      <Image
+                        source={{ uri: post.imageUrl }}
+                        style={{ width: "100%", height: 180, borderRadius: 12, marginBottom: 8 }}
+                        contentFit="cover"
+                        transition={300}
+                      />
+                    </Pressable>
                   ) : null}
 
-                  {/* Content */}
-                  <Text style={{ color: palette.colors.text, fontSize: 14, lineHeight: 20 }}>{post.content}</Text>
+                  {/* Content — tappable to open full post */}
+                  <Pressable onPress={() => openCommentModal(post)}>
+                    <Text style={{ color: palette.colors.text, fontSize: 14, lineHeight: 20 }}>{post.content}</Text>
+                    <Text style={{ color: palette.colors.primary, fontSize: 12, marginTop: 4, fontWeight: "600" }}>
+                      View all {post.commentCount} comments
+                    </Text>
+                  </Pressable>
 
                   {/* Like / comment action row */}
                   <View style={{ flexDirection: "row", gap: 16, marginTop: 10, alignItems: "center" }}>
@@ -1210,134 +1263,233 @@ export function HomeScreen() {
         ) : null}
       </ScrollView>
 
-      {/* Comments Modal */}
+      {/* Post Detail Modal */}
       <Modal
         visible={commentModalPost !== null}
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={closeCommentModal}
       >
-        <SafeAreaView style={{ flex: 1, backgroundColor: palette.colors.background }} edges={["bottom"]}>
+        <View style={{ flex: 1, backgroundColor: palette.colors.background }}>
           <KeyboardAvoidingView
             style={{ flex: 1 }}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
           >
-            {/* Drag handle indicator */}
-            <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 4 }}>
+            {/* Drag handle */}
+            <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 2 }}>
               <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: palette.colors.border }} />
             </View>
 
-            {/* Header */}
-            <View style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              borderBottomWidth: 1,
-              borderBottomColor: palette.colors.border,
-              backgroundColor: palette.colors.surface,
-            }}>
-              <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 17 }}>Comments</Text>
-              <Pressable onPress={closeCommentModal} style={{ padding: 6 }}>
-                <X size={22} color={palette.colors.text} />
-              </Pressable>
-            </View>
-
-            {/* Post preview */}
-            {commentModalPost ? (
-              <View style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: palette.colors.border }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Pressable
-                    onPress={() => {
-                      if (!commentModalPost.authorId.startsWith("demo_") && commentModalPost.authorId !== "seed_fbla_atlas") {
-                        closeCommentModal();
-                        navigation.navigate("StudentProfile", { userId: commentModalPost.authorId });
-                      }
-                    }}
-                  >
-                    <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: commentModalPost.authorAvatarColor, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ color: "#fff", fontWeight: "800", fontSize: 12 }}>{commentModalPost.authorName.charAt(0)}</Text>
-                    </View>
-                  </Pressable>
-                  <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 13 }}>{commentModalPost.authorName}</Text>
-                </View>
-                <Text style={{ color: palette.colors.textSecondary, fontSize: 13, marginTop: 6, lineHeight: 18 }} numberOfLines={2}>{commentModalPost.content}</Text>
-              </View>
-            ) : null}
-
-            {/* Comments list */}
             <ScrollView
               style={{ flex: 1 }}
-              contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 20 }}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onScroll={(e) => {
+                const y = e.nativeEvent.contentOffset.y;
+                const delta = y - lastCommentScrollY.current;
+                lastCommentScrollY.current = y;
+                if (delta > 8 && y > 60) {
+                  commentInputVisible.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
+                } else if (delta < -6) {
+                  commentInputVisible.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+                }
+              }}
             >
-              {expandedComments.length === 0 ? (
-                <Text style={{ color: palette.colors.textMuted, textAlign: "center", marginTop: 40, fontSize: 14 }}>
-                  No comments yet. Be the first!
-                </Text>
-              ) : (
-                expandedComments.map((comment) => (
-                  <View key={comment.id} style={{ marginBottom: 16, flexDirection: "row", gap: 10 }}>
-                    <Pressable onPress={() => {
-                      if (!comment.authorId.startsWith("demo_") && comment.authorId !== "seed_fbla_atlas") {
-                        closeCommentModal();
-                        navigation.navigate("StudentProfile", { userId: comment.authorId });
-                      }
-                    }}>
-                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: comment.authorAvatarColor, alignItems: "center", justifyContent: "center" }}>
-                        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>{comment.authorName.charAt(0)}</Text>
+              {commentModalPost ? (
+                <>
+                  {/* Hero image with gradient fade */}
+                  {commentModalPost.imageUrl ? (
+                    <View style={{ position: "relative", marginBottom: 0 }}>
+                      <Image
+                        source={{ uri: commentModalPost.imageUrl }}
+                        style={{ width: "100%", height: 260 }}
+                        contentFit="cover"
+                        transition={300}
+                      />
+                      <LinearGradient
+                        pointerEvents="none"
+                        colors={["transparent", palette.colors.background]}
+                        start={{ x: 0, y: 0.4 }}
+                        end={{ x: 0, y: 1 }}
+                        style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 130 }}
+                      />
+                      {/* Close button floating on image */}
+                      <Pressable
+                        onPress={closeCommentModal}
+                        style={{
+                          position: "absolute", top: 14, right: 14,
+                          width: 34, height: 34, borderRadius: 17,
+                          backgroundColor: "rgba(0,0,0,0.45)",
+                          alignItems: "center", justifyContent: "center",
+                        }}
+                      >
+                        <X size={18} color="#fff" />
+                      </Pressable>
+                    </View>
+                  ) : (
+                    /* No image — show close button in a regular header */
+                    <View style={{ flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: 16, paddingVertical: 10 }}>
+                      <Pressable onPress={closeCommentModal} style={{ padding: 4 }}>
+                        <X size={22} color={palette.colors.text} />
+                      </Pressable>
+                    </View>
+                  )}
+
+                  {/* Author row */}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: commentModalPost.imageUrl ? 0 : 4, paddingBottom: 12 }}>
+                    <Pressable
+                      onPress={() => {
+                        if (!commentModalPost.authorId.startsWith("demo_") && commentModalPost.authorId !== "seed_fbla_atlas") {
+                          closeCommentModal();
+                          navigation.navigate("StudentProfile", { userId: commentModalPost.authorId });
+                        }
+                      }}
+                    >
+                      <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: commentModalPost.authorAvatarColor, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: palette.colors.border }}>
+                        <Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>{commentModalPost.authorName.charAt(0)}</Text>
                       </View>
                     </Pressable>
                     <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                        <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 13 }}>{comment.authorName}</Text>
-                        <Text style={{ color: palette.colors.textMuted, fontSize: 11 }}>{formatRelativeDateTime(comment.createdAt)}</Text>
-                      </View>
-                      <Text style={{ color: palette.colors.textSecondary, fontSize: 14, lineHeight: 20 }}>{comment.content}</Text>
+                      <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 15 }}>{commentModalPost.authorName}</Text>
+                      <Text style={{ color: palette.colors.textMuted, fontSize: 12, marginTop: 1 }}>{formatRelativeDateTime(commentModalPost.createdAt)}</Text>
                     </View>
+                    {/* Like button */}
+                    <Pressable
+                      onPress={() => void handleLikePost(commentModalPost)}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: likedPostIds.has(commentModalPost.id) ? "#ef444422" : palette.colors.surface, borderWidth: 1, borderColor: likedPostIds.has(commentModalPost.id) ? "#ef4444" : palette.colors.border }}
+                    >
+                      <Heart size={15} color={likedPostIds.has(commentModalPost.id) ? "#ef4444" : palette.colors.textMuted} fill={likedPostIds.has(commentModalPost.id) ? "#ef4444" : "transparent"} />
+                      <Text style={{ color: likedPostIds.has(commentModalPost.id) ? "#ef4444" : palette.colors.textMuted, fontWeight: "700", fontSize: 13 }}>{commentModalPost.likeCount}</Text>
+                    </Pressable>
                   </View>
-                ))
-              )}
+
+                  {/* Full post content */}
+                  <View style={{ paddingHorizontal: 16, paddingBottom: 14 }}>
+                    <Text style={{ color: palette.colors.text, fontSize: 16, lineHeight: 24, fontWeight: "400" }}>
+                      {commentModalPost.content}
+                    </Text>
+                    {/* Tags */}
+                    {commentModalPost.tags && commentModalPost.tags.length > 0 ? (
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+                        {commentModalPost.tags.map((tag) => (
+                          <View key={tag} style={{ borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: palette.colors.primary + "22", borderWidth: 1, borderColor: palette.colors.primary + "44" }}>
+                            <Text style={{ color: palette.colors.primary, fontSize: 12, fontWeight: "600" }}>#{tag}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {/* Comments header */}
+                  <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: palette.colors.border, marginTop: 4 }}>
+                    <MessageCircleIcon size={16} color={palette.colors.textMuted} />
+                    <Text style={{ color: palette.colors.text, fontWeight: "800", fontSize: 15, marginLeft: 7 }}>
+                      {expandedComments.length > 0 ? `${expandedComments.length} Comments` : "Comments"}
+                    </Text>
+                  </View>
+
+                  {/* Comments list */}
+                  <View style={{ paddingHorizontal: 16, paddingBottom: 30 }}>
+                    {expandedComments.length === 0 ? (
+                      <Text style={{ color: palette.colors.textMuted, textAlign: "center", marginTop: 24, marginBottom: 24, fontSize: 14 }}>
+                        No comments yet. Be the first!
+                      </Text>
+                    ) : (
+                      expandedComments.map((comment, idx) => (
+                        <View
+                          key={comment.id}
+                          style={{
+                            flexDirection: "row", gap: 12, paddingVertical: 14,
+                            borderBottomWidth: idx < expandedComments.length - 1 ? 1 : 0,
+                            borderBottomColor: palette.colors.border,
+                          }}
+                        >
+                          <Pressable onPress={() => {
+                            if (!comment.authorId.startsWith("demo_") && comment.authorId !== "seed_fbla_atlas") {
+                              closeCommentModal();
+                              navigation.navigate("StudentProfile", { userId: comment.authorId });
+                            }
+                          }}>
+                            <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: comment.authorAvatarColor, alignItems: "center", justifyContent: "center" }}>
+                              <Text style={{ color: "#fff", fontSize: 15, fontWeight: "800" }}>{comment.authorName.charAt(0)}</Text>
+                            </View>
+                          </Pressable>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                              <Text style={{ color: palette.colors.text, fontWeight: "700", fontSize: 14 }}>{comment.authorName}</Text>
+                              <Text style={{ color: palette.colors.textMuted, fontSize: 12 }}>{formatRelativeDateTime(comment.createdAt)}</Text>
+                            </View>
+                            <Text style={{ color: palette.colors.text, fontSize: 15, lineHeight: 22 }}>{comment.content}</Text>
+                            <Pressable
+                              onPress={() => {
+                                setReplyingTo({ id: comment.id, name: comment.authorName });
+                                commentInputVisible.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+                              }}
+                              style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 }}
+                            >
+                              <CornerDownRight size={13} color={palette.colors.primary} />
+                              <Text style={{ color: palette.colors.primary, fontSize: 13, fontWeight: "600" }}>Reply</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </>
+              ) : null}
             </ScrollView>
 
-            {/* Comment input — sits above keyboard */}
-            <View style={{
-              flexDirection: "row",
-              gap: 10,
-              alignItems: "center",
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              paddingBottom: Math.max(10, insets.bottom > 0 ? 4 : 10),
-              borderTopWidth: 1,
-              borderTopColor: palette.colors.border,
-              backgroundColor: palette.colors.surface,
-            }}>
-              <GlassInput
-                value={commentInput}
-                onChangeText={setCommentInput}
-                placeholder="Add a comment..."
-                containerStyle={{ flex: 1 }}
-              />
-              <Pressable
-                onPress={() => void handleAddComment()}
-                disabled={submittingComment || !commentInput.trim()}
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 999,
-                  backgroundColor: commentInput.trim() ? palette.colors.primary : palette.colors.inputSurface,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Send size={18} color={commentInput.trim() ? "#fff" : palette.colors.textMuted} />
-              </Pressable>
-            </View>
+            {/* Animated comment input + replying chip */}
+            <Animated.View style={animatedCommentInputStyle}>
+              {replyingTo ? (
+                <View style={{
+                  flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                  paddingHorizontal: 16, paddingVertical: 8,
+                  backgroundColor: palette.colors.primary + "18",
+                  borderTopWidth: 1, borderTopColor: palette.colors.primary + "44",
+                }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <CornerDownRight size={13} color={palette.colors.primary} />
+                    <Text style={{ color: palette.colors.primary, fontSize: 13, fontWeight: "600" }}>Replying to @{replyingTo.name}</Text>
+                  </View>
+                  <Pressable onPress={() => setReplyingTo(null)} style={{ padding: 4 }}>
+                    <X size={14} color={palette.colors.primary} />
+                  </Pressable>
+                </View>
+              ) : null}
+
+              <View style={{
+                flexDirection: "row", gap: 10, alignItems: "center",
+                paddingHorizontal: 16, paddingVertical: 10,
+                paddingBottom: Math.max(10, insets.bottom),
+                borderTopWidth: 1, borderTopColor: palette.colors.border,
+                backgroundColor: palette.colors.surface,
+              }}>
+                <GlassInput
+                  value={commentInput}
+                  onChangeText={setCommentInput}
+                  placeholder="Add a comment..."
+                  containerStyle={{ flex: 1 }}
+                />
+                <Pressable
+                  onPress={() => void handleAddComment()}
+                  disabled={submittingComment || !commentInput.trim()}
+                  style={{
+                    width: 44, height: 44, borderRadius: 22,
+                    backgroundColor: commentInput.trim() ? palette.colors.primary : palette.colors.inputSurface,
+                    alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  <Send size={18} color={commentInput.trim() ? "#fff" : palette.colors.textMuted} />
+                </Pressable>
+              </View>
+            </Animated.View>
           </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
       </Modal>
     </SafeAreaView>
+    </View>
   );
 }

@@ -40,8 +40,9 @@ export class ErrorBoundary extends React.Component<
             gap: 14,
           }}
         >
-          <Text style={{ color: this.palette.colors.text, fontSize: 22, fontWeight: "800" }}>
-            FBLA Atlas
+          <Text style={{ fontSize: 26, fontWeight: "800", color: this.palette.colors.text }}>
+            FBLA{" "}
+            <Text style={{ color: this.palette.colors.primary }}>Atlas</Text>
           </Text>
           <Text style={{ color: this.palette.colors.textSecondary, textAlign: "center" }}>
             Something went wrong, but your app is still alive.

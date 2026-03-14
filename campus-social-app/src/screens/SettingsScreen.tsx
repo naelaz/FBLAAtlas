@@ -160,20 +160,23 @@ function SettingsSection({ id, title, isOpen, onToggle, children }: SectionProps
   return (
     <View
       style={{
-        borderBottomWidth: 1,
-        borderBottomColor: palette.colors.divider,
+        borderRadius: 14,
+        overflow: "hidden",
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: palette.colors.border,
+        backgroundColor: palette.colors.surface,
       }}
     >
       <Pressable
         onPress={onToggle}
         style={{
-          minHeight: 56,
-          height: 56,
-          paddingHorizontal: 12,
+          minHeight: 52,
+          height: 52,
+          paddingHorizontal: 14,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          backgroundColor: isOpen ? palette.colors.surface : palette.colors.background,
         }}
         accessibilityRole="button"
         accessibilityLabel={`Toggle ${id} settings`}
@@ -195,11 +198,12 @@ function SettingsSection({ id, title, isOpen, onToggle, children }: SectionProps
       {isOpen ? (
         <View
           style={{
-            paddingHorizontal: 12,
-            paddingTop: 12,
-            paddingBottom: 12,
+            paddingHorizontal: 14,
+            paddingTop: 4,
+            paddingBottom: 14,
             gap: 12,
-            backgroundColor: palette.colors.surface,
+            borderTopWidth: 1,
+            borderTopColor: palette.colors.border,
           }}
         >
           {children}

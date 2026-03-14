@@ -62,7 +62,9 @@ export function GlassButton({
       ? "transparent"
     : isSolid
       ? resolvedAccent
-      : palette.colors.surface;
+      : isIcon && accentColor
+        ? resolvedAccent
+        : palette.colors.surface;
   const borderColor = isGhost
     ? palette.colors.border
     : isDestructive

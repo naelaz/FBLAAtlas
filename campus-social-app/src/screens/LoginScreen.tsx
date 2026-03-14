@@ -301,12 +301,13 @@ export function LoginScreen() {
       />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 36 }} keyboardShouldPersistTaps="handled">
-          <View style={{ marginTop: 14, alignItems: "center" }}>
-            <AppLogo size={52} layout="stack" subtitle="Your FBLA journey starts here" />
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
+          <View style={{ marginTop: 10, marginBottom: 16, alignItems: "center" }}>
+            <AppLogo size={48} layout="stack" subtitle="Your FBLA journey starts here" />
           </View>
 
-          <GlassSurface style={{ marginTop: 14, padding: 12 }}>
+          <GlassSurface style={{ padding: 16, gap: 12 }}>
+            {/* Google Auth */}
             {googleConfigured ? (
               <GoogleAuthButton
                 busy={busy}
@@ -326,34 +327,36 @@ export function LoginScreen() {
                 icon={<Text style={{ color: palette.colors.text, fontSize: 16, fontWeight: "900" }}>G</Text>}
                 onPress={() => {
                   setError(
-                    "Google sign-in is not configured for this build yet. Add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID from Firebase Google Sign-In.",
+                    "Google sign-in is not configured. Add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID from Firebase.",
                   );
                 }}
                 disabled={busy}
               />
             )}
-            {!googleConfigured ? (
-              <Text style={{ color: palette.colors.textSecondary, marginTop: 8 }}>
-                Google sign-in is currently unavailable in this build (missing Firebase Web client ID).
-              </Text>
-            ) : null}
 
-            <View style={{ marginTop: 10 }}>
-              <GlassSegmentedControl
-                value={mode}
-                onValueChange={(next) => {
-                  if (next === "signin" || next === "signup") {
-                    setMode(next);
-                  }
-                }}
-                options={[
-                  { label: "Sign In", value: "signin" },
-                  { label: "Sign Up", value: "signup" },
-                ]}
-              />
+            {/* Divider */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: palette.colors.border }} />
+              <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>or</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: palette.colors.border }} />
             </View>
 
-            <View style={{ marginTop: 12, gap: 8 }}>
+            {/* Sign In / Sign Up Toggle */}
+            <GlassSegmentedControl
+              value={mode}
+              onValueChange={(next) => {
+                if (next === "signin" || next === "signup") {
+                  setMode(next);
+                }
+              }}
+              options={[
+                { label: "Sign In", value: "signin" },
+                { label: "Sign Up", value: "signup" },
+              ]}
+            />
+
+            {/* Email & Password Fields */}
+            <View style={{ gap: 8 }}>
               <GlassInput
                 value={email}
                 onChangeText={setEmail}
@@ -383,7 +386,7 @@ export function LoginScreen() {
                 }
               />
 
-              {mode === "signup" ? (
+              {mode === "signup" && (
                 <>
                   <GlassInput
                     value={displayName}
@@ -416,29 +419,41 @@ export function LoginScreen() {
                     />
                   </View>
                 </>
-              ) : null}
+              )}
             </View>
 
-            {mode === "signin" ? (
-              <View style={{ alignItems: "flex-end", marginTop: 6 }}>
+            {mode === "signin" && (
+              <View style={{ alignItems: "flex-end" }}>
                 <Pressable onPress={() => void runPasswordReset()}>
                   <Text style={{ color: palette.colors.textSecondary, fontSize: 13 }}>Forgot password?</Text>
                 </Pressable>
               </View>
-            ) : null}
+            )}
 
-            <View style={{ marginTop: 10 }}>
-              <GlassButton
-                variant="solid"
-                label={mode === "signin" ? "Sign In" : "Create Account"}
-                onPress={() => {
-                  void runEmailAuth();
-                }}
-                loading={busy}
-              />
+            {/* Primary Action */}
+            <GlassButton
+              variant="solid"
+              label={mode === "signin" ? "Sign In" : "Create Account"}
+              onPress={() => void runEmailAuth()}
+              loading={busy}
+            />
+
+            {/* Error Message */}
+            {error && (
+              <GlassSurface style={{ padding: 10, borderColor: palette.colors.danger }}>
+                <Text style={{ color: palette.colors.danger, fontSize: 13 }}>{error}</Text>
+              </GlassSurface>
+            )}
+
+            {/* Secondary Divider */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: palette.colors.border }} />
+              <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>more options</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: palette.colors.border }} />
             </View>
 
-            <View style={{ marginTop: 10 }}>
+            {/* FBLA Connect */}
+            <View>
               <GlassButton
                 variant="primary"
                 label="Sign in with FBLA Connect"
@@ -452,57 +467,46 @@ export function LoginScreen() {
               </View>
             </View>
 
-            <View style={{ marginTop: 10 }}>
-              <GlassButton
-                variant="ghost"
-                label="Continue as Guest"
-                onPress={async () => {
-                  hapticTap();
-                  await setAdminMode(false);
-                  await signInAsGuest();
-                  await setOnboardingCompleted(true);
-                }}
-              />
-            </View>
+            {/* Guest Mode */}
+            <GlassButton
+              variant="ghost"
+              label="Continue as Guest"
+              onPress={async () => {
+                hapticTap();
+                await setAdminMode(false);
+                await signInAsGuest();
+                await setOnboardingCompleted(true);
+              }}
+            />
 
+            {/* Admin Link */}
             <Pressable
               onPress={() => {
                 hapticTap();
                 setAdminOpen(true);
               }}
-              style={{ alignSelf: "center", marginTop: 10, minHeight: 28, justifyContent: "center" }}
+              style={{ alignSelf: "center", minHeight: 28, justifyContent: "center" }}
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Shield size={14} color={palette.colors.textSecondary} />
-                <Text style={{ color: palette.colors.textSecondary, fontSize: 13 }}>
+                <Shield size={13} color={palette.colors.muted} />
+                <Text style={{ color: palette.colors.muted, fontSize: 12 }}>
                   Administrator Login
                 </Text>
               </View>
             </Pressable>
-
-            {busy ? (
-              <View style={{ marginTop: 10, alignItems: "center" }}>
-                <Text style={{ color: palette.colors.textSecondary }}>Signing you in...</Text>
-              </View>
-            ) : null}
-
-            {error ? (
-              <GlassSurface style={{ marginTop: 10, padding: 10, borderColor: palette.colors.danger }}>
-                <Text style={{ color: palette.colors.danger }}>{error}</Text>
-              </GlassSurface>
-            ) : null}
           </GlassSurface>
 
-          <View style={{ marginTop: 14, alignItems: "center", gap: 8 }}>
-            <View style={{ flexDirection: "row", gap: 14 }}>
+          {/* Footer */}
+          <View style={{ marginTop: 16, alignItems: "center", gap: 4 }}>
+            <View style={{ flexDirection: "row", gap: 16 }}>
               <Pressable onPress={() => void WebBrowser.openBrowserAsync("https://www.fbla.org/legal/")}>
-                <Text style={{ color: palette.colors.textSecondary }}>Terms of Service</Text>
+                <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>Terms of Service</Text>
               </Pressable>
               <Pressable onPress={() => void WebBrowser.openBrowserAsync("https://www.fbla.org/privacy-policy/")}>
-                <Text style={{ color: palette.colors.textSecondary }}>Privacy Policy</Text>
+                <Text style={{ color: palette.colors.textSecondary, fontSize: 12 }}>Privacy Policy</Text>
               </Pressable>
             </View>
-            <Text style={{ color: palette.colors.muted, fontSize: 12, textAlign: "center" }}>
+            <Text style={{ color: palette.colors.muted, fontSize: 11, textAlign: "center" }}>
               Built for FBLA - FBLA-PBL is not affiliated with this app.
             </Text>
           </View>

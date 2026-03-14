@@ -1,21 +1,30 @@
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import {
+  Bell,
+  Flame,
+  Heart,
+  MessageCircle,
+  Sparkles,
+  Star,
+  Trophy,
+  UserPlus,
+  Zap,
+} from "lucide-react-native";
 import React, { useLayoutEffect, useMemo } from "react";
 import { Pressable, View } from "react-native";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import { Text } from "react-native-paper";
 
 import { ScreenShell } from "../components/ScreenShell";
-import { AvatarWithStatus } from "../components/ui/AvatarWithStatus";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GlassButton } from "../components/ui/GlassButton";
 import { GlassSurface } from "../components/ui/GlassSurface";
-import { getUserAvatarUrl } from "../constants/media";
 import { useNotifications } from "../context/NotificationsContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { RootStackParamList } from "../navigation/types";
 import { hapticTap } from "../services/haptics";
-import { AppNotification } from "../types/social";
+import { AppNotification, AppNotificationType } from "../types/social";
 import { formatRelativeTime } from "../utils/format";
 
 type SectionTitle = "Today" | "This Week" | "Earlier";
@@ -38,13 +47,35 @@ function getSectionTitle(createdAt: string): SectionTitle {
   return "Earlier";
 }
 
-function avatarForNotification(item: AppNotification): string {
-  const fromMetadata = item.metadata?.avatarUrl;
-  if (fromMetadata) {
-    return fromMetadata;
-  }
-  const seedSource = item.metadata?.userId ?? item.id;
-  return getUserAvatarUrl(seedSource);
+const NOTIFICATION_ICON_CONFIG: Record<AppNotificationType, { icon: typeof Bell; color: string }> = {
+  like: { icon: Heart, color: "#EC4899" },
+  comment: { icon: MessageCircle, color: "#3B82F6" },
+  follow: { icon: UserPlus, color: "#8B5CF6" },
+  event_reminder: { icon: Bell, color: "#F97316" },
+  message: { icon: MessageCircle, color: "#06B6D4" },
+  tier_upgrade: { icon: Trophy, color: "#EAB308" },
+  reaction: { icon: Sparkles, color: "#A855F7" },
+  xp: { icon: Zap, color: "#22C55E" },
+  streak: { icon: Flame, color: "#F43F5E" },
+};
+
+function NotificationIcon({ type, size }: { type: AppNotificationType; size: number }) {
+  const config = NOTIFICATION_ICON_CONFIG[type] ?? NOTIFICATION_ICON_CONFIG.event_reminder;
+  const Icon = config.icon;
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: config.color + "18",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Icon size={size * 0.48} color={config.color} />
+    </View>
+  );
 }
 
 export function NotificationsScreen() {
@@ -176,7 +207,7 @@ export function NotificationsScreen() {
                         borderColor: item.read ? palette.colors.glassBorder : palette.colors.primary,
                       }}
                     >
-                      <AvatarWithStatus uri={avatarForNotification(item)} size={42} online={!item.read} />
+                      <NotificationIcon type={item.type} size={42} />
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: palette.colors.text, fontWeight: "800" }}>{item.title}</Text>
                         <Text style={{ color: palette.colors.muted, marginTop: 2 }}>{item.body}</Text>

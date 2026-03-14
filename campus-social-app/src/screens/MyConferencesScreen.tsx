@@ -1,7 +1,8 @@
 import { Plus } from "lucide-react-native";
 import React, { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from "react-native";
 import { Text } from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
@@ -9,7 +10,6 @@ import { ScreenShell } from "../components/ScreenShell";
 import { GlassButton } from "../components/ui/GlassButton";
 import { GlassCard } from "../components/ui/GlassCard";
 import { GlassInput } from "../components/ui/GlassInput";
-import { GlassPanel } from "../components/ui/GlassPanel";
 import { GlassSegmentedControl } from "../components/ui/GlassSegmentedControl";
 import { GlassSurface } from "../components/ui/GlassSurface";
 import { JollySelect } from "../components/ui/JollySelect";
@@ -63,6 +63,7 @@ export function MyConferencesScreen() {
   };
 
   return (
+    <View style={{ flex: 1 }}>
     <ScreenShell title="My Conferences" subtitle="Manage DLC, SLC, and NLC agendas and prep entries.">
       <View>
         <Text style={{ color: palette.colors.textSecondary, marginBottom: 6, fontWeight: "700", fontSize: 12 }}>
@@ -95,7 +96,7 @@ export function MyConferencesScreen() {
         {entries.length === 0 ? (
           <GlassCard style={{ borderStyle: "dashed" }}>
             <Text style={{ color: palette.colors.textSecondary, textAlign: "center" }}>
-              No {activeLevel} entries yet. Tap Add Event.
+              No {activeLevel} entries yet. Tap + to add one.
             </Text>
           </GlassCard>
         ) : null}
@@ -127,171 +128,159 @@ export function MyConferencesScreen() {
         ))}
       </View>
 
+      {/* Spacer so content doesn't hide behind FAB */}
+      <View style={{ height: 80 }} />
+    </ScreenShell>
+
+    {/* FAB — outside ScreenShell so it stays fixed on screen */}
+    <View
+      style={{
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        alignItems: oneHandedMode ? "flex-start" : "flex-end",
+        paddingHorizontal: 20,
+        paddingBottom: 24,
+      }}
+      pointerEvents="box-none"
+    >
       <Pressable
         onPress={() => setSheetOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Add conference event"
+        accessibilityHint="Opens form to add a new conference event"
         style={{
-          position: "absolute",
-          right: oneHandedMode ? undefined : 18,
-          left: oneHandedMode ? 18 : undefined,
-          bottom: 28,
-          minWidth: 54,
-          minHeight: 54,
+          width: 54,
+          height: 54,
           borderRadius: 27,
           backgroundColor: palette.colors.primary,
           alignItems: "center",
           justifyContent: "center",
           shadowColor: palette.colors.primary,
-          shadowOpacity: 0.3,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 5 },
+          shadowOpacity: 0.25,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 4,
         }}
       >
-        <Plus size={20} color={palette.colors.onPrimary} />
+        <Plus size={22} color={palette.colors.onPrimary} />
       </Pressable>
+    </View>
 
       <Modal visible={sheetOpen} transparent animationType="slide" onRequestClose={() => setSheetOpen(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: palette.colors.overlay, justifyContent: "flex-end" }} onPress={() => setSheetOpen(false)}>
-          <Pressable>
-          <GlassPanel>
-            <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 18 }}>
-              Add Conference Event
-            </Text>
-            <ScrollView style={{ marginTop: 10 }}>
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ color: palette.colors.textSecondary, marginBottom: 6, fontWeight: "700", fontSize: 12 }}>
-                  Conference Level
-                </Text>
-                <GlassSegmentedControl
-                  value={activeLevel}
-                  onValueChange={(value) => {
-                    if (value === "DLC" || value === "SLC" || value === "NLC") {
-                      setActiveLevel(value);
-                    }
-                  }}
-                  options={CONFERENCE_LEVELS.map((value) => ({ value, label: value }))}
-                />
-              </View>
-              <View style={{ marginTop: 8 }}>
-                <JollySelect
-                  label="Event Name"
-                  value={eventName}
-                  onValueChange={setEventName}
-                  placeholder="Choose official event"
-                  options={FBLA_COMPETITIVE_EVENTS.map((entry) => ({
-                    label: entry,
-                    value: entry,
-                    section: "Official FBLA Events",
-                  }))}
-                />
-              </View>
-              <GlassInput
-                value={day}
-                onChangeText={setDay}
-                label="Day"
-                placeholder="Day 1 / Monday"
-                containerStyle={{ marginTop: 8 }}
-              />
-              <GlassInput
-                value={time}
-                onChangeText={setTime}
-                label="Time"
-                placeholder="09:30 AM"
-                containerStyle={{ marginTop: 8 }}
-              />
-              <GlassInput
-                value={location}
-                onChangeText={setLocation}
-                label="Location"
-                placeholder="Room / Venue"
-                containerStyle={{ marginTop: 8 }}
-              />
-              <GlassInput
-                value={teammates}
-                onChangeText={setTeammates}
-                label="Teammates"
-                placeholder="Comma separated names"
-                containerStyle={{ marginTop: 8 }}
-              />
-              <GlassInput
-                value={notes}
-                onChangeText={setNotes}
-                label="Notes"
-                placeholder="Notes"
-                multiline
-                containerStyle={{ marginTop: 8 }}
-              />
+        <Pressable
+          style={{ flex: 1, backgroundColor: palette.colors.overlay }}
+          onPress={() => setSheetOpen(false)}
+        />
+        <KeyboardAvoidingView
+          style={{
+            maxHeight: "85%",
+            backgroundColor: palette.colors.background,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            overflow: "hidden",
+          }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          {/* Drag handle */}
+          <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 6 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: palette.colors.border }} />
+          </View>
 
-              <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-                <Pressable onPress={() => setSheetOpen(false)} style={{ flex: 1 }}>
-                  {({ pressed }) => (
-                    <GlassSurface
-                      pressed={pressed}
-                      elevation={2}
-                      borderRadius={12}
-                      style={{
-                        minHeight: 42,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: palette.colors.border,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Text style={{ color: palette.colors.text, fontWeight: "700" }}>Cancel</Text>
-                    </GlassSurface>
-                  )}
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    if (!eventName.trim()) {
-                      return;
-                    }
-                    const teammateNames = teammates
-                      .split(",")
-                      .map((item) => item.trim())
-                      .filter(Boolean);
-                    void upsertConferenceEntry({
-                      id: createConferenceEntryId(activeLevel),
-                      level: activeLevel,
-                      eventName: eventName.trim(),
-                      day: day.trim(),
-                      time: time.trim(),
-                      location: location.trim(),
-                      notes: notes.trim(),
-                      teammateNames,
-                    });
-                    resetForm();
-                    setSheetOpen(false);
-                  }}
-                  style={{ flex: 1 }}
-                >
-                  {({ pressed }) => (
-                    <GlassSurface
-                      pressed={pressed}
-                      tone="accent"
-                      strong
-                      elevation={3}
-                      borderRadius={12}
-                      style={{
-                        minHeight: 42,
-                        borderRadius: 12,
-                        backgroundColor: palette.colors.primary,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Text style={{ color: palette.colors.onPrimary, fontWeight: "800" }}>
-                        Save Event
-                      </Text>
-                    </GlassSurface>
-                  )}
-                </Pressable>
-              </View>
-            </ScrollView>
-          </GlassPanel>
-          </Pressable>
-        </Pressable>
+          {/* Header */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 16,
+              paddingBottom: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: palette.colors.border,
+            }}
+          >
+            <Pressable onPress={() => setSheetOpen(false)} style={{ minHeight: 44, justifyContent: "center" }}>
+              <Text style={{ color: palette.colors.primary, fontWeight: "700", fontSize: 15 }}>Cancel</Text>
+            </Pressable>
+            <Text style={{ color: palette.colors.text, fontWeight: "900", fontSize: 17 }}>
+              Add Event
+            </Text>
+            <Pressable
+              onPress={() => {
+                if (!eventName.trim()) {
+                  return;
+                }
+                const teammateNames = teammates
+                  .split(",")
+                  .map((item) => item.trim())
+                  .filter(Boolean);
+                void upsertConferenceEntry({
+                  id: createConferenceEntryId(activeLevel),
+                  level: activeLevel,
+                  eventName: eventName.trim(),
+                  day: day.trim(),
+                  time: time.trim(),
+                  location: location.trim(),
+                  notes: notes.trim(),
+                  teammateNames,
+                });
+                resetForm();
+                setSheetOpen(false);
+              }}
+              style={{ minHeight: 44, justifyContent: "center" }}
+            >
+              <Text
+                style={{
+                  color: eventName.trim() ? palette.colors.primary : palette.colors.muted,
+                  fontWeight: "800",
+                  fontSize: 15,
+                }}
+              >
+                Save
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Form */}
+          <ScrollView
+            contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 10 }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
+            <View>
+              <Text style={{ color: palette.colors.textSecondary, marginBottom: 6, fontWeight: "700", fontSize: 12 }}>
+                Conference Level
+              </Text>
+              <GlassSegmentedControl
+                value={activeLevel}
+                onValueChange={(value) => {
+                  if (value === "DLC" || value === "SLC" || value === "NLC") {
+                    setActiveLevel(value);
+                  }
+                }}
+                options={CONFERENCE_LEVELS.map((value) => ({ value, label: value }))}
+              />
+            </View>
+            <JollySelect
+              label="Event Name"
+              value={eventName}
+              onValueChange={setEventName}
+              placeholder="Choose official event"
+              options={FBLA_COMPETITIVE_EVENTS.map((entry) => ({
+                label: entry,
+                value: entry,
+                section: "Official FBLA Events",
+              }))}
+            />
+            <GlassInput value={day} onChangeText={setDay} label="Day" placeholder="Day 1 / Monday" />
+            <GlassInput value={time} onChangeText={setTime} label="Time" placeholder="09:30 AM" />
+            <GlassInput value={location} onChangeText={setLocation} label="Location" placeholder="Room / Venue" />
+            <GlassInput value={teammates} onChangeText={setTeammates} label="Teammates" placeholder="Comma separated names" />
+            <GlassInput value={notes} onChangeText={setNotes} label="Notes" placeholder="Notes" multiline />
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
-    </ScreenShell>
+    </View>
   );
 }
